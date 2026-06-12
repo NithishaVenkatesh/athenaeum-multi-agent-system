@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "headroom": {
+      "command": "uvx",
+      "args": [
+        "--python",
+        "3.12",
+        "--from",
+        "headroom-ai[mcp]",
+        "headroom",
+        "mcp",
+        "serve"
+      ]
+    }
+  }
+}
