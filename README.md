@@ -1,5 +1,16 @@
 # msf-reasoning-agent
 
+Multi-agent **Enterprise Learning System** for the Microsoft Agents League Hackathon 2026 — 🧠 Reasoning Agents track, Challenge A. Built on Microsoft Foundry with Foundry IQ grounding (+ Fabric IQ semantic model and Work IQ work-context patterns).
+
+## Knowledge base (vectorless)
+
+All research and planning lives in [kb/](kb/) as tagged markdown — retrieval is `grep`, not embeddings. Start at [kb/INDEX.md](kb/INDEX.md) for the tag taxonomy and document map:
+
+- `kb/hackathon/` — rules, judging rubric, compliance checklists
+- `kb/challenge/` — Challenge A brief, agent architecture, synthetic data pack
+- `kb/iq/` — Foundry IQ / Work IQ / Fabric IQ deep dives incl. verified SDK recipes
+- `kb/planning/` — build plan, decision log, progress log
+
 ## Headroom (context compression)
 
 This repo ships a project-scoped MCP config ([.mcp.json](.mcp.json)) that gives Claude Code (and any MCP-compatible agent) the [Headroom](https://github.com/chopratejas/headroom) tools — `headroom_compress`, `headroom_retrieve`, `headroom_stats` — for compressing large tool outputs, logs, and files before they hit the model (60–95% fewer tokens).
