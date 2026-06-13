@@ -16,11 +16,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
+from app.agent.contracts import TokenEvent
+from app.agent.orchestrator import run_pipeline
 from app.catalog.loader import get_course as get_catalog_course
 from app.catalog.loader import is_valid_course_id
 from app.courses.models import Course
 from app.courses.repository import CourseRepository
 from app.courses.schemas import (
+    AcceptCourse,
     AssessmentRead,
     CourseCreate,
     CoursePatch,
@@ -28,12 +31,15 @@ from app.courses.schemas import (
     CourseSummary,
     MessageIn,
 )
-from app.courses.service import generate_title, stream_reply
+from app.courses.service import generate_title
 from app.db import get_session, session_scope
 
 router = APIRouter(prefix="/api/courses", tags=["courses"])
 
 SessionDep = Annotated[Session, Depends(get_session)]
+
+# Course.status when a learner accepts a course: attempt 1 (encoding in models.py).
+STATUS_FIRST_ATTEMPT = 1
 
 
 def _require(course: Course | None, course_id: str) -> Course:
@@ -128,13 +134,44 @@ def list_course_assessments(course_id: str, session: SessionDep) -> list[Assessm
     ]
 
 
+@router.post(
+    "/{course_id}/accept",
+    response_model=CourseRead,
+    summary="Accept the suggested course: link it and start attempt 1",
+)
+def accept_course(course_id: str, body: AcceptCourse, session: SessionDep) -> CourseRead:
+    """Enroll the learner: set the chat's ``catalog_id`` and bump status to attempt 1.
+
+    Per-learner enrollment is just ``courses WHERE persona_id`` — the accepted
+    course lives in the same row the chat is in, so no separate table is needed.
+    """
+    repo = CourseRepository(session)
+    course = _require(repo.get(course_id), course_id)
+    if not is_valid_course_id(body.catalog_id):
+        raise HTTPException(
+            status_code=422, detail=f"'{body.catalog_id}' is not an Athenaeum course id"
+        )
+    course = repo.update(
+        course,
+        catalog_id=body.catalog_id,
+        set_catalog=True,
+        status=STATUS_FIRST_ATTEMPT,
+    )
+    return _to_read(course, repo)
+
+
 def _sse(payload: dict[str, object]) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
 
-@router.post("/{course_id}/messages", summary="Send a message; stream the reply (SSE)")
+@router.post("/{course_id}/messages", summary="Send a message; stream the agent pipeline (SSE)")
 def post_message(course_id: str, body: MessageIn, session: SessionDep) -> StreamingResponse:
-    """Append the learner's message, then stream the assistant reply token-by-token."""
+    """Append the learner's turn, run it through the agent pipeline, and stream events.
+
+    The SSE stream carries the full pipeline: per-phase telemetry, answer tokens, a
+    blocked toast (jailbreak), an explicit error (providers down), and an optional
+    course suggestion — every event is one of the typed ``PipelineEvent`` shapes.
+    """
     repo = CourseRepository(session)
     course = _require(repo.get(course_id), course_id)
     # Persist the user's turn before streaming so it survives a client disconnect.
@@ -147,14 +184,28 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
             stream_repo = CourseRepository(stream_session)
             current = stream_repo.get(course_id)
             if current is None:  # pragma: no cover - just persisted above
-                yield _sse({"error": "course not found"})
+                yield _sse({"type": "error", "message": "course not found"})
                 return
-            parts: list[str] = []
-            for token in stream_reply(current.messages):
-                parts.append(token)
-                yield _sse({"token": token})
-            stream_repo.append_message(current, role="assistant", content="".join(parts))
-            yield _sse({"done": True})
+
+            answer_parts: list[str] = []
+            final_text = ""  # what gets persisted as the assistant turn
+            for event in run_pipeline(
+                body.content,
+                persona_id=current.persona_id,
+                catalog_id=current.catalog_id,
+            ):
+                if isinstance(event, TokenEvent):
+                    answer_parts.append(event.token)
+                yield _sse(event.model_dump(mode="json"))
+                # Terminal, non-token messages become the persisted transcript text.
+                if event.type == "blocked":
+                    final_text = event.reason
+                elif event.type == "error":
+                    final_text = event.message
+
+            answer = "".join(answer_parts).strip() or final_text
+            if answer:
+                stream_repo.append_message(current, role="assistant", content=answer)
 
     return StreamingResponse(
         event_stream(),

@@ -57,13 +57,17 @@ class CourseRepository:
         chat_name: str | None = None,
         catalog_id: str | None = None,
         set_catalog: bool = False,
+        status: int | None = None,
     ) -> Course:
         """Apply a partial update. ``set_catalog`` distinguishes 'link to X' / 'unlink'
-        from 'field not provided' (since ``catalog_id=None`` means unlink)."""
+        from 'field not provided' (since ``catalog_id=None`` means unlink). ``status``
+        is set only when provided (course-attempt encoding lives on ``Course.status``)."""
         if chat_name is not None:
             course.chat_name = chat_name
         if set_catalog:
             course.catalog_id = catalog_id
+        if status is not None:
+            course.status = status
         course.updated_at = datetime.now(UTC)
         self._session.add(course)
         self._session.commit()

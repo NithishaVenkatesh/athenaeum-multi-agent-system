@@ -28,6 +28,12 @@ class MessageIn(BaseModel):
     content: str = Field(min_length=1)
 
 
+class AcceptCourse(BaseModel):
+    """Accept the suggested course: link it to this chat and start attempt 1."""
+
+    catalog_id: str = Field(min_length=1, description="Athenaeum course id to enroll in")
+
+
 class CourseSummary(BaseModel):
     """Compact row for the course (chat) chooser."""
 
