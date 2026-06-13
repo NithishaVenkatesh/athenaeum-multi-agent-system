@@ -88,11 +88,18 @@ describe("ChatView", () => {
     mockStream.mockImplementation(async (_id, _text, handlers) => {
       handlers.onToken?.("Here is the answer.");
       handlers.onSuggestion?.({
-        catalog_id: "cb-c01",
-        title: "Azure Compute & Serverless Foundations",
-        cert: "AZ-204",
-        pitch: "Build the compute layer.",
-        prep_points: ["App Service", "Functions"],
+        prompt: "Want to start this course?",
+        options: [
+          {
+            catalog_id: "cb-c01",
+            title: "Azure Compute & Serverless Foundations",
+            cert: "AZ-204",
+            level: "foundational",
+            pitch: "Build the compute layer.",
+            reason: "Next step in your track.",
+            prep_points: ["App Service", "Functions"],
+          },
+        ],
       });
       handlers.onDone?.({ route: "foundry_iq", suggested: true });
     });
@@ -107,7 +114,7 @@ describe("ChatView", () => {
         screen.getByText("Azure Compute & Serverless Foundations"),
       ).toBeInTheDocument(),
     );
-    fireEvent.click(screen.getByRole("button", { name: /Pursue this course/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Choose$/i }));
     await waitFor(() => expect(mockAccept).toHaveBeenCalledWith("c1", "cb-c01"));
     await waitFor(() =>
       expect(screen.getByText(/now your course workspace/i)).toBeInTheDocument(),

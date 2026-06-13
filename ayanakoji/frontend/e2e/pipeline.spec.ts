@@ -8,11 +8,13 @@ import { expect, test } from "@playwright/test";
  */
 
 async function signIn(page: import("@playwright/test").Page) {
+  // Use Mira here so the workspace spec's single-chat assumption for Vega holds
+  // (these tests create chats for whoever signs in).
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Sign in to your account" })).toBeVisible({
     timeout: 15_000,
   });
-  await page.getByRole("button", { name: /Sign in as Vega/ }).click();
+  await page.getByRole("button", { name: /Sign in as Mira/ }).click();
   await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible();
 }
 
@@ -32,10 +34,40 @@ test("course question shows reasoning trace, grounded answer, and enrolls on acc
   // A grounded answer streams.
   await expect(page.getByText(/offline mode/i)).toBeVisible({ timeout: 15_000 });
 
-  // The course suggestion tool appears; accepting enrolls (status → attempt 1).
-  await expect(page.getByText("Suggested course")).toBeVisible({ timeout: 15_000 });
-  await page.getByRole("button", { name: /Pursue this course/i }).click();
+  // The course-selection tool appears; choosing enrolls (status → attempt 1).
+  await page.getByRole("button", { name: /^Choose$/i }).first().click();
   await expect(page.getByText(/now your course workspace/i)).toBeVisible({ timeout: 15_000 });
+});
+
+test("greeting welcomes the learner and offers profile-based course options", async ({
+  page,
+}) => {
+  await signIn(page);
+
+  const composer = page.getByRole("textbox", { name: "Message" });
+  await composer.fill("hey");
+  await composer.press("Enter");
+
+  // Warm welcome + at least one choosable course from the learner's profile.
+  await expect(page.getByText(/welcome to Athenaeum/i)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: /^Choose$/i }).first()).toBeVisible({
+    timeout: 15_000,
+  });
+});
+
+test("'suggest a course' recommends from the learner's profile", async ({ page }) => {
+  await signIn(page);
+
+  const composer = page.getByRole("textbox", { name: "Message" });
+  await composer.fill("suggest me a course");
+  await composer.press("Enter");
+
+  await expect(page.getByText(/Recommend · from your profile/i).first()).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page.getByRole("button", { name: /^Choose$/i }).first()).toBeVisible({
+    timeout: 15_000,
+  });
 });
 
 test("a jailbreak attempt is blocked with a toast and never answered", async ({ page }) => {

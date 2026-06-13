@@ -175,7 +175,7 @@ export function listAssessments(
 
 // ── Agent pipeline event protocol (mirrors app/agent/contracts.py) ────────────
 
-export type Route = "foundry_iq" | "work_iq" | "general";
+export type Route = "greeting" | "recommend" | "foundry_iq" | "work_iq" | "general";
 
 export interface GroundingSource {
   ref: string;
@@ -202,14 +202,22 @@ export interface CourseSuggestion {
   catalog_id: string;
   title: string;
   cert: string;
+  level: string;
   pitch: string;
+  reason: string;
   prep_points: string[];
+}
+
+/** One or more courses the learner can choose from (the course-selection tool). */
+export interface Suggestion {
+  prompt: string;
+  options: CourseSuggestion[];
 }
 
 export type PipelineEvent =
   | { type: "phase"; phase: PhaseTelemetry }
   | { type: "token"; token: string }
-  | { type: "suggestion"; suggestion: CourseSuggestion }
+  | { type: "suggestion"; prompt: string; options: CourseSuggestion[] }
   | { type: "blocked"; reason: string }
   | { type: "error"; message: string }
   | { type: "done"; route: Route | null; suggested: boolean };
@@ -217,7 +225,7 @@ export type PipelineEvent =
 export interface StreamHandlers {
   onPhase?: (phase: PhaseTelemetry) => void;
   onToken?: (token: string) => void;
-  onSuggestion?: (suggestion: CourseSuggestion) => void;
+  onSuggestion?: (suggestion: Suggestion) => void;
   onBlocked?: (reason: string) => void;
   onError?: (message: string) => void;
   onDone?: (info: { route: Route | null; suggested: boolean }) => void;
@@ -279,7 +287,7 @@ function dispatchEvent(event: PipelineEvent, handlers: StreamHandlers): void {
       handlers.onToken?.(event.token);
       break;
     case "suggestion":
-      handlers.onSuggestion?.(event.suggestion);
+      handlers.onSuggestion?.({ prompt: event.prompt, options: event.options });
       break;
     case "blocked":
       handlers.onBlocked?.(event.reason);

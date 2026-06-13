@@ -23,8 +23,8 @@ import {
   createCourse,
   getCourse,
   streamMessage,
-  type CourseSuggestion,
   type PhaseTelemetry,
+  type Suggestion,
 } from "@/lib/api";
 
 type AcceptState = "idle" | "accepting" | "accepted" | "declined";
@@ -38,8 +38,9 @@ interface AssistantTurn {
   kind: "assistant";
   phases: PhaseTelemetry[];
   text: string;
-  suggestion: CourseSuggestion | null;
+  suggestion: Suggestion | null;
   suggestionState: AcceptState;
+  chosenId: string | null;
   error: string | null;
   streaming: boolean;
 }
@@ -53,6 +54,7 @@ function emptyAssistantTurn(): AssistantTurn {
     text: "",
     suggestion: null,
     suggestionState: "idle",
+    chosenId: null,
     error: null,
     streaming: true,
   };
@@ -95,6 +97,7 @@ export function ChatView({ courseId }: { courseId?: string }) {
                   text: m.content,
                   suggestion: null,
                   suggestionState: "idle",
+                  chosenId: null,
                   error: null,
                   streaming: false,
                 },
@@ -171,22 +174,37 @@ export function ChatView({ courseId }: { courseId?: string }) {
     }
   }
 
-  function handleAccept(turnIndex: number, suggestion: CourseSuggestion) {
+  function handleAccept(turnIndex: number, catalogId: string) {
     if (!activeCourseId) return;
+    const turn = turns[turnIndex];
+    const option =
+      turn?.kind === "assistant"
+        ? turn.suggestion?.options.find((o) => o.catalog_id === catalogId)
+        : undefined;
     setTurns((prev) =>
-      updateAssistant(prev, turnIndex, (t) => ({ ...t, suggestionState: "accepting" })),
+      updateAssistant(prev, turnIndex, (t) => ({
+        ...t,
+        suggestionState: "accepting",
+        chosenId: catalogId,
+      })),
     );
-    acceptCourse(activeCourseId, suggestion.catalog_id)
+    acceptCourse(activeCourseId, catalogId)
       .then(() => {
         setTurns((prev) =>
           updateAssistant(prev, turnIndex, (t) => ({ ...t, suggestionState: "accepted" })),
         );
-        toast.success("Enrolled", { description: `${suggestion.title} — attempt 1 started.` });
+        toast.success("Enrolled", {
+          description: `${option?.title ?? "Course"} — attempt 1 started.`,
+        });
         void reloadCourses();
       })
       .catch(() => {
         setTurns((prev) =>
-          updateAssistant(prev, turnIndex, (t) => ({ ...t, suggestionState: "idle" })),
+          updateAssistant(prev, turnIndex, (t) => ({
+            ...t,
+            suggestionState: "idle",
+            chosenId: null,
+          })),
         );
         toast.error("Could not enroll", { description: "Please try again." });
       });
@@ -231,7 +249,8 @@ export function ChatView({ courseId }: { courseId?: string }) {
                   <CourseSuggestionCard
                     suggestion={turn.suggestion}
                     state={turn.suggestionState}
-                    onAccept={() => handleAccept(index, turn.suggestion!)}
+                    chosenId={turn.chosenId}
+                    onAccept={(catalogId) => handleAccept(index, catalogId)}
                     onDecline={() => handleDecline(index)}
                   />
                 )}
