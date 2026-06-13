@@ -13,3 +13,9 @@ if (typeof window !== "undefined" && !window.matchMedia) {
     dispatchEvent: () => false,
   })) as typeof window.matchMedia;
 }
+
+// jsdom does not implement scrollIntoView; the chat view calls it to follow the
+// stream. Make it a no-op so components that auto-scroll can render under test.
+if (typeof Element !== "undefined" && !Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}
