@@ -144,6 +144,7 @@ class WorkIQRepository:
                 "CONDITIONAL": readiness.get("CONDITIONAL", 0),
                 "NOT_YET": readiness.get("NOT_YET", 0),
             },
+            capacity_policy=team.capacity_policy,
         )
 
 

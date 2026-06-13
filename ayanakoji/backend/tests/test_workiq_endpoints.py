@@ -116,6 +116,7 @@ def test_team_capacity_is_aggregate_only(client: TestClient) -> None:
         "avg_focus_hours_per_week",
         "high_meeting_load_count",
         "readiness_distribution",
+        "capacity_policy",
     }
     assert capacity["member_count"] == 11
     assert sum(capacity["readiness_distribution"].values()) == 11

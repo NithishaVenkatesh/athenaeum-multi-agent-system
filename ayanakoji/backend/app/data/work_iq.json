@@ -47,7 +47,77 @@
           "EMP-009",
           "EMP-010",
           "EMP-011"
-        ]
+        ],
+        "sprint": {
+          "number": 24,
+          "name": "Sprint 24 — Atlas",
+          "start": "2026-06-08",
+          "end": "2026-06-12",
+          "goal": "Ship the Checkout API revamp behind a feature flag and harden the CD platform."
+        },
+        "okrs": [
+          {
+            "id": "OKR-1",
+            "objective": "Raise delivery reliability",
+            "key_results": [
+              "Cut change-failure rate below 10%",
+              "Bring p95 deploy lead time under 1 day"
+            ],
+            "progress": 0.6
+          },
+          {
+            "id": "OKR-2",
+            "objective": "Grow certification coverage across the team",
+            "key_results": [
+              "80% of engineers GO-ready on their primary cert",
+              "Each vertical has one cross-trained engineer"
+            ],
+            "progress": 0.45
+          },
+          {
+            "id": "OKR-3",
+            "objective": "Protect maker time",
+            "key_results": [
+              "Two no-meeting mornings per week per engineer",
+              "Average focus hours at or above 18/week"
+            ],
+            "progress": 0.3
+          }
+        ],
+        "cert_targets": [
+          {
+            "vertical": "cloud-backend",
+            "cert": "AZ-204",
+            "target_quarter": "Q3 FY26"
+          },
+          {
+            "vertical": "devops-platform",
+            "cert": "AZ-400",
+            "target_quarter": "Q3 FY26"
+          },
+          {
+            "vertical": "data-engineering",
+            "cert": "DP-700",
+            "target_quarter": "Q3 FY26"
+          },
+          {
+            "vertical": "ai-ml",
+            "cert": "AI-102",
+            "target_quarter": "Q3 FY26"
+          },
+          {
+            "vertical": "architecture-security",
+            "cert": "AZ-305",
+            "target_quarter": "Q3 FY26"
+          }
+        ],
+        "capacity_policy": {
+          "target_study_hours_by_seniority": {
+            "senior": 4,
+            "junior": 6,
+            "manager": 2
+          }
+        }
       }
     ]
   },
@@ -93,6 +163,64 @@
       "reports": [],
       "timezone": "Asia/Kolkata",
       "preferred_learning_slot": "Morning",
+      "profile": {
+        "start_date": "2023-08-23",
+        "tenure_months": 34,
+        "level_code": "L5",
+        "years_experience": 7,
+        "location": "Bengaluru",
+        "employment_type": "full_time",
+        "languages": [
+          "C#",
+          "TypeScript",
+          "Python"
+        ]
+      },
+      "learning_preferences": {
+        "preferred_study_hours_per_week": 5,
+        "preferred_session_minutes": 60,
+        "preferred_study_days": [
+          "tue",
+          "wed",
+          "thu"
+        ],
+        "study_window": {
+          "start": "11:00",
+          "end": "12:00"
+        },
+        "preferred_modality": "hands_on_lab",
+        "pace": "steady",
+        "reminder_opt_in": true
+      },
+      "work_context": {
+        "work_mode": "hybrid",
+        "working_hours": {
+          "start": "09:00",
+          "end": "18:00"
+        },
+        "working_days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri"
+        ],
+        "focus_windows": [
+          {
+            "start": "09:45",
+            "end": "12:00"
+          }
+        ],
+        "on_call": {
+          "is_on_call": false,
+          "dates": []
+        },
+        "pto_days": [],
+        "after_hours_load": "moderate",
+        "context_switch_score": 0.85,
+        "longest_focus_block_minutes": 90,
+        "response_latency_minutes": 25
+      },
       "work_signals": {
         "employee_id": "EMP-001",
         "meeting_hours_per_week": 22.75,
@@ -226,7 +354,17 @@
                 "title": "Sprint planning — Checkout API revamp",
                 "collaborative": true
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 4.75,
+              "focus_hours": 2.25,
+              "learning_hours": 0.0,
+              "collab_hours": 0.5,
+              "block_count": 12,
+              "longest_focus_block_minutes": 60,
+              "fragmentation_score": 0.91,
+              "free_capacity_hours": 2.25
+            }
           },
           {
             "day": "tue",
@@ -340,7 +478,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 4.25,
+              "focus_hours": 1.25,
+              "learning_hours": 1.0,
+              "collab_hours": 1.0,
+              "block_count": 12,
+              "longest_focus_block_minutes": 60,
+              "fragmentation_score": 0.82,
+              "free_capacity_hours": 1.25
+            }
           },
           {
             "day": "wed",
@@ -445,7 +593,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 4.75,
+              "focus_hours": 1.75,
+              "learning_hours": 1.0,
+              "collab_hours": 0.5,
+              "block_count": 11,
+              "longest_focus_block_minutes": 90,
+              "fragmentation_score": 0.8,
+              "free_capacity_hours": 1.75
+            }
           },
           {
             "day": "thu",
@@ -559,7 +717,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 4.25,
+              "focus_hours": 1.25,
+              "learning_hours": 1.0,
+              "collab_hours": 1.0,
+              "block_count": 12,
+              "longest_focus_block_minutes": 60,
+              "fragmentation_score": 0.82,
+              "free_capacity_hours": 1.25
+            }
           },
           {
             "day": "fri",
@@ -673,7 +841,17 @@
                 "title": "Sprint review & retro",
                 "collaborative": true
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 4.75,
+              "focus_hours": 2.25,
+              "learning_hours": 0.0,
+              "collab_hours": 0.5,
+              "block_count": 12,
+              "longest_focus_block_minutes": 60,
+              "fragmentation_score": 0.91,
+              "free_capacity_hours": 2.25
+            }
           }
         ]
       }
@@ -692,6 +870,69 @@
       "reports": [],
       "timezone": "Asia/Kolkata",
       "preferred_learning_slot": "Afternoon",
+      "profile": {
+        "start_date": "2025-07-13",
+        "tenure_months": 11,
+        "level_code": "L3",
+        "years_experience": 2,
+        "location": "Hyderabad",
+        "employment_type": "full_time",
+        "languages": [
+          "C#",
+          "TypeScript",
+          "Python"
+        ]
+      },
+      "learning_preferences": {
+        "preferred_study_hours_per_week": 8,
+        "preferred_session_minutes": 90,
+        "preferred_study_days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu"
+        ],
+        "study_window": {
+          "start": "16:00",
+          "end": "17:00"
+        },
+        "preferred_modality": "video",
+        "pace": "intensive",
+        "reminder_opt_in": true
+      },
+      "work_context": {
+        "work_mode": "remote",
+        "working_hours": {
+          "start": "09:00",
+          "end": "18:00"
+        },
+        "working_days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri"
+        ],
+        "focus_windows": [
+          {
+            "start": "09:45",
+            "end": "12:00"
+          },
+          {
+            "start": "15:30",
+            "end": "18:00"
+          }
+        ],
+        "on_call": {
+          "is_on_call": false,
+          "dates": []
+        },
+        "pto_days": [],
+        "after_hours_load": "low",
+        "context_switch_score": 0.78,
+        "longest_focus_block_minutes": 150,
+        "response_latency_minutes": 12
+      },
       "work_signals": {
         "employee_id": "EMP-002",
         "meeting_hours_per_week": 5.25,
@@ -825,7 +1066,17 @@
                 "title": "Sprint planning — Checkout API revamp",
                 "collaborative": true
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 1.25,
+              "focus_hours": 3.75,
+              "learning_hours": 1.0,
+              "collab_hours": 1.5,
+              "block_count": 12,
+              "longest_focus_block_minutes": 135,
+              "fragmentation_score": 0.73,
+              "free_capacity_hours": 3.75
+            }
           },
           {
             "day": "tue",
@@ -921,7 +1172,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 0.75,
+              "focus_hours": 4.75,
+              "learning_hours": 1.0,
+              "collab_hours": 1.0,
+              "block_count": 10,
+              "longest_focus_block_minutes": 135,
+              "fragmentation_score": 0.78,
+              "free_capacity_hours": 4.75
+            }
           },
           {
             "day": "wed",
@@ -1026,7 +1287,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 1.25,
+              "focus_hours": 4.25,
+              "learning_hours": 1.0,
+              "collab_hours": 1.5,
+              "block_count": 11,
+              "longest_focus_block_minutes": 135,
+              "fragmentation_score": 0.6,
+              "free_capacity_hours": 4.25
+            }
           },
           {
             "day": "thu",
@@ -1122,7 +1393,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 0.75,
+              "focus_hours": 4.75,
+              "learning_hours": 1.0,
+              "collab_hours": 1.0,
+              "block_count": 10,
+              "longest_focus_block_minutes": 135,
+              "fragmentation_score": 0.78,
+              "free_capacity_hours": 4.75
+            }
           },
           {
             "day": "fri",
@@ -1209,7 +1490,17 @@
                 "title": "Sprint review & retro",
                 "collaborative": true
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 1.25,
+              "focus_hours": 5.25,
+              "learning_hours": 0.0,
+              "collab_hours": 1.0,
+              "block_count": 9,
+              "longest_focus_block_minutes": 150,
+              "fragmentation_score": 1.0,
+              "free_capacity_hours": 5.25
+            }
           }
         ]
       }
@@ -1228,6 +1519,67 @@
       "reports": [],
       "timezone": "Asia/Kolkata",
       "preferred_learning_slot": "Morning",
+      "profile": {
+        "start_date": "2022-08-28",
+        "tenure_months": 46,
+        "level_code": "L6",
+        "years_experience": 9,
+        "location": "Pune",
+        "employment_type": "full_time",
+        "languages": [
+          "Go",
+          "Bash",
+          "Bicep"
+        ]
+      },
+      "learning_preferences": {
+        "preferred_study_hours_per_week": 4,
+        "preferred_session_minutes": 60,
+        "preferred_study_days": [
+          "tue",
+          "wed",
+          "thu"
+        ],
+        "study_window": {
+          "start": "11:00",
+          "end": "12:00"
+        },
+        "preferred_modality": "hands_on_lab",
+        "pace": "steady",
+        "reminder_opt_in": false
+      },
+      "work_context": {
+        "work_mode": "hybrid",
+        "working_hours": {
+          "start": "09:00",
+          "end": "18:00"
+        },
+        "working_days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri"
+        ],
+        "focus_windows": [
+          {
+            "start": "09:45",
+            "end": "12:00"
+          }
+        ],
+        "on_call": {
+          "is_on_call": true,
+          "dates": [
+            "2026-06-13",
+            "2026-06-14"
+          ]
+        },
+        "pto_days": [],
+        "after_hours_load": "high",
+        "context_switch_score": 0.85,
+        "longest_focus_block_minutes": 90,
+        "response_latency_minutes": 30
+      },
       "work_signals": {
         "employee_id": "EMP-003",
         "meeting_hours_per_week": 22.75,
@@ -1361,7 +1713,17 @@
                 "title": "Sprint planning — CD platform hardening",
                 "collaborative": true
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 4.75,
+              "focus_hours": 2.25,
+              "learning_hours": 0.0,
+              "collab_hours": 0.5,
+              "block_count": 12,
+              "longest_focus_block_minutes": 60,
+              "fragmentation_score": 0.91,
+              "free_capacity_hours": 2.25
+            }
           },
           {
             "day": "tue",
@@ -1475,7 +1837,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 4.25,
+              "focus_hours": 1.25,
+              "learning_hours": 1.0,
+              "collab_hours": 1.0,
+              "block_count": 12,
+              "longest_focus_block_minutes": 60,
+              "fragmentation_score": 0.82,
+              "free_capacity_hours": 1.25
+            }
           },
           {
             "day": "wed",
@@ -1580,7 +1952,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 4.75,
+              "focus_hours": 1.75,
+              "learning_hours": 1.0,
+              "collab_hours": 0.5,
+              "block_count": 11,
+              "longest_focus_block_minutes": 90,
+              "fragmentation_score": 0.8,
+              "free_capacity_hours": 1.75
+            }
           },
           {
             "day": "thu",
@@ -1694,7 +2076,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 4.25,
+              "focus_hours": 1.25,
+              "learning_hours": 1.0,
+              "collab_hours": 1.0,
+              "block_count": 12,
+              "longest_focus_block_minutes": 60,
+              "fragmentation_score": 0.82,
+              "free_capacity_hours": 1.25
+            }
           },
           {
             "day": "fri",
@@ -1808,7 +2200,17 @@
                 "title": "Sprint review & retro",
                 "collaborative": true
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 4.75,
+              "focus_hours": 2.25,
+              "learning_hours": 0.0,
+              "collab_hours": 0.5,
+              "block_count": 12,
+              "longest_focus_block_minutes": 60,
+              "fragmentation_score": 0.91,
+              "free_capacity_hours": 2.25
+            }
           }
         ]
       }
@@ -1827,6 +2229,72 @@
       "reports": [],
       "timezone": "Asia/Kolkata",
       "preferred_learning_slot": "Afternoon",
+      "profile": {
+        "start_date": "2025-04-14",
+        "tenure_months": 14,
+        "level_code": "L4",
+        "years_experience": 3,
+        "location": "Chennai",
+        "employment_type": "contractor",
+        "languages": [
+          "Go",
+          "Bash",
+          "Bicep"
+        ]
+      },
+      "learning_preferences": {
+        "preferred_study_hours_per_week": 6,
+        "preferred_session_minutes": 60,
+        "preferred_study_days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu"
+        ],
+        "study_window": {
+          "start": "16:00",
+          "end": "17:00"
+        },
+        "preferred_modality": "hands_on_lab",
+        "pace": "intensive",
+        "reminder_opt_in": true
+      },
+      "work_context": {
+        "work_mode": "office",
+        "working_hours": {
+          "start": "09:00",
+          "end": "18:00"
+        },
+        "working_days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri"
+        ],
+        "focus_windows": [
+          {
+            "start": "09:45",
+            "end": "12:00"
+          },
+          {
+            "start": "15:30",
+            "end": "18:00"
+          }
+        ],
+        "on_call": {
+          "is_on_call": true,
+          "dates": [
+            "2026-06-11",
+            "2026-06-12"
+          ]
+        },
+        "pto_days": [],
+        "after_hours_load": "low",
+        "context_switch_score": 0.93,
+        "longest_focus_block_minutes": 135,
+        "response_latency_minutes": 15
+      },
       "work_signals": {
         "employee_id": "EMP-004",
         "meeting_hours_per_week": 12.75,
@@ -1942,7 +2410,17 @@
                 "title": "Sprint planning — CD platform hardening",
                 "collaborative": true
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 2.75,
+              "focus_hours": 2.25,
+              "learning_hours": 1.0,
+              "collab_hours": 1.5,
+              "block_count": 10,
+              "longest_focus_block_minutes": 135,
+              "fragmentation_score": 1.0,
+              "free_capacity_hours": 2.25
+            }
           },
           {
             "day": "tue",
@@ -2029,7 +2507,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 2.25,
+              "focus_hours": 3.25,
+              "learning_hours": 1.0,
+              "collab_hours": 1.0,
+              "block_count": 9,
+              "longest_focus_block_minutes": 135,
+              "fragmentation_score": 0.88,
+              "free_capacity_hours": 3.25
+            }
           },
           {
             "day": "wed",
@@ -2125,7 +2613,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 2.75,
+              "focus_hours": 2.75,
+              "learning_hours": 1.0,
+              "collab_hours": 1.5,
+              "block_count": 10,
+              "longest_focus_block_minutes": 135,
+              "fragmentation_score": 0.89,
+              "free_capacity_hours": 2.75
+            }
           },
           {
             "day": "thu",
@@ -2212,7 +2710,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 2.25,
+              "focus_hours": 3.25,
+              "learning_hours": 1.0,
+              "collab_hours": 1.0,
+              "block_count": 9,
+              "longest_focus_block_minutes": 135,
+              "fragmentation_score": 0.88,
+              "free_capacity_hours": 3.25
+            }
           },
           {
             "day": "fri",
@@ -2299,7 +2807,17 @@
                 "title": "Sprint review & retro",
                 "collaborative": true
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 2.75,
+              "focus_hours": 3.75,
+              "learning_hours": 0.0,
+              "collab_hours": 1.0,
+              "block_count": 9,
+              "longest_focus_block_minutes": 135,
+              "fragmentation_score": 1.0,
+              "free_capacity_hours": 3.75
+            }
           }
         ]
       }
@@ -2318,6 +2836,67 @@
       "reports": [],
       "timezone": "Asia/Kolkata",
       "preferred_learning_slot": "Morning",
+      "profile": {
+        "start_date": "2024-02-19",
+        "tenure_months": 28,
+        "level_code": "L5",
+        "years_experience": 6,
+        "location": "Bengaluru",
+        "employment_type": "full_time",
+        "languages": [
+          "Python",
+          "SQL",
+          "Scala"
+        ]
+      },
+      "learning_preferences": {
+        "preferred_study_hours_per_week": 4,
+        "preferred_session_minutes": 60,
+        "preferred_study_days": [
+          "tue",
+          "wed",
+          "thu"
+        ],
+        "study_window": {
+          "start": "11:00",
+          "end": "12:00"
+        },
+        "preferred_modality": "reading",
+        "pace": "steady",
+        "reminder_opt_in": false
+      },
+      "work_context": {
+        "work_mode": "hybrid",
+        "working_hours": {
+          "start": "09:00",
+          "end": "18:00"
+        },
+        "working_days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri"
+        ],
+        "focus_windows": [
+          {
+            "start": "09:45",
+            "end": "12:00"
+          }
+        ],
+        "on_call": {
+          "is_on_call": false,
+          "dates": []
+        },
+        "pto_days": [
+          "2026-06-19",
+          "2026-06-20"
+        ],
+        "after_hours_load": "moderate",
+        "context_switch_score": 0.86,
+        "longest_focus_block_minutes": 150,
+        "response_latency_minutes": 22
+      },
       "work_signals": {
         "employee_id": "EMP-005",
         "meeting_hours_per_week": 12.75,
@@ -2424,7 +3003,17 @@
                 "title": "Sprint planning — Realtime analytics rollout",
                 "collaborative": true
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 2.75,
+              "focus_hours": 4.25,
+              "learning_hours": 0.0,
+              "collab_hours": 0.5,
+              "block_count": 9,
+              "longest_focus_block_minutes": 135,
+              "fragmentation_score": 1.0,
+              "free_capacity_hours": 4.25
+            }
           },
           {
             "day": "tue",
@@ -2520,7 +3109,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 2.25,
+              "focus_hours": 3.25,
+              "learning_hours": 1.0,
+              "collab_hours": 1.0,
+              "block_count": 10,
+              "longest_focus_block_minutes": 120,
+              "fragmentation_score": 0.78,
+              "free_capacity_hours": 3.25
+            }
           },
           {
             "day": "wed",
@@ -2607,7 +3206,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 2.75,
+              "focus_hours": 3.75,
+              "learning_hours": 1.0,
+              "collab_hours": 0.5,
+              "block_count": 9,
+              "longest_focus_block_minutes": 150,
+              "fragmentation_score": 0.75,
+              "free_capacity_hours": 3.75
+            }
           },
           {
             "day": "thu",
@@ -2703,7 +3312,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 2.25,
+              "focus_hours": 3.25,
+              "learning_hours": 1.0,
+              "collab_hours": 1.0,
+              "block_count": 10,
+              "longest_focus_block_minutes": 120,
+              "fragmentation_score": 0.78,
+              "free_capacity_hours": 3.25
+            }
           },
           {
             "day": "fri",
@@ -2790,7 +3409,17 @@
                 "title": "Sprint review & retro",
                 "collaborative": true
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 2.75,
+              "focus_hours": 4.25,
+              "learning_hours": 0.0,
+              "collab_hours": 0.5,
+              "block_count": 9,
+              "longest_focus_block_minutes": 135,
+              "fragmentation_score": 1.0,
+              "free_capacity_hours": 4.25
+            }
           }
         ]
       }
@@ -2809,6 +3438,69 @@
       "reports": [],
       "timezone": "Asia/Kolkata",
       "preferred_learning_slot": "Afternoon",
+      "profile": {
+        "start_date": "2025-11-10",
+        "tenure_months": 7,
+        "level_code": "L3",
+        "years_experience": 1,
+        "location": "Hyderabad",
+        "employment_type": "full_time",
+        "languages": [
+          "Python",
+          "SQL",
+          "Scala"
+        ]
+      },
+      "learning_preferences": {
+        "preferred_study_hours_per_week": 6,
+        "preferred_session_minutes": 60,
+        "preferred_study_days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu"
+        ],
+        "study_window": {
+          "start": "16:00",
+          "end": "17:00"
+        },
+        "preferred_modality": "hands_on_lab",
+        "pace": "light",
+        "reminder_opt_in": true
+      },
+      "work_context": {
+        "work_mode": "remote",
+        "working_hours": {
+          "start": "09:00",
+          "end": "18:00"
+        },
+        "working_days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri"
+        ],
+        "focus_windows": [
+          {
+            "start": "09:45",
+            "end": "12:00"
+          },
+          {
+            "start": "15:30",
+            "end": "18:00"
+          }
+        ],
+        "on_call": {
+          "is_on_call": false,
+          "dates": []
+        },
+        "pto_days": [],
+        "after_hours_load": "none",
+        "context_switch_score": 0.78,
+        "longest_focus_block_minutes": 150,
+        "response_latency_minutes": 14
+      },
       "work_signals": {
         "employee_id": "EMP-006",
         "meeting_hours_per_week": 5.25,
@@ -2942,7 +3634,17 @@
                 "title": "Sprint planning — Realtime analytics rollout",
                 "collaborative": true
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 1.25,
+              "focus_hours": 3.75,
+              "learning_hours": 1.0,
+              "collab_hours": 1.5,
+              "block_count": 12,
+              "longest_focus_block_minutes": 135,
+              "fragmentation_score": 0.73,
+              "free_capacity_hours": 3.75
+            }
           },
           {
             "day": "tue",
@@ -3038,7 +3740,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 0.75,
+              "focus_hours": 4.75,
+              "learning_hours": 1.0,
+              "collab_hours": 1.0,
+              "block_count": 10,
+              "longest_focus_block_minutes": 135,
+              "fragmentation_score": 0.78,
+              "free_capacity_hours": 4.75
+            }
           },
           {
             "day": "wed",
@@ -3143,7 +3855,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 1.25,
+              "focus_hours": 4.25,
+              "learning_hours": 1.0,
+              "collab_hours": 1.5,
+              "block_count": 11,
+              "longest_focus_block_minutes": 135,
+              "fragmentation_score": 0.6,
+              "free_capacity_hours": 4.25
+            }
           },
           {
             "day": "thu",
@@ -3239,7 +3961,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 0.75,
+              "focus_hours": 4.75,
+              "learning_hours": 1.0,
+              "collab_hours": 1.0,
+              "block_count": 10,
+              "longest_focus_block_minutes": 135,
+              "fragmentation_score": 0.78,
+              "free_capacity_hours": 4.75
+            }
           },
           {
             "day": "fri",
@@ -3326,7 +4058,17 @@
                 "title": "Sprint review & retro",
                 "collaborative": true
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 1.25,
+              "focus_hours": 5.25,
+              "learning_hours": 0.0,
+              "collab_hours": 1.0,
+              "block_count": 9,
+              "longest_focus_block_minutes": 150,
+              "fragmentation_score": 1.0,
+              "free_capacity_hours": 5.25
+            }
           }
         ]
       }
@@ -3345,6 +4087,65 @@
       "reports": [],
       "timezone": "Asia/Kolkata",
       "preferred_learning_slot": "Morning",
+      "profile": {
+        "start_date": "2023-02-24",
+        "tenure_months": 40,
+        "level_code": "L6",
+        "years_experience": 10,
+        "location": "Bengaluru",
+        "employment_type": "full_time",
+        "languages": [
+          "Python",
+          "SQL"
+        ]
+      },
+      "learning_preferences": {
+        "preferred_study_hours_per_week": 5,
+        "preferred_session_minutes": 60,
+        "preferred_study_days": [
+          "tue",
+          "wed",
+          "thu"
+        ],
+        "study_window": {
+          "start": "11:00",
+          "end": "12:00"
+        },
+        "preferred_modality": "video",
+        "pace": "steady",
+        "reminder_opt_in": true
+      },
+      "work_context": {
+        "work_mode": "hybrid",
+        "working_hours": {
+          "start": "09:00",
+          "end": "18:00"
+        },
+        "working_days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri"
+        ],
+        "focus_windows": [
+          {
+            "start": "09:45",
+            "end": "12:00"
+          }
+        ],
+        "on_call": {
+          "is_on_call": false,
+          "dates": []
+        },
+        "pto_days": [
+          "2026-06-26"
+        ],
+        "after_hours_load": "moderate",
+        "context_switch_score": 0.85,
+        "longest_focus_block_minutes": 90,
+        "response_latency_minutes": 28
+      },
       "work_signals": {
         "employee_id": "EMP-007",
         "meeting_hours_per_week": 22.75,
@@ -3478,7 +4279,17 @@
                 "title": "Sprint planning — Document intelligence service",
                 "collaborative": true
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 4.75,
+              "focus_hours": 2.25,
+              "learning_hours": 0.0,
+              "collab_hours": 0.5,
+              "block_count": 12,
+              "longest_focus_block_minutes": 60,
+              "fragmentation_score": 0.91,
+              "free_capacity_hours": 2.25
+            }
           },
           {
             "day": "tue",
@@ -3592,7 +4403,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 4.25,
+              "focus_hours": 1.25,
+              "learning_hours": 1.0,
+              "collab_hours": 1.0,
+              "block_count": 12,
+              "longest_focus_block_minutes": 60,
+              "fragmentation_score": 0.82,
+              "free_capacity_hours": 1.25
+            }
           },
           {
             "day": "wed",
@@ -3697,7 +4518,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 4.75,
+              "focus_hours": 1.75,
+              "learning_hours": 1.0,
+              "collab_hours": 0.5,
+              "block_count": 11,
+              "longest_focus_block_minutes": 90,
+              "fragmentation_score": 0.8,
+              "free_capacity_hours": 1.75
+            }
           },
           {
             "day": "thu",
@@ -3811,7 +4642,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 4.25,
+              "focus_hours": 1.25,
+              "learning_hours": 1.0,
+              "collab_hours": 1.0,
+              "block_count": 12,
+              "longest_focus_block_minutes": 60,
+              "fragmentation_score": 0.82,
+              "free_capacity_hours": 1.25
+            }
           },
           {
             "day": "fri",
@@ -3925,7 +4766,17 @@
                 "title": "Sprint review & retro",
                 "collaborative": true
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 4.75,
+              "focus_hours": 2.25,
+              "learning_hours": 0.0,
+              "collab_hours": 0.5,
+              "block_count": 12,
+              "longest_focus_block_minutes": 60,
+              "fragmentation_score": 0.91,
+              "free_capacity_hours": 2.25
+            }
           }
         ]
       }
@@ -3944,6 +4795,68 @@
       "reports": [],
       "timezone": "Asia/Kolkata",
       "preferred_learning_slot": "Afternoon",
+      "profile": {
+        "start_date": "2025-05-14",
+        "tenure_months": 13,
+        "level_code": "L4",
+        "years_experience": 2,
+        "location": "Pune",
+        "employment_type": "full_time",
+        "languages": [
+          "Python",
+          "SQL"
+        ]
+      },
+      "learning_preferences": {
+        "preferred_study_hours_per_week": 8,
+        "preferred_session_minutes": 90,
+        "preferred_study_days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu"
+        ],
+        "study_window": {
+          "start": "16:00",
+          "end": "17:00"
+        },
+        "preferred_modality": "video",
+        "pace": "intensive",
+        "reminder_opt_in": true
+      },
+      "work_context": {
+        "work_mode": "remote",
+        "working_hours": {
+          "start": "09:00",
+          "end": "18:00"
+        },
+        "working_days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri"
+        ],
+        "focus_windows": [
+          {
+            "start": "09:45",
+            "end": "12:00"
+          },
+          {
+            "start": "15:30",
+            "end": "18:00"
+          }
+        ],
+        "on_call": {
+          "is_on_call": false,
+          "dates": []
+        },
+        "pto_days": [],
+        "after_hours_load": "low",
+        "context_switch_score": 0.78,
+        "longest_focus_block_minutes": 150,
+        "response_latency_minutes": 13
+      },
       "work_signals": {
         "employee_id": "EMP-008",
         "meeting_hours_per_week": 5.25,
@@ -4077,7 +4990,17 @@
                 "title": "Sprint planning — Document intelligence service",
                 "collaborative": true
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 1.25,
+              "focus_hours": 3.75,
+              "learning_hours": 1.0,
+              "collab_hours": 1.5,
+              "block_count": 12,
+              "longest_focus_block_minutes": 135,
+              "fragmentation_score": 0.73,
+              "free_capacity_hours": 3.75
+            }
           },
           {
             "day": "tue",
@@ -4173,7 +5096,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 0.75,
+              "focus_hours": 4.75,
+              "learning_hours": 1.0,
+              "collab_hours": 1.0,
+              "block_count": 10,
+              "longest_focus_block_minutes": 135,
+              "fragmentation_score": 0.78,
+              "free_capacity_hours": 4.75
+            }
           },
           {
             "day": "wed",
@@ -4278,7 +5211,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 1.25,
+              "focus_hours": 4.25,
+              "learning_hours": 1.0,
+              "collab_hours": 1.5,
+              "block_count": 11,
+              "longest_focus_block_minutes": 135,
+              "fragmentation_score": 0.6,
+              "free_capacity_hours": 4.25
+            }
           },
           {
             "day": "thu",
@@ -4374,7 +5317,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 0.75,
+              "focus_hours": 4.75,
+              "learning_hours": 1.0,
+              "collab_hours": 1.0,
+              "block_count": 10,
+              "longest_focus_block_minutes": 135,
+              "fragmentation_score": 0.78,
+              "free_capacity_hours": 4.75
+            }
           },
           {
             "day": "fri",
@@ -4461,7 +5414,17 @@
                 "title": "Sprint review & retro",
                 "collaborative": true
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 1.25,
+              "focus_hours": 5.25,
+              "learning_hours": 0.0,
+              "collab_hours": 1.0,
+              "block_count": 9,
+              "longest_focus_block_minutes": 150,
+              "fragmentation_score": 1.0,
+              "free_capacity_hours": 5.25
+            }
           }
         ]
       }
@@ -4480,6 +5443,64 @@
       "reports": [],
       "timezone": "Asia/Kolkata",
       "preferred_learning_slot": "Morning",
+      "profile": {
+        "start_date": "2023-12-21",
+        "tenure_months": 30,
+        "level_code": "L6",
+        "years_experience": 12,
+        "location": "Gurugram",
+        "employment_type": "full_time",
+        "languages": [
+          "C#",
+          "Bicep",
+          "PowerShell"
+        ]
+      },
+      "learning_preferences": {
+        "preferred_study_hours_per_week": 5,
+        "preferred_session_minutes": 60,
+        "preferred_study_days": [
+          "tue",
+          "wed",
+          "thu"
+        ],
+        "study_window": {
+          "start": "11:00",
+          "end": "12:00"
+        },
+        "preferred_modality": "reading",
+        "pace": "steady",
+        "reminder_opt_in": false
+      },
+      "work_context": {
+        "work_mode": "hybrid",
+        "working_hours": {
+          "start": "09:00",
+          "end": "18:00"
+        },
+        "working_days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri"
+        ],
+        "focus_windows": [
+          {
+            "start": "09:45",
+            "end": "12:00"
+          }
+        ],
+        "on_call": {
+          "is_on_call": false,
+          "dates": []
+        },
+        "pto_days": [],
+        "after_hours_load": "high",
+        "context_switch_score": 0.85,
+        "longest_focus_block_minutes": 90,
+        "response_latency_minutes": 35
+      },
       "work_signals": {
         "employee_id": "EMP-009",
         "meeting_hours_per_week": 22.75,
@@ -4613,7 +5634,17 @@
                 "title": "Sprint planning — Zero-trust migration",
                 "collaborative": true
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 4.75,
+              "focus_hours": 2.25,
+              "learning_hours": 0.0,
+              "collab_hours": 0.5,
+              "block_count": 12,
+              "longest_focus_block_minutes": 60,
+              "fragmentation_score": 0.91,
+              "free_capacity_hours": 2.25
+            }
           },
           {
             "day": "tue",
@@ -4727,7 +5758,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 4.25,
+              "focus_hours": 1.25,
+              "learning_hours": 1.0,
+              "collab_hours": 1.0,
+              "block_count": 12,
+              "longest_focus_block_minutes": 60,
+              "fragmentation_score": 0.82,
+              "free_capacity_hours": 1.25
+            }
           },
           {
             "day": "wed",
@@ -4832,7 +5873,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 4.75,
+              "focus_hours": 1.75,
+              "learning_hours": 1.0,
+              "collab_hours": 0.5,
+              "block_count": 11,
+              "longest_focus_block_minutes": 90,
+              "fragmentation_score": 0.8,
+              "free_capacity_hours": 1.75
+            }
           },
           {
             "day": "thu",
@@ -4946,7 +5997,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 4.25,
+              "focus_hours": 1.25,
+              "learning_hours": 1.0,
+              "collab_hours": 1.0,
+              "block_count": 12,
+              "longest_focus_block_minutes": 60,
+              "fragmentation_score": 0.82,
+              "free_capacity_hours": 1.25
+            }
           },
           {
             "day": "fri",
@@ -5060,7 +6121,17 @@
                 "title": "Sprint review & retro",
                 "collaborative": true
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 4.75,
+              "focus_hours": 2.25,
+              "learning_hours": 0.0,
+              "collab_hours": 0.5,
+              "block_count": 12,
+              "longest_focus_block_minutes": 60,
+              "fragmentation_score": 0.91,
+              "free_capacity_hours": 2.25
+            }
           }
         ]
       }
@@ -5079,6 +6150,69 @@
       "reports": [],
       "timezone": "Asia/Kolkata",
       "preferred_learning_slot": "Afternoon",
+      "profile": {
+        "start_date": "2025-02-13",
+        "tenure_months": 16,
+        "level_code": "L4",
+        "years_experience": 3,
+        "location": "Chennai",
+        "employment_type": "full_time",
+        "languages": [
+          "C#",
+          "Bicep",
+          "PowerShell"
+        ]
+      },
+      "learning_preferences": {
+        "preferred_study_hours_per_week": 6,
+        "preferred_session_minutes": 60,
+        "preferred_study_days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu"
+        ],
+        "study_window": {
+          "start": "16:00",
+          "end": "17:00"
+        },
+        "preferred_modality": "instructor_led",
+        "pace": "steady",
+        "reminder_opt_in": true
+      },
+      "work_context": {
+        "work_mode": "office",
+        "working_hours": {
+          "start": "09:00",
+          "end": "18:00"
+        },
+        "working_days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri"
+        ],
+        "focus_windows": [
+          {
+            "start": "09:45",
+            "end": "12:00"
+          },
+          {
+            "start": "15:30",
+            "end": "18:00"
+          }
+        ],
+        "on_call": {
+          "is_on_call": false,
+          "dates": []
+        },
+        "pto_days": [],
+        "after_hours_load": "low",
+        "context_switch_score": 0.93,
+        "longest_focus_block_minutes": 135,
+        "response_latency_minutes": 16
+      },
       "work_signals": {
         "employee_id": "EMP-010",
         "meeting_hours_per_week": 12.75,
@@ -5194,7 +6328,17 @@
                 "title": "Sprint planning — Zero-trust migration",
                 "collaborative": true
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 2.75,
+              "focus_hours": 2.25,
+              "learning_hours": 1.0,
+              "collab_hours": 1.5,
+              "block_count": 10,
+              "longest_focus_block_minutes": 135,
+              "fragmentation_score": 1.0,
+              "free_capacity_hours": 2.25
+            }
           },
           {
             "day": "tue",
@@ -5281,7 +6425,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 2.25,
+              "focus_hours": 3.25,
+              "learning_hours": 1.0,
+              "collab_hours": 1.0,
+              "block_count": 9,
+              "longest_focus_block_minutes": 135,
+              "fragmentation_score": 0.88,
+              "free_capacity_hours": 3.25
+            }
           },
           {
             "day": "wed",
@@ -5377,7 +6531,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 2.75,
+              "focus_hours": 2.75,
+              "learning_hours": 1.0,
+              "collab_hours": 1.5,
+              "block_count": 10,
+              "longest_focus_block_minutes": 135,
+              "fragmentation_score": 0.89,
+              "free_capacity_hours": 2.75
+            }
           },
           {
             "day": "thu",
@@ -5464,7 +6628,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 2.25,
+              "focus_hours": 3.25,
+              "learning_hours": 1.0,
+              "collab_hours": 1.0,
+              "block_count": 9,
+              "longest_focus_block_minutes": 135,
+              "fragmentation_score": 0.88,
+              "free_capacity_hours": 3.25
+            }
           },
           {
             "day": "fri",
@@ -5551,7 +6725,17 @@
                 "title": "Sprint review & retro",
                 "collaborative": true
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 2.75,
+              "focus_hours": 3.75,
+              "learning_hours": 0.0,
+              "collab_hours": 1.0,
+              "block_count": 9,
+              "longest_focus_block_minutes": 135,
+              "fragmentation_score": 1.0,
+              "free_capacity_hours": 3.75
+            }
           }
         ]
       }
@@ -5581,6 +6765,60 @@
       ],
       "timezone": "Asia/Kolkata",
       "preferred_learning_slot": "Morning",
+      "profile": {
+        "start_date": "2022-12-26",
+        "tenure_months": 42,
+        "level_code": "L6",
+        "years_experience": 11,
+        "location": "Bengaluru",
+        "employment_type": "full_time",
+        "languages": [
+          "Python"
+        ]
+      },
+      "learning_preferences": {
+        "preferred_study_hours_per_week": 2,
+        "preferred_session_minutes": 45,
+        "preferred_study_days": [
+          "wed"
+        ],
+        "study_window": {
+          "start": "11:00",
+          "end": "12:00"
+        },
+        "preferred_modality": "instructor_led",
+        "pace": "light",
+        "reminder_opt_in": true
+      },
+      "work_context": {
+        "work_mode": "hybrid",
+        "working_hours": {
+          "start": "09:00",
+          "end": "18:00"
+        },
+        "working_days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri"
+        ],
+        "focus_windows": [
+          {
+            "start": "11:00",
+            "end": "12:00"
+          }
+        ],
+        "on_call": {
+          "is_on_call": false,
+          "dates": []
+        },
+        "pto_days": [],
+        "after_hours_load": "high",
+        "context_switch_score": 0.72,
+        "longest_focus_block_minutes": 60,
+        "response_latency_minutes": 15
+      },
       "work_signals": {
         "employee_id": "EMP-011",
         "meeting_hours_per_week": 27.75,
@@ -5714,7 +6952,17 @@
                 "title": "Sprint planning — Atlas Q2 delivery",
                 "collaborative": true
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 5.75,
+              "focus_hours": 1.25,
+              "learning_hours": 0.0,
+              "collab_hours": 0.0,
+              "block_count": 12,
+              "longest_focus_block_minutes": 60,
+              "fragmentation_score": 0.73,
+              "free_capacity_hours": 1.25
+            }
           },
           {
             "day": "tue",
@@ -5837,7 +7085,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 5.75,
+              "focus_hours": 1.75,
+              "learning_hours": 0.0,
+              "collab_hours": 0.0,
+              "block_count": 13,
+              "longest_focus_block_minutes": 60,
+              "fragmentation_score": 0.67,
+              "free_capacity_hours": 1.75
+            }
           },
           {
             "day": "wed",
@@ -5951,7 +7209,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 5.25,
+              "focus_hours": 0.75,
+              "learning_hours": 1.0,
+              "collab_hours": 0.0,
+              "block_count": 12,
+              "longest_focus_block_minutes": 60,
+              "fragmentation_score": 0.73,
+              "free_capacity_hours": 0.75
+            }
           },
           {
             "day": "thu",
@@ -6065,7 +7333,17 @@
                 "title": "Deep work block",
                 "collaborative": false
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 5.25,
+              "focus_hours": 1.75,
+              "learning_hours": 0.0,
+              "collab_hours": 0.0,
+              "block_count": 12,
+              "longest_focus_block_minutes": 60,
+              "fragmentation_score": 0.73,
+              "free_capacity_hours": 1.75
+            }
           },
           {
             "day": "fri",
@@ -6179,7 +7457,17 @@
                 "title": "Sprint review & retro",
                 "collaborative": true
               }
-            ]
+            ],
+            "summary": {
+              "meeting_hours": 5.75,
+              "focus_hours": 1.25,
+              "learning_hours": 0.0,
+              "collab_hours": 0.0,
+              "block_count": 12,
+              "longest_focus_block_minutes": 60,
+              "fragmentation_score": 0.73,
+              "free_capacity_hours": 1.25
+            }
           }
         ]
       }

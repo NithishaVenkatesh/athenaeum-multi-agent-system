@@ -150,6 +150,36 @@ def _minimal_persona() -> dict[str, Any]:
         "reports": [],
         "timezone": "Asia/Kolkata",
         "preferred_learning_slot": "Morning",
+        "profile": {
+            "start_date": "2024-01-08",
+            "tenure_months": 24,
+            "level_code": "L5",
+            "years_experience": 7,
+            "location": "Bengaluru",
+            "employment_type": "full_time",
+            "languages": ["C#", "Python"],
+        },
+        "learning_preferences": {
+            "preferred_study_hours_per_week": 5,
+            "preferred_session_minutes": 60,
+            "preferred_study_days": ["tue", "wed", "thu"],
+            "study_window": {"start": "11:00", "end": "12:00"},
+            "preferred_modality": "hands_on_lab",
+            "pace": "steady",
+            "reminder_opt_in": True,
+        },
+        "work_context": {
+            "work_mode": "hybrid",
+            "working_hours": {"start": "09:00", "end": "18:00"},
+            "working_days": ["mon", "tue", "wed", "thu", "fri"],
+            "focus_windows": [{"start": "09:45", "end": "12:00"}],
+            "on_call": {"is_on_call": False, "dates": []},
+            "pto_days": [],
+            "after_hours_load": "low",
+            "context_switch_score": 0.2,
+            "longest_focus_block_minutes": 60,
+            "response_latency_minutes": 20,
+        },
         "work_signals": {
             "employee_id": "EMP-001",
             "meeting_hours_per_week": 5.0,
@@ -170,7 +200,44 @@ def _minimal_persona() -> dict[str, Any]:
         },
         "schedule": {
             "week_id": "2026-W24",
-            "days": [{"day": "mon", "date": "2026-06-08", "blocks": [_minimal_block()]}],
+            "days": [
+                {
+                    "day": "mon",
+                    "date": "2026-06-08",
+                    "blocks": [_minimal_block()],
+                    "summary": {
+                        "meeting_hours": 0.0,
+                        "focus_hours": 1.0,
+                        "learning_hours": 0.0,
+                        "collab_hours": 0.0,
+                        "block_count": 1,
+                        "longest_focus_block_minutes": 60,
+                        "fragmentation_score": 0.0,
+                        "free_capacity_hours": 1.0,
+                    },
+                }
+            ],
+        },
+    }
+
+
+def _team_context() -> dict[str, Any]:
+    return {
+        "sprint": {
+            "number": 24,
+            "name": "Sprint 24",
+            "start": "2026-06-08",
+            "end": "2026-06-12",
+            "goal": "Ship things",
+        },
+        "okrs": [
+            {"id": "OKR-1", "objective": "Reliability", "key_results": ["KR"], "progress": 0.5}
+        ],
+        "cert_targets": [
+            {"vertical": "cloud-backend", "cert": "AZ-204", "target_quarter": "Q3 FY26"}
+        ],
+        "capacity_policy": {
+            "target_study_hours_by_seniority": {"senior": 4, "junior": 6, "manager": 2}
         },
     }
 
@@ -205,12 +272,14 @@ def _minimal_document() -> WorkIQDocument:
                         "name": "Has members",
                         "manager_employee_id": "EMP-001",
                         "member_employee_ids": ["EMP-001"],
+                        **_team_context(),
                     },
                     {
                         "id": "TEAM-EMPTY",
                         "name": "No members",
                         "manager_employee_id": "EMP-001",
                         "member_employee_ids": [],
+                        **_team_context(),
                     },
                 ],
             },

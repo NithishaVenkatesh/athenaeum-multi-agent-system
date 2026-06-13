@@ -35,6 +35,12 @@ BlockCategory = Literal[
     "lunch",
     "admin",
 ]
+WorkMode = Literal["office", "remote", "hybrid"]
+Modality = Literal["hands_on_lab", "video", "reading", "instructor_led"]
+Pace = Literal["intensive", "steady", "light"]
+AfterHoursLoad = Literal["none", "low", "moderate", "high"]
+LevelCode = Literal["L3", "L4", "L5", "L6", "L7"]
+EmploymentType = Literal["full_time", "contractor"]
 
 
 class _Model(BaseModel):
@@ -55,10 +61,31 @@ class CalendarBlock(_Model):
     collaborative: bool
 
 
+class TimeWindow(_Model):
+    """A simple HH:MM start/end window."""
+
+    start: str
+    end: str
+
+
+class DaySummary(_Model):
+    """Derived per-day rollup of a schedule (Work IQ workload-insight signal)."""
+
+    meeting_hours: float
+    focus_hours: float
+    learning_hours: float
+    collab_hours: float
+    block_count: int
+    longest_focus_block_minutes: int
+    fragmentation_score: float
+    free_capacity_hours: float
+
+
 class DaySchedule(_Model):
     day: Weekday
     date: str
     blocks: list[CalendarBlock]
+    summary: DaySummary
 
 
 class WeekSchedule(_Model):
@@ -90,6 +117,50 @@ class LearnerProfile(_Model):
     readiness_status: ReadinessStatus
 
 
+class LearningPreferences(_Model):
+    """Bundle A — how a learner wants to study (drives study-slot scheduling)."""
+
+    preferred_study_hours_per_week: int
+    preferred_session_minutes: int
+    preferred_study_days: list[Weekday]
+    study_window: TimeWindow
+    preferred_modality: Modality
+    pace: Pace
+    reminder_opt_in: bool
+
+
+class OnCall(_Model):
+    is_on_call: bool
+    dates: list[str]
+
+
+class WorkContext(_Model):
+    """Bundle B — availability and workload shape (Work IQ workload insights)."""
+
+    work_mode: WorkMode
+    working_hours: TimeWindow
+    working_days: list[Weekday]
+    focus_windows: list[TimeWindow]
+    on_call: OnCall
+    pto_days: list[str]
+    after_hours_load: AfterHoursLoad
+    context_switch_score: float
+    longest_focus_block_minutes: int
+    response_latency_minutes: int
+
+
+class Profile(_Model):
+    """Bundle E — synthetic HR identity (fabricated; no PII)."""
+
+    start_date: str
+    tenure_months: int
+    level_code: LevelCode
+    years_experience: int
+    location: str
+    employment_type: EmploymentType
+    languages: list[str]
+
+
 class Persona(_Model):
     """A full org member: identity, role, work signals, learner profile, schedule."""
 
@@ -106,6 +177,9 @@ class Persona(_Model):
     reports: list[str]
     timezone: str
     preferred_learning_slot: LearningSlot
+    profile: Profile
+    learning_preferences: LearningPreferences
+    work_context: WorkContext
     work_signals: WorkSignals
     learning: LearnerProfile
     schedule: WeekSchedule
@@ -117,11 +191,44 @@ class Vertical(_Model):
     primary_cert: str
 
 
+class Sprint(_Model):
+    """Bundle F — the team's active sprint."""
+
+    number: int
+    name: str
+    start: str
+    end: str
+    goal: str
+
+
+class Okr(_Model):
+    id: str
+    objective: str
+    key_results: list[str]
+    progress: float
+
+
+class CertTarget(_Model):
+    vertical: str
+    cert: str
+    target_quarter: str
+
+
+class CapacityPolicy(_Model):
+    """Target weekly study hours the team allocates per seniority band."""
+
+    target_study_hours_by_seniority: dict[Seniority, int]
+
+
 class Team(_Model):
     id: str
     name: str
     manager_employee_id: str
     member_employee_ids: list[str]
+    sprint: Sprint
+    okrs: list[Okr]
+    cert_targets: list[CertTarget]
+    capacity_policy: CapacityPolicy
 
 
 class Org(_Model):
@@ -191,6 +298,33 @@ class PersonaSummary(_Model):
         )
 
 
+class Availability(_Model):
+    """Derived availability projection (Bundle B) — when this person is reachable/free."""
+
+    employee_id: str
+    work_mode: WorkMode
+    working_hours: TimeWindow
+    working_days: list[Weekday]
+    focus_windows: list[TimeWindow]
+    on_call: OnCall
+    pto_days: list[str]
+    weekly_free_capacity_hours: float
+
+    @classmethod
+    def of(cls, persona: Persona, weekly_free_capacity_hours: float) -> Availability:
+        ctx = persona.work_context
+        return cls(
+            employee_id=persona.employee_id,
+            work_mode=ctx.work_mode,
+            working_hours=ctx.working_hours,
+            working_days=ctx.working_days,
+            focus_windows=ctx.focus_windows,
+            on_call=ctx.on_call,
+            pto_days=ctx.pto_days,
+            weekly_free_capacity_hours=weekly_free_capacity_hours,
+        )
+
+
 class TeamCapacity(_Model):
     """Aggregate-only team capacity view (manager surface — never per-learner detail)."""
 
@@ -201,3 +335,4 @@ class TeamCapacity(_Model):
     avg_focus_hours_per_week: float
     high_meeting_load_count: int
     readiness_distribution: dict[ReadinessStatus, int]
+    capacity_policy: CapacityPolicy

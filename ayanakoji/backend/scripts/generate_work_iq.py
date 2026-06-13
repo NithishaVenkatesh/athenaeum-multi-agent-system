@@ -128,6 +128,267 @@ RECOMMENDED_HOURS = {
     "SC-100": 26,
 }
 
+# Programming languages per vertical (Bundle E — profile).
+LANGUAGES: dict[str, list[str]] = {
+    "cloud-backend": ["C#", "TypeScript", "Python"],
+    "devops-platform": ["Go", "Bash", "Bicep"],
+    "data-engineering": ["Python", "SQL", "Scala"],
+    "ai-ml": ["Python", "SQL"],
+    "architecture-security": ["C#", "Bicep", "PowerShell"],
+    "management": ["Python"],
+}
+
+# Per-persona varying inputs for bundles A (learning prefs), B (work context),
+# E (profile). Derived fields (study days, focus windows, summaries, switch score)
+# are computed from the schedule, not listed here.
+EXTRAS: dict[str, dict[str, object]] = {
+    "EMP-001": {
+        "level": "L5",
+        "years": 7,
+        "tenure": 34,
+        "location": "Bengaluru",
+        "employment": "full_time",
+        "study_hours": 5,
+        "session_min": 60,
+        "modality": "hands_on_lab",
+        "pace": "steady",
+        "reminder": True,
+        "work_mode": "hybrid",
+        "after_hours": "moderate",
+        "latency": 25,
+        "on_call": False,
+        "on_call_dates": [],
+        "pto": [],
+    },
+    "EMP-002": {
+        "level": "L3",
+        "years": 2,
+        "tenure": 11,
+        "location": "Hyderabad",
+        "employment": "full_time",
+        "study_hours": 8,
+        "session_min": 90,
+        "modality": "video",
+        "pace": "intensive",
+        "reminder": True,
+        "work_mode": "remote",
+        "after_hours": "low",
+        "latency": 12,
+        "on_call": False,
+        "on_call_dates": [],
+        "pto": [],
+    },
+    "EMP-003": {
+        "level": "L6",
+        "years": 9,
+        "tenure": 46,
+        "location": "Pune",
+        "employment": "full_time",
+        "study_hours": 4,
+        "session_min": 60,
+        "modality": "hands_on_lab",
+        "pace": "steady",
+        "reminder": False,
+        "work_mode": "hybrid",
+        "after_hours": "high",
+        "latency": 30,
+        "on_call": True,
+        "on_call_dates": ["2026-06-13", "2026-06-14"],
+        "pto": [],
+    },
+    "EMP-004": {
+        "level": "L4",
+        "years": 3,
+        "tenure": 14,
+        "location": "Chennai",
+        "employment": "contractor",
+        "study_hours": 6,
+        "session_min": 60,
+        "modality": "hands_on_lab",
+        "pace": "intensive",
+        "reminder": True,
+        "work_mode": "office",
+        "after_hours": "low",
+        "latency": 15,
+        "on_call": True,
+        "on_call_dates": ["2026-06-11", "2026-06-12"],
+        "pto": [],
+    },
+    "EMP-005": {
+        "level": "L5",
+        "years": 6,
+        "tenure": 28,
+        "location": "Bengaluru",
+        "employment": "full_time",
+        "study_hours": 4,
+        "session_min": 60,
+        "modality": "reading",
+        "pace": "steady",
+        "reminder": False,
+        "work_mode": "hybrid",
+        "after_hours": "moderate",
+        "latency": 22,
+        "on_call": False,
+        "on_call_dates": [],
+        "pto": ["2026-06-19", "2026-06-20"],
+    },
+    "EMP-006": {
+        "level": "L3",
+        "years": 1,
+        "tenure": 7,
+        "location": "Hyderabad",
+        "employment": "full_time",
+        "study_hours": 6,
+        "session_min": 60,
+        "modality": "hands_on_lab",
+        "pace": "light",
+        "reminder": True,
+        "work_mode": "remote",
+        "after_hours": "none",
+        "latency": 14,
+        "on_call": False,
+        "on_call_dates": [],
+        "pto": [],
+    },
+    "EMP-007": {
+        "level": "L6",
+        "years": 10,
+        "tenure": 40,
+        "location": "Bengaluru",
+        "employment": "full_time",
+        "study_hours": 5,
+        "session_min": 60,
+        "modality": "video",
+        "pace": "steady",
+        "reminder": True,
+        "work_mode": "hybrid",
+        "after_hours": "moderate",
+        "latency": 28,
+        "on_call": False,
+        "on_call_dates": [],
+        "pto": ["2026-06-26"],
+    },
+    "EMP-008": {
+        "level": "L4",
+        "years": 2,
+        "tenure": 13,
+        "location": "Pune",
+        "employment": "full_time",
+        "study_hours": 8,
+        "session_min": 90,
+        "modality": "video",
+        "pace": "intensive",
+        "reminder": True,
+        "work_mode": "remote",
+        "after_hours": "low",
+        "latency": 13,
+        "on_call": False,
+        "on_call_dates": [],
+        "pto": [],
+    },
+    "EMP-009": {
+        "level": "L6",
+        "years": 12,
+        "tenure": 30,
+        "location": "Gurugram",
+        "employment": "full_time",
+        "study_hours": 5,
+        "session_min": 60,
+        "modality": "reading",
+        "pace": "steady",
+        "reminder": False,
+        "work_mode": "hybrid",
+        "after_hours": "high",
+        "latency": 35,
+        "on_call": False,
+        "on_call_dates": [],
+        "pto": [],
+    },
+    "EMP-010": {
+        "level": "L4",
+        "years": 3,
+        "tenure": 16,
+        "location": "Chennai",
+        "employment": "full_time",
+        "study_hours": 6,
+        "session_min": 60,
+        "modality": "instructor_led",
+        "pace": "steady",
+        "reminder": True,
+        "work_mode": "office",
+        "after_hours": "low",
+        "latency": 16,
+        "on_call": False,
+        "on_call_dates": [],
+        "pto": [],
+    },
+    "EMP-011": {
+        "level": "L6",
+        "years": 11,
+        "tenure": 42,
+        "location": "Bengaluru",
+        "employment": "full_time",
+        "study_hours": 2,
+        "session_min": 45,
+        "modality": "instructor_led",
+        "pace": "light",
+        "reminder": True,
+        "work_mode": "hybrid",
+        "after_hours": "high",
+        "latency": 15,
+        "on_call": False,
+        "on_call_dates": [],
+        "pto": [],
+    },
+}
+
+# Team & delivery context (Bundle F).
+TEAM_CONTEXT = {
+    "sprint": {
+        "number": 24,
+        "name": "Sprint 24 — Atlas",
+        "start": "2026-06-08",
+        "end": "2026-06-12",
+        "goal": "Ship the Checkout API revamp behind a feature flag and harden the CD platform.",
+    },
+    "okrs": [
+        {
+            "id": "OKR-1",
+            "objective": "Raise delivery reliability",
+            "key_results": [
+                "Cut change-failure rate below 10%",
+                "Bring p95 deploy lead time under 1 day",
+            ],
+            "progress": 0.6,
+        },
+        {
+            "id": "OKR-2",
+            "objective": "Grow certification coverage across the team",
+            "key_results": [
+                "80% of engineers GO-ready on their primary cert",
+                "Each vertical has one cross-trained engineer",
+            ],
+            "progress": 0.45,
+        },
+        {
+            "id": "OKR-3",
+            "objective": "Protect maker time",
+            "key_results": [
+                "Two no-meeting mornings per week per engineer",
+                "Average focus hours at or above 18/week",
+            ],
+            "progress": 0.3,
+        },
+    ],
+    "cert_targets": [
+        {"vertical": v["id"], "cert": v["primary_cert"], "target_quarter": "Q3 FY26"}
+        for v in VERTICALS
+    ],
+    "capacity_policy": {
+        "target_study_hours_by_seniority": {"senior": 4, "junior": 6, "manager": 2}
+    },
+}
+
 
 # ── Persona specs (declarative; schedules are built from archetypes) ─────────
 
@@ -579,6 +840,105 @@ def _date_for(weekday: str) -> str:
     return (WEEK_START + timedelta(days=WEEKDAYS.index(weekday))).isoformat()
 
 
+# ── Bundle helpers (A learning prefs · B work context · E profile) ───────────
+
+
+def _start_date(tenure_months: int) -> str:
+    return (WEEK_START - timedelta(days=tenure_months * 30)).isoformat()
+
+
+def _study_window(slot: str) -> dict[str, str]:
+    start, end = _learning_anchor(slot)
+    return {"start": start.strftime("%H:%M"), "end": end.strftime("%H:%M")}
+
+
+def _focus_windows(spec: PersonaSpec) -> list[dict[str, str]]:
+    """Declared maker-time windows; afternoon-slot folks get a second window."""
+    if spec.seniority == "manager":
+        return [{"start": "11:00", "end": "12:00"}]
+    windows = [{"start": "09:45", "end": "12:00"}]
+    if spec.preferred_learning_slot == "Afternoon":
+        windows.append({"start": "15:30", "end": "18:00"})
+    return windows
+
+
+def _profile_json(spec: PersonaSpec, extra: dict[str, object]) -> dict[str, object]:
+    return {
+        "start_date": _start_date(int(extra["tenure"])),
+        "tenure_months": extra["tenure"],
+        "level_code": extra["level"],
+        "years_experience": extra["years"],
+        "location": extra["location"],
+        "employment_type": extra["employment"],
+        "languages": LANGUAGES[spec.vertical],
+    }
+
+
+def _learning_prefs_json(spec: PersonaSpec, extra: dict[str, object]) -> dict[str, object]:
+    return {
+        "preferred_study_hours_per_week": extra["study_hours"],
+        "preferred_session_minutes": extra["session_min"],
+        "preferred_study_days": [wd for wd in WEEKDAYS if _is_learning_day(spec, wd)],
+        "study_window": _study_window(spec.preferred_learning_slot),
+        "preferred_modality": extra["modality"],
+        "pace": extra["pace"],
+        "reminder_opt_in": extra["reminder"],
+    }
+
+
+def _day_summary(blocks: list[Block]) -> dict[str, object]:
+    """Derived per-day rollup — the granular workload-insight signal."""
+    meeting = focus = learning = collab = 0.0
+    longest_focus = 0
+    ordered = sorted(blocks, key=lambda b: b.start)
+    for b in ordered:
+        hours = _dur_hours(b)
+        if CATEGORY_METER[b.category] == "meeting":
+            meeting += hours
+        elif CATEGORY_METER[b.category] == "collab":
+            collab += hours
+        if b.category == "focus":
+            focus += hours
+        elif b.category == "learning":
+            learning += hours
+        if b.category in ("focus", "learning"):
+            longest_focus = max(longest_focus, round(hours * 60))
+    transitions = sum(
+        CATEGORY_METER[a.category] != CATEGORY_METER[c.category]
+        for a, c in zip(ordered, ordered[1:], strict=False)
+    )
+    fragmentation = round(transitions / (len(ordered) - 1), 2) if len(ordered) > 1 else 0.0
+    return {
+        "meeting_hours": round(meeting, 2),
+        "focus_hours": round(focus, 2),
+        "learning_hours": round(learning, 2),
+        "collab_hours": round(collab, 2),
+        "block_count": len(ordered),
+        "longest_focus_block_minutes": longest_focus,
+        "fragmentation_score": fragmentation,
+        "free_capacity_hours": round(focus, 2),
+    }
+
+
+def _work_context_json(
+    spec: PersonaSpec, summaries: list[dict[str, object]], extra: dict[str, object]
+) -> dict[str, object]:
+    fragmentations = [float(s["fragmentation_score"]) for s in summaries]
+    longest = max(int(s["longest_focus_block_minutes"]) for s in summaries)
+    return {
+        "work_mode": extra["work_mode"],
+        "working_hours": {"start": "09:00", "end": "18:00"},
+        "working_days": list(WEEKDAYS),
+        "focus_windows": _focus_windows(spec),
+        "on_call": {"is_on_call": extra["on_call"], "dates": extra["on_call_dates"]},
+        "pto_days": extra["pto"],
+        "after_hours_load": extra["after_hours"],
+        "context_switch_score": round(sum(fragmentations) / len(fragmentations), 2),
+        "longest_focus_block_minutes": longest,
+        "response_latency_minutes": extra["latency"],
+    }
+
+
 def _persona_json(spec: PersonaSpec) -> dict:
     week = _week_blocks(spec)
     agg = _aggregate(week)
@@ -600,9 +960,12 @@ def _persona_json(spec: PersonaSpec) -> dict:
                 }
                 for b in week[wd]
             ],
+            "summary": _day_summary(week[wd]),
         }
         for wd in WEEKDAYS
     ]
+    summaries = [day["summary"] for day in days]
+    extra = EXTRAS[spec.employee_id]
 
     return {
         "employee_id": spec.employee_id,
@@ -620,6 +983,12 @@ def _persona_json(spec: PersonaSpec) -> dict:
         else [],
         "timezone": TIMEZONE,
         "preferred_learning_slot": spec.preferred_learning_slot,
+        # Bundle E — synthetic profile/identity.
+        "profile": _profile_json(spec, extra),
+        # Bundle A — learning preferences & cadence.
+        "learning_preferences": _learning_prefs_json(spec, extra),
+        # Bundle B — work context & availability.
+        "work_context": _work_context_json(spec, summaries, extra),
         # Work IQ Dataset 2 surface — DERIVED from the schedule (Response Fidelity).
         "work_signals": {
             "employee_id": spec.employee_id,
@@ -685,6 +1054,11 @@ def build_document() -> dict:
                     "name": "Atlas",
                     "manager_employee_id": MANAGER_ID,
                     "member_employee_ids": [p.employee_id for p in PERSONAS],
+                    # Bundle F — team & delivery context.
+                    "sprint": TEAM_CONTEXT["sprint"],
+                    "okrs": TEAM_CONTEXT["okrs"],
+                    "cert_targets": TEAM_CONTEXT["cert_targets"],
+                    "capacity_policy": TEAM_CONTEXT["capacity_policy"],
                 }
             ],
         },
