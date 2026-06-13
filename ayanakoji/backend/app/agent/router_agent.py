@@ -27,6 +27,14 @@ _RECOMMEND_RE = re.compile(
     r"|recommend\s+(me\s+)?(a|some|something)",
     re.IGNORECASE,
 )
+# "Build my study plan / schedule" → Study Plan.
+_PLAN_RE = re.compile(
+    r"\b(study\s+plan|study\s+schedule|learning\s+plan|prep\s+plan|prepare\s+plan)"
+    r"|\b(build|make|create|give|generate|draft)\b.{0,20}\b(plan|schedule)"
+    r"|\b(plan|schedule)\b.{0,20}\b(my|the)\s+(study|learning|prep|week)"
+    r"|how\s+should\s+i\s+(study|prepare|schedule)|when\s+do\s+i\s+study",
+    re.IGNORECASE,
+)
 # Warm onboarding / small talk → Greeting.
 _GREETING_INTENT_RE = re.compile(
     r"^\s*(hi|hey|hello|yo|sup|hiya|good\s+(morning|afternoon|evening)|"
@@ -58,11 +66,12 @@ _ROUTE_SYSTEM = (
     "learner CHOOSE an Azure certification course. Choose ONE route:\n"
     "- greeting: hi/hello/thanks/who are you/what can you do — onboarding small talk.\n"
     "- recommend: asks you to suggest/recommend a course, what to learn next, or help choosing.\n"
+    "- study_plan: asks you to build/make a study plan or schedule, or how/when to study.\n"
     "- foundry_iq: names a specific course/cert/Azure topic, or asks about course content.\n"
     "- work_iq: asks about THEIR OWN schedule, workload, meetings, capacity, or study timing.\n"
     "- general: off-topic or anything else.\n"
     "Also rate off_topic 0..1 (0 = enterprise-learning, 1 = far off such as sports/weather).\n"
-    'Reply ONLY with JSON: {"route":"greeting|recommend|foundry_iq|work_iq|general",'
+    'Reply ONLY with JSON: {"route":"greeting|recommend|study_plan|foundry_iq|work_iq|general",'
     '"reasoning":"<short>","off_topic":0..1,"confidence":0..1}.'
 )
 
@@ -70,9 +79,16 @@ _ROUTE_SYSTEM = (
 def classify(text: str, *, grounding: CourseGrounding | None = None) -> RouteDecision:
     """Deterministic intent classifier (offline path + fallback for the online path).
 
-    Priority: recommend → greeting → work → course-content → off-topic → general.
-    Recommend outranks greeting so "hi, suggest me a course" recommends, not greets.
+    Priority: plan → recommend → greeting → work → course-content → off-topic → general.
+    Plan outranks recommend so "build me a study plan" plans for the chosen course.
     """
+    if _PLAN_RE.search(text):
+        return RouteDecision(
+            route=Route.STUDY_PLAN,
+            reasoning="Asks for a study plan/schedule — build one for the chosen course.",
+            off_topic=0.0,
+            confidence=0.78,
+        )
     if _RECOMMEND_RE.search(text):
         return RouteDecision(
             route=Route.RECOMMEND,

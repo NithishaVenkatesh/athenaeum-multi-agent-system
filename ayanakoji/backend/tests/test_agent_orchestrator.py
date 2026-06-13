@@ -54,6 +54,26 @@ def test_recommend_flow_offers_profile_based_choices() -> None:
     assert suggestion.options  # personalized options to choose from
 
 
+def test_study_plan_flow_emits_plan_for_linked_course() -> None:
+    events = list(run_pipeline("build me a study plan", persona_id="EMP-001", catalog_id="cb-c01"))
+    kinds = _types(events)
+    assert "plan" in kinds
+    plan = next(e for e in events if e.type == "plan").plan
+    assert plan.catalog_id == "cb-c01"
+    assert plan.overestimate_factor == 2.0
+    assert events[-1].route is Route.STUDY_PLAN
+
+
+def test_study_plan_without_course_offers_options() -> None:
+    learner = get_repository().list_personas(learners_only=True)[0]
+    events = list(
+        run_pipeline("make a study plan", persona_id=learner.employee_id, catalog_id=None)
+    )
+    kinds = _types(events)
+    assert "plan" not in kinds
+    assert "suggestion" in kinds  # asked to pick a course first
+
+
 def test_foundry_flow_emits_suggestion_offline() -> None:
     events = list(run_pipeline("how do azure functions triggers work", persona_id="p"))
     kinds = _types(events)

@@ -14,6 +14,7 @@ from app.agent.answer import (
     answer_general,
     answer_greeting,
     answer_recommend,
+    answer_study_plan,
     answer_work,
 )
 from app.agent.contracts import PhaseName, PhaseStatus, Route
@@ -168,6 +169,12 @@ def test_classify_recommend_outranks_greeting() -> None:
     assert classify("hi, can you suggest a course?").route is Route.RECOMMEND
 
 
+def test_classify_study_plan_intent() -> None:
+    assert classify("build me a study plan").route is Route.STUDY_PLAN
+    assert classify("make my study schedule").route is Route.STUDY_PLAN
+    assert classify("how should I study for this?").route is Route.STUDY_PLAN
+
+
 def test_route_offline_uses_heuristic() -> None:
     decision, telemetry = route("explain azure functions")
     assert decision.route is Route.FOUNDRY_IQ
@@ -258,3 +265,34 @@ def test_answer_recommend_unknown_persona_asks_for_topic() -> None:
     reply = answer_recommend("suggest a course", persona_id="nobody", taken=[])
     assert reply.suggestion is None
     assert "couldn't find a profile" in "".join(reply.tokens).lower()
+
+
+def test_answer_study_plan_builds_workload_aware_plan() -> None:
+    from app.workiq.repository import get_repository
+
+    vega = get_repository().get_persona("EMP-001")
+    assert vega is not None
+    reply = answer_study_plan(
+        "build me a study plan",
+        persona_id=vega.employee_id,
+        catalog_id="cb-c01",
+        taken=[],
+    )
+    assert reply.plan is not None
+    assert reply.plan.catalog_id == "cb-c01"
+    assert reply.plan.overestimate_factor == 2.0
+    assert reply.plan.weeks == len(reply.plan.schedule)
+    assert reply.telemetry.route.value == "study_plan"
+
+
+def test_answer_study_plan_without_course_offers_options() -> None:
+    from app.workiq.repository import get_repository
+
+    vega = get_repository().get_persona("EMP-001")
+    assert vega is not None
+    reply = answer_study_plan(
+        "make a study plan", persona_id=vega.employee_id, catalog_id=None, taken=[]
+    )
+    assert reply.plan is None
+    assert reply.suggestion is not None  # offered courses to pick first
+    assert "pick a course" in "".join(reply.tokens).lower()

@@ -28,6 +28,7 @@ from app.agent.answer import (
     answer_general,
     answer_greeting,
     answer_recommend,
+    answer_study_plan,
     answer_work,
 )
 from app.agent.contracts import (
@@ -36,6 +37,7 @@ from app.agent.contracts import (
     ErrorEvent,
     PhaseEvent,
     PipelineEvent,
+    PlanEvent,
     Route,
     RouteDecision,
     TakenCourse,
@@ -77,6 +79,15 @@ def _dispatch(
     if decision.route is Route.RECOMMEND:
         return answer_recommend(
             text, persona_id=persona_id, taken=taken, router=router, settings=settings
+        )
+    if decision.route is Route.STUDY_PLAN:
+        return answer_study_plan(
+            text,
+            persona_id=persona_id,
+            catalog_id=catalog_id,
+            taken=taken,
+            router=router,
+            settings=settings,
         )
     if decision.route is Route.FOUNDRY_IQ:
         return answer_foundry(
@@ -146,6 +157,10 @@ def run_pipeline(
         yield ErrorEvent(message=_STREAM_BROKE_MESSAGE)
         yield DoneEvent(route=decision.route)
         return
+
+    # ── Structured study plan (rendered as a schedule card) ────────────────────
+    if reply.plan is not None:
+        yield PlanEvent(plan=reply.plan)
 
     # ── The course-selection tool (1+ choosable courses) ───────────────────────
     if reply.suggestion is not None:
