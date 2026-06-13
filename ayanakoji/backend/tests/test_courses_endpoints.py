@@ -1,0 +1,120 @@
+"""Courses API: create / list / get / patch / streaming messages / assessments."""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+from fastapi.testclient import TestClient
+
+
+def _create(
+    client: TestClient,
+    persona_id: str = "EMP-001",
+    content: str = "Tell me about Azure Functions please",
+) -> dict[str, Any]:
+    resp = client.post("/api/courses", json={"persona_id": persona_id, "content": content})
+    assert resp.status_code == 201, resp.text
+    return resp.json()
+
+
+def test_create_course_titles_from_first_message(client: TestClient) -> None:
+    body = _create(client, content="How do Azure Functions triggers work in production?")
+    assert body["id"]
+    assert body["persona_id"] == "EMP-001"
+    assert body["status"] == 0
+    assert body["catalog_id"] is None
+    assert body["catalog_title"] is None
+    assert body["messages"] == []
+    assert body["assessment_ids"] == []
+    # offline title = first six words of the message
+    assert body["chat_name"] == "How do Azure Functions triggers work"
+
+
+def test_list_courses_scoped_to_persona_recent_first(client: TestClient) -> None:
+    first = _create(client, "EMP-001", "alpha topic question to ask here")
+    second = _create(client, "EMP-001", "beta topic question to ask here")
+    _create(client, "EMP-002", "gamma other persona question entirely")
+
+    # Sending a message bumps updated_at, so `first` becomes most-recent.
+    client.post(f"/api/courses/{first['id']}/messages", json={"content": "more on alpha"})
+
+    rows = client.get("/api/courses", params={"persona_id": "EMP-001"}).json()
+    ids = [r["id"] for r in rows]
+    assert set(ids) == {first["id"], second["id"]}  # EMP-002's chat excluded
+    assert ids[0] == first["id"]  # recently-updated first
+
+
+def test_get_course_not_found(client: TestClient) -> None:
+    assert client.get("/api/courses/nope").status_code == 404
+
+
+def test_patch_rename_link_validate_and_unlink(client: TestClient) -> None:
+    course_id = _create(client)["id"]
+
+    # rename only
+    renamed = client.patch(f"/api/courses/{course_id}", json={"chat_name": "Functions deep dive"})
+    assert renamed.status_code == 200
+    assert renamed.json()["chat_name"] == "Functions deep dive"
+    assert renamed.json()["catalog_id"] is None
+
+    # link a valid Athenaeum course → title resolved
+    linked = client.patch(f"/api/courses/{course_id}", json={"catalog_id": "cb-c01"})
+    assert linked.status_code == 200
+    assert linked.json()["catalog_id"] == "cb-c01"
+    assert linked.json()["catalog_title"] == "Azure Compute & Serverless Foundations"
+    assert linked.json()["chat_name"] == "Functions deep dive"  # unchanged
+
+    # invalid catalog id → 422
+    assert client.patch(f"/api/courses/{course_id}", json={"catalog_id": "nope"}).status_code == 422
+
+    # explicit unlink
+    unlinked = client.patch(f"/api/courses/{course_id}", json={"catalog_id": None})
+    assert unlinked.status_code == 200
+    assert unlinked.json()["catalog_id"] is None
+
+    # nonexistent course → 404
+    assert client.patch("/api/courses/nope", json={"chat_name": "x"}).status_code == 404
+
+
+def _parse_sse(text: str) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    for block in text.strip().split("\n\n"):
+        line = block.strip()
+        if line.startswith("data:"):
+            events.append(json.loads(line[len("data:") :].strip()))
+    return events
+
+
+def test_post_message_streams_reply_and_persists_both_turns(client: TestClient) -> None:
+    course_id = _create(client, content="Explain blob storage tiers")["id"]
+
+    resp = client.post(
+        f"/api/courses/{course_id}/messages", json={"content": "Explain blob storage tiers"}
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/event-stream")
+
+    events = _parse_sse(resp.text)
+    assert any("token" in e for e in events)
+    assert events[-1] == {"done": True}
+    streamed = "".join(e["token"] for e in events if "token" in e)
+    assert "offline mode" in streamed
+    assert "Explain blob storage tiers" in streamed  # echo of the user message
+
+    full = client.get(f"/api/courses/{course_id}").json()
+    assert [m["role"] for m in full["messages"]] == ["user", "assistant"]
+    assert full["messages"][0]["content"] == "Explain blob storage tiers"
+    assert "offline mode" in full["messages"][1]["content"]
+
+
+def test_post_message_to_missing_course_404(client: TestClient) -> None:
+    assert client.post("/api/courses/nope/messages", json={"content": "hi"}).status_code == 404
+
+
+def test_assessments_empty_but_present_for_new_course(client: TestClient) -> None:
+    course_id = _create(client)["id"]
+    resp = client.get(f"/api/courses/{course_id}/assessments")
+    assert resp.status_code == 200
+    assert resp.json() == []
+    assert client.get("/api/courses/nope/assessments").status_code == 404

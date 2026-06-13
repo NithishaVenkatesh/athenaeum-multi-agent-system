@@ -45,8 +45,9 @@ class Course(SQLModel, table=True):
     id: str = Field(default_factory=_uuid, primary_key=True)
     persona_id: str = Field(index=True)
     chat_name: str
-    # Athenaeum catalog id; nullable until linked, validated against the catalog when set.
-    course_id: str | None = Field(default=None)
+    # Athenaeum catalog course id this chat is about; nullable until linked, validated
+    # against the catalog when set. Named ``catalog_id`` to avoid colliding with ``id``.
+    catalog_id: str | None = Field(default=None)
     status: int = Field(default=STATUS_NEW)
     messages: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON)
     created_at: datetime = Field(default_factory=_now)

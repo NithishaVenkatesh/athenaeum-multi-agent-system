@@ -22,7 +22,7 @@ def test_course_defaults_round_trip(session: Session) -> None:
 
     assert course.id  # uuid hex assigned
     assert course.status == STATUS_NEW == 0
-    assert course.course_id is None
+    assert course.catalog_id is None
     assert course.messages == []
     assert course.created_at is not None
 

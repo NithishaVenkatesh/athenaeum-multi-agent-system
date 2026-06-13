@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from app import __version__
 from app.catalog.router import router as catalog_router
 from app.config import get_settings
+from app.courses.router import router as courses_router
 from app.db import init_db
 from app.workiq.router import router as workiq_router
 
@@ -67,6 +68,8 @@ def create_app() -> FastAPI:
     app.include_router(workiq_router)
     # Athenaeum course catalog (GET-only).
     app.include_router(catalog_router)
+    # Learner workspace: courses (chats), messages, assessments.
+    app.include_router(courses_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     def health() -> HealthResponse:

@@ -9,7 +9,6 @@ from app import db as db_module
 from app.main import create_app
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine
-from sqlalchemy.pool import StaticPool
 from sqlmodel import Session
 
 
@@ -20,13 +19,14 @@ def _offline_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-def db_engine() -> Iterator[Engine]:
-    """An isolated in-memory SQLite engine with the workspace schema created.
+def db_engine(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Engine]:
+    """An isolated temp-file SQLite engine with the workspace schema created.
 
-    ``StaticPool`` keeps one shared connection so the in-memory DB survives across
-    the request thread and the streaming generator thread.
+    A file (not ``:memory:``) so the request session and the SSE streaming
+    session each get their own connection — mirroring production.
     """
-    engine = db_module.configure_engine("sqlite://", poolclass=StaticPool)
+    db_file = tmp_path_factory.mktemp("workspace-db") / "test.db"
+    engine = db_module.configure_engine(f"sqlite:///{db_file}")
     db_module.init_db()
     try:
         yield engine
