@@ -149,7 +149,7 @@ export function StudyPlanCard({ plan, courseId }: { plan: StudyPlan; courseId?: 
           href={`/chat/${courseId}/modules`}
           className="bg-brand text-brand-foreground hover:bg-brand/90 inline-flex h-8 items-center rounded-lg px-3 text-xs font-medium transition-colors"
         >
-          Open the Modules tab →
+          Open the Modules tab ›
         </Link>
       )}
     </motion.div>
