@@ -26,9 +26,12 @@ from app.agent.contracts import (
     PhaseTelemetry,
     Route,
     RouteDecision,
+    SuggestionEvent,
+    TakenCourse,
 )
 from app.agent.grounding import CourseGrounding, get_grounding
 from app.agent.llm import Capability, ModelRouter, StreamHandle
+from app.agent.recommend import recommend_courses
 from app.config import Settings, get_settings
 from app.workiq.models import Persona
 from app.workiq.repository import WorkIQRepository, get_repository
@@ -41,7 +44,7 @@ class AgentReply:
     telemetry: PhaseTelemetry
     tokens: Iterator[str]
     sources: list[GroundingSource] = field(default_factory=list)
-    suggestion: CourseSuggestion | None = None
+    suggestion: SuggestionEvent | None = None
 
 
 def _offline_stream(text: str) -> Iterator[str]:
@@ -191,7 +194,12 @@ def answer_foundry(
     settings = settings or get_settings()
     grounding = grounding or get_grounding()
     sources = grounding.search(text, catalog_id=catalog_id)
-    suggestion = grounding.suggest(text, catalog_id=catalog_id)
+    course = grounding.suggest(text, catalog_id=catalog_id)
+    suggestion = (
+        SuggestionEvent(prompt="Want to start this course?", options=[course])
+        if course is not None
+        else None
+    )
     reasoning = (
         f"Grounded on {len(sources)} approved module(s): {', '.join(s.ref for s in sources)}."
         if sources
@@ -360,4 +368,157 @@ def answer_work(
         ),
         tokens=handle.tokens,
         sources=sources,
+    )
+
+
+# ── Greeting + Recommend (course selection; tool scope: persona + catalog) ──────
+
+
+def _recommend_for(persona: Persona | None, taken: list[TakenCourse]) -> list[CourseSuggestion]:
+    """Profile-based course options for a persona (empty if no profile)."""
+    if persona is None:
+        return []
+    return recommend_courses(
+        vertical=persona.vertical,
+        target_cert=persona.learning.target_cert,
+        taken=taken,
+        role_title=persona.role_title,
+        k=3,
+    )
+
+
+def answer_greeting(
+    text: str,
+    *,
+    persona_id: str,
+    taken: list[TakenCourse],
+    repo: WorkIQRepository | None = None,
+    settings: Settings | None = None,
+) -> AgentReply:
+    """Warm welcome that invites the learner to pick a course (offers a head start)."""
+    settings = settings or get_settings()
+    repo = repo or get_repository()
+    persona = repo.get_persona(persona_id)
+    options = _recommend_for(persona, taken)
+
+    who = f" {persona.codename}" if persona else ""
+    greeting = (
+        f"Hi{who} — welcome to Athenaeum. I help you choose and prepare for an Azure "
+        "certification course. Tell me a topic or cert you're aiming for, or say "
+        "“suggest a course” and I'll recommend one that fits your role."
+    )
+    suggestion = (
+        SuggestionEvent(prompt="Or jump straight in — here's a fit for your path:", options=options)
+        if options
+        else None
+    )
+    return AgentReply(
+        telemetry=_answer_telemetry(
+            summary="Welcomed the learner and invited a course choice",
+            reasoning=(
+                f"Greeting; offered {len(options)} profile-based option(s)."
+                if options
+                else "Greeting; no profile options available."
+            ),
+            route=Route.GREETING,
+            sources=[],
+            model="offline" if settings.llm_offline else None,
+            tier=None,
+        ),
+        tokens=_offline_stream(greeting),
+        suggestion=suggestion,
+    )
+
+
+def _recommend_narration(persona: Persona, options: list[CourseSuggestion]) -> str:
+    titles = ", ".join(o.title for o in options)
+    return (
+        f"Based on your work as a {persona.role_title} heading toward "
+        f"{persona.learning.target_cert}, here's what I'd suggest next: {titles}. "
+        "Pick one below to start preparing."
+    )
+
+
+def answer_recommend(
+    text: str,
+    *,
+    persona_id: str,
+    taken: list[TakenCourse],
+    router: ModelRouter | None = None,
+    repo: WorkIQRepository | None = None,
+    settings: Settings | None = None,
+) -> AgentReply:
+    """Recommend the natural-next course(s) from the learner's profile + progress."""
+    settings = settings or get_settings()
+    repo = repo or get_repository()
+    persona = repo.get_persona(persona_id)
+    options = _recommend_for(persona, taken)
+
+    if persona is None or not options:
+        reply = (
+            "I couldn't find a profile to base a recommendation on. Tell me which Azure topic "
+            "or certification you're interested in and I'll point you to the right course."
+        )
+        return AgentReply(
+            telemetry=_answer_telemetry(
+                summary="No profile to recommend from",
+                reasoning=f"No persona '{persona_id}' or no eligible courses.",
+                route=Route.RECOMMEND,
+                sources=[],
+                model="offline" if settings.llm_offline else None,
+                tier=None,
+            ),
+            tokens=_offline_stream(reply),
+        )
+
+    suggestion = SuggestionEvent(
+        prompt="Pick one to start preparing:" if len(options) > 1 else "Want to start this course?",
+        options=options,
+    )
+    reasoning = (
+        f"Recommended {len(options)} course(s) for {persona.codename} "
+        f"({persona.role_title} → {persona.learning.target_cert}): "
+        + ", ".join(o.catalog_id for o in options)
+        + "."
+    )
+
+    if settings.llm_offline:
+        return AgentReply(
+            telemetry=_answer_telemetry(
+                summary="Recommended courses from your profile",
+                reasoning=reasoning,
+                route=Route.RECOMMEND,
+                sources=[],
+                model="offline",
+                tier=None,
+            ),
+            tokens=_offline_stream(_recommend_narration(persona, options)),
+            suggestion=suggestion,
+        )
+
+    router = router or ModelRouter(settings)
+    catalogue = "; ".join(f"{o.title} ({o.cert}, {o.level})" for o in options)
+    system = (
+        "You are Athenaeum's enrollment advisor. Recommend ONLY from the candidate courses "
+        "below — these were chosen for this learner's role and progress. Be warm and brief "
+        "(2-3 sentences); end by inviting them to pick one. Do not invent courses.\n\n"
+        f"LEARNER: {persona.role_title}, working toward {persona.learning.target_cert}.\n"
+        f"CANDIDATES: {catalogue}"
+    )
+    handle = router.stream(
+        Capability.WORKHORSE,
+        [{"role": "system", "content": system}, {"role": "user", "content": text}],
+        max_tokens=400,
+    )
+    return AgentReply(
+        telemetry=_answer_telemetry(
+            summary="Recommended courses from your profile",
+            reasoning=reasoning,
+            route=Route.RECOMMEND,
+            sources=[],
+            model=handle.model,
+            tier=handle.tier,
+        ),
+        tokens=handle.tokens,
+        suggestion=suggestion,
     )

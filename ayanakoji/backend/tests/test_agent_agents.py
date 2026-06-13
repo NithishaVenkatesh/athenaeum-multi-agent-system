@@ -9,7 +9,13 @@ from __future__ import annotations
 from collections.abc import Iterator, Sequence
 
 import pytest
-from app.agent.answer import answer_foundry, answer_general, answer_work
+from app.agent.answer import (
+    answer_foundry,
+    answer_general,
+    answer_greeting,
+    answer_recommend,
+    answer_work,
+)
 from app.agent.contracts import PhaseName, PhaseStatus, Route
 from app.agent.gate import screen
 from app.agent.llm import LLMResult, Provider, StreamHandle
@@ -148,10 +154,20 @@ def test_classify_off_topic_general_high_off_topic() -> None:
     assert decision.off_topic >= 0.7
 
 
-def test_classify_greeting_low_off_topic() -> None:
-    decision = classify("hi there")
-    assert decision.route is Route.GENERAL
-    assert decision.off_topic < 0.3
+def test_classify_greeting_routes_to_greeting() -> None:
+    assert classify("hi there").route is Route.GREETING
+    assert classify("who are you").route is Route.GREETING
+
+
+def test_classify_recommend_intent() -> None:
+    assert classify("suggest me a course").route is Route.RECOMMEND
+    assert classify("what should I learn next?").route is Route.RECOMMEND
+    assert classify("help me choose a course for my role").route is Route.RECOMMEND
+
+
+def test_classify_recommend_outranks_greeting() -> None:
+    # "hi, suggest a course" must recommend, not just greet.
+    assert classify("hi, can you suggest a course?").route is Route.RECOMMEND
 
 
 def test_route_offline_uses_heuristic() -> None:
@@ -217,3 +233,30 @@ def test_answer_work_unknown_persona_explains_no_context() -> None:
     reply = answer_work("when should I study?", persona_id="does-not-exist")
     assert reply.sources == []
     assert "couldn't find" in "".join(reply.tokens).lower()
+
+
+def test_answer_greeting_welcomes_and_offers_options() -> None:
+    from app.workiq.repository import get_repository
+
+    learner = get_repository().list_personas(learners_only=True)[0]
+    reply = answer_greeting("hi", persona_id=learner.employee_id, taken=[])
+    text = "".join(reply.tokens)
+    assert "welcome" in text.lower()
+    assert reply.suggestion is not None
+    assert reply.suggestion.options  # a profile-based head start
+
+
+def test_answer_recommend_uses_profile() -> None:
+    from app.workiq.repository import get_repository
+
+    learner = get_repository().list_personas(learners_only=True)[0]
+    reply = answer_recommend("suggest a course", persona_id=learner.employee_id, taken=[])
+    assert reply.suggestion is not None
+    assert reply.suggestion.options
+    assert reply.telemetry.route.value == "recommend"
+
+
+def test_answer_recommend_unknown_persona_asks_for_topic() -> None:
+    reply = answer_recommend("suggest a course", persona_id="nobody", taken=[])
+    assert reply.suggestion is None
+    assert "couldn't find a profile" in "".join(reply.tokens).lower()

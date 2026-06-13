@@ -28,23 +28,38 @@ def test_jailbreak_is_rejected_before_routing() -> None:
 
 
 def test_general_flow_offline() -> None:
-    events = list(run_pipeline("hi there", persona_id="p"))
+    events = list(run_pipeline("what is the tallest mountain in the world", persona_id="p"))
     kinds = _types(events)
     assert kinds[0] == "phase"  # gate
     assert kinds[1] == "phase"  # router
     assert kinds[2] == "phase"  # answer
     assert "token" in kinds
     assert kinds[-1] == "done"
-    done = events[-1]
-    assert done.route is Route.GENERAL
+    assert events[-1].route is Route.GENERAL
+
+
+def test_greeting_flow_welcomes_and_offers_a_course() -> None:
+    learner = get_repository().list_personas(learners_only=True)[0]
+    events = list(run_pipeline("hi", persona_id=learner.employee_id))
+    assert events[-1].route is Route.GREETING
+    suggestion = next(e for e in events if e.type == "suggestion")
+    assert len(suggestion.options) >= 1  # offered a profile-based starting course
+
+
+def test_recommend_flow_offers_profile_based_choices() -> None:
+    learner = get_repository().list_personas(learners_only=True)[0]
+    events = list(run_pipeline("suggest me a course", persona_id=learner.employee_id))
+    assert events[-1].route is Route.RECOMMEND
+    suggestion = next(e for e in events if e.type == "suggestion")
+    assert suggestion.options  # personalized options to choose from
 
 
 def test_foundry_flow_emits_suggestion_offline() -> None:
     events = list(run_pipeline("how do azure functions triggers work", persona_id="p"))
     kinds = _types(events)
     assert "suggestion" in kinds
-    suggestion = next(e for e in events if e.type == "suggestion").suggestion
-    assert suggestion.catalog_id == "cb-c01"
+    suggestion = next(e for e in events if e.type == "suggestion")
+    assert suggestion.options[0].catalog_id == "cb-c01"
     assert events[-1].suggested is True
 
 

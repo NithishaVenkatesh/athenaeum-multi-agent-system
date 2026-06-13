@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
-from app.agent.contracts import TokenEvent
+from app.agent.contracts import TakenCourse, TokenEvent
 from app.agent.orchestrator import run_pipeline
 from app.catalog.loader import get_course as get_catalog_course
 from app.catalog.loader import is_valid_course_id
@@ -164,6 +164,24 @@ def _sse(payload: dict[str, object]) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
 
+def _taken_courses(
+    repo: CourseRepository, persona_id: str, *, exclude_id: str
+) -> list[TakenCourse]:
+    """The learner's linked courses (their progress so far), for the recommender.
+
+    Dedupe by catalog course, keeping the most-progressed status (negative = passed,
+    which sorts lowest), so a course is counted once at its best state.
+    """
+    best: dict[str, int] = {}
+    for course in repo.list_for_persona(persona_id):
+        if course.id == exclude_id or not course.catalog_id:
+            continue
+        prior = best.get(course.catalog_id)
+        if prior is None or course.status < prior:
+            best[course.catalog_id] = course.status
+    return [TakenCourse(catalog_id=cid, status=status) for cid, status in best.items()]
+
+
 @router.post("/{course_id}/messages", summary="Send a message; stream the agent pipeline (SSE)")
 def post_message(course_id: str, body: MessageIn, session: SessionDep) -> StreamingResponse:
     """Append the learner's turn, run it through the agent pipeline, and stream events.
@@ -187,12 +205,14 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
                 yield _sse({"type": "error", "message": "course not found"})
                 return
 
+            taken = _taken_courses(stream_repo, current.persona_id, exclude_id=current.id)
             answer_parts: list[str] = []
             final_text = ""  # what gets persisted as the assistant turn
             for event in run_pipeline(
                 body.content,
                 persona_id=current.persona_id,
                 catalog_id=current.catalog_id,
+                taken=taken,
             ):
                 if isinstance(event, TokenEvent):
                     answer_parts.append(event.token)

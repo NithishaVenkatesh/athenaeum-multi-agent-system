@@ -16,6 +16,24 @@ from app.agent.grounding import CourseGrounding, get_grounding
 from app.agent.llm import AllProvidersDown, Capability, ModelRouter
 from app.config import Settings, get_settings
 
+# "Help me choose a course" signals → profile-based Recommend.
+_RECOMMEND_RE = re.compile(
+    r"\b(suggest|recommend|which)\b.{0,40}\bcourse"
+    r"|\bcourse\b.{0,20}\b(for me|suggestion|recommendation)"
+    r"|what\s+(should|do|can)\s+i\s+(learn|take|study|do|start)"
+    r"|what(?:'s| is)\s+next|where\s+(do|should)\s+i\s+start"
+    r"|help\s+me\s+(choose|pick|decide|get\s+started|start)"
+    r"|(based\s+on|fits?)\s+my\s+(role|profile|schedule|work)"
+    r"|recommend\s+(me\s+)?(a|some|something)",
+    re.IGNORECASE,
+)
+# Warm onboarding / small talk → Greeting.
+_GREETING_INTENT_RE = re.compile(
+    r"^\s*(hi|hey|hello|yo|sup|hiya|good\s+(morning|afternoon|evening)|"
+    r"thanks?|thank\s+you|who\s+are\s+you|what\s+can\s+you\s+do|"
+    r"what\s+do\s+you\s+do|help\b|get\s+started)\b",
+    re.IGNORECASE,
+)
 # "Ask about my own work" signals → Work IQ.
 _WORK_RE = re.compile(
     r"\b(my\s+(schedule|calendar|week|day|meetings?|workload|capacity|hours|time)"
@@ -36,18 +54,39 @@ _GREETING_RE = re.compile(
 )
 
 _ROUTE_SYSTEM = (
-    "You route a message in an enterprise learning assistant. Choose ONE route:\n"
-    "- foundry_iq: asks about course/certification content or an Azure/learning topic.\n"
+    "You route a message in an enterprise learning assistant whose goal is to help the "
+    "learner CHOOSE an Azure certification course. Choose ONE route:\n"
+    "- greeting: hi/hello/thanks/who are you/what can you do — onboarding small talk.\n"
+    "- recommend: asks you to suggest/recommend a course, what to learn next, or help choosing.\n"
+    "- foundry_iq: names a specific course/cert/Azure topic, or asks about course content.\n"
     "- work_iq: asks about THEIR OWN schedule, workload, meetings, capacity, or study timing.\n"
-    "- general: greetings, small talk, or anything else.\n"
+    "- general: off-topic or anything else.\n"
     "Also rate off_topic 0..1 (0 = enterprise-learning, 1 = far off such as sports/weather).\n"
-    'Reply ONLY with JSON: {"route":"foundry_iq|work_iq|general","reasoning":"<short>",'
-    '"off_topic":0..1,"confidence":0..1}.'
+    'Reply ONLY with JSON: {"route":"greeting|recommend|foundry_iq|work_iq|general",'
+    '"reasoning":"<short>","off_topic":0..1,"confidence":0..1}.'
 )
 
 
 def classify(text: str, *, grounding: CourseGrounding | None = None) -> RouteDecision:
-    """Deterministic intent classifier (offline path + fallback for the online path)."""
+    """Deterministic intent classifier (offline path + fallback for the online path).
+
+    Priority: recommend → greeting → work → course-content → off-topic → general.
+    Recommend outranks greeting so "hi, suggest me a course" recommends, not greets.
+    """
+    if _RECOMMEND_RE.search(text):
+        return RouteDecision(
+            route=Route.RECOMMEND,
+            reasoning="Asks for a course recommendation — match to their profile.",
+            off_topic=0.0,
+            confidence=0.75,
+        )
+    if _GREETING_INTENT_RE.search(text) and len(text.split()) <= 6:
+        return RouteDecision(
+            route=Route.GREETING,
+            reasoning="Greeting / onboarding — welcome and invite a course choice.",
+            off_topic=0.0,
+            confidence=0.7,
+        )
     if _WORK_RE.search(text):
         return RouteDecision(
             route=Route.WORK_IQ,
@@ -59,7 +98,7 @@ def classify(text: str, *, grounding: CourseGrounding | None = None) -> RouteDec
     if grounding.search(text, k=1):
         return RouteDecision(
             route=Route.FOUNDRY_IQ,
-            reasoning="Matches approved course content in the catalog.",
+            reasoning="Names a course or topic in the catalog — answer + offer to start it.",
             off_topic=0.0,
             confidence=0.7,
         )

@@ -22,7 +22,14 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator
 
-from app.agent.answer import AgentReply, answer_foundry, answer_general, answer_work
+from app.agent.answer import (
+    AgentReply,
+    answer_foundry,
+    answer_general,
+    answer_greeting,
+    answer_recommend,
+    answer_work,
+)
 from app.agent.contracts import (
     BlockedEvent,
     DoneEvent,
@@ -31,7 +38,7 @@ from app.agent.contracts import (
     PipelineEvent,
     Route,
     RouteDecision,
-    SuggestionEvent,
+    TakenCourse,
     TokenEvent,
 )
 from app.agent.gate import screen
@@ -61,11 +68,18 @@ def _dispatch(
     *,
     persona_id: str,
     catalog_id: str | None,
+    taken: list[TakenCourse],
     router: ModelRouter | None,
     grounding: CourseGrounding,
     settings: Settings,
 ) -> AgentReply:
     """Branch to the answer agent for the chosen route (opens the stream)."""
+    if decision.route is Route.GREETING:
+        return answer_greeting(text, persona_id=persona_id, taken=taken, settings=settings)
+    if decision.route is Route.RECOMMEND:
+        return answer_recommend(
+            text, persona_id=persona_id, taken=taken, router=router, settings=settings
+        )
     if decision.route is Route.FOUNDRY_IQ:
         return answer_foundry(
             text, catalog_id=catalog_id, router=router, grounding=grounding, settings=settings
@@ -80,6 +94,7 @@ def run_pipeline(
     *,
     persona_id: str,
     catalog_id: str | None = None,
+    taken: list[TakenCourse] | None = None,
     router: ModelRouter | None = None,
     grounding: CourseGrounding | None = None,
     settings: Settings | None = None,
@@ -87,6 +102,7 @@ def run_pipeline(
     """Run one turn through the pipeline, yielding events for the SSE stream."""
     settings = settings or get_settings()
     grounding = grounding or get_grounding()
+    taken = taken or []
     # One router instance per turn so the provider clients are reused across nodes.
     if router is None and not settings.llm_offline:
         router = ModelRouter(settings)
@@ -110,6 +126,7 @@ def run_pipeline(
             decision,
             persona_id=persona_id,
             catalog_id=catalog_id,
+            taken=taken,
             router=router,
             grounding=grounding,
             settings=settings,
@@ -132,8 +149,8 @@ def run_pipeline(
         yield DoneEvent(route=decision.route)
         return
 
-    # ── The 'pursue this course?' tool ─────────────────────────────────────────
+    # ── The course-selection tool (1+ choosable courses) ───────────────────────
     if reply.suggestion is not None:
-        yield SuggestionEvent(suggestion=reply.suggestion)
+        yield reply.suggestion
 
     yield DoneEvent(route=decision.route, suggested=reply.suggestion is not None)

@@ -24,11 +24,17 @@ from pydantic import BaseModel, Field
 
 
 class Route(StrEnum):
-    """Where the router sends a turn after the injection gate clears."""
+    """Where the router sends a turn after the injection gate clears.
 
-    FOUNDRY_IQ = "foundry_iq"  # course-content questions → grounded, cited answer
+    The whole stage is about getting the learner to *choose a course*, so the
+    onboarding intents (greeting, recommend) are first-class routes.
+    """
+
+    GREETING = "greeting"  # hi / hey / who are you → warm welcome + invite to pick a course
+    RECOMMEND = "recommend"  # "suggest a course" / "what next" → profile-based options to choose
+    FOUNDRY_IQ = "foundry_iq"  # a named course/topic → grounded answer + offer to start it
     WORK_IQ = "work_iq"  # the learner's own schedule / workload / capacity
-    GENERAL = "general"  # everything else → helpful answer + platform nudge
+    GENERAL = "general"  # off-topic → helpful answer + steer back to learning
 
 
 class PhaseName(StrEnum):
@@ -80,15 +86,24 @@ class GroundingSource(BaseModel):
 
 
 class CourseSuggestion(BaseModel):
-    """The 'are you willing to pursue this course?' tool offered after a course answer."""
+    """One choosable course in a suggestion. Accepting it links it to the chat."""
 
     catalog_id: str = Field(description="Athenaeum course id to link on accept")
     title: str
     cert: str = Field(description="Certification the course ladders toward")
-    pitch: str = Field(description="One-line reason to pursue it")
+    level: str = Field(default="", description="foundational | intermediate | advanced")
+    pitch: str = Field(description="One-line description of the course")
+    reason: str = Field(default="", description="Why it fits THIS learner (profile-based)")
     prep_points: list[str] = Field(
         default_factory=list, description="What the learner would prepare / commit to"
     )
+
+
+class TakenCourse(BaseModel):
+    """A course the learner has already linked to a chat (their progress so far)."""
+
+    catalog_id: str
+    status: int = Field(description="Course.status encoding: 0 new, +N attempt N, -N passed on N")
 
 
 class PhaseTelemetry(BaseModel):
@@ -120,8 +135,11 @@ class TokenEvent(BaseModel):
 
 
 class SuggestionEvent(BaseModel):
+    """One or more courses the learner can choose from (the course-selection tool)."""
+
     type: Literal["suggestion"] = "suggestion"
-    suggestion: CourseSuggestion
+    prompt: str = Field(description="Framing line, e.g. 'Want to start this?' or 'Pick one:'")
+    options: list[CourseSuggestion] = Field(min_length=1)
 
 
 class BlockedEvent(BaseModel):
