@@ -14,16 +14,21 @@ import re
 from app.agent.contracts import PhaseName, PhaseStatus, PhaseTelemetry, Route, RouteDecision
 from app.agent.grounding import CourseGrounding, get_grounding
 from app.agent.llm import AllProvidersDown, Capability, ModelRouter
+from app.agent.recommend import vertical_from_text
 from app.config import Settings, get_settings
 
-# "Help me choose a course" signals → profile-based Recommend.
+# "Help me choose / explore courses" signals → Recommend (profile- or topic-scoped).
 _RECOMMEND_RE = re.compile(
     r"\b(suggest|recommend|which)\b.{0,40}\bcourse"
     r"|\bcourse\b.{0,20}\b(for me|suggestion|recommendation)"
+    r"|\b(explore|show|find|browse|see|list|view)\b.{0,25}\bcourses?"
+    r"|\bcourses?\s+(in|on|about|for|related)\b"
     r"|what\s+(should|do|can)\s+i\s+(learn|take|study|do|start)"
+    r"|what\s+(courses|verticals|tracks|topics|paths?)\b"
     r"|what(?:'s| is)\s+next|where\s+(do|should)\s+i\s+start"
     r"|help\s+me\s+(choose|pick|decide|get\s+started|start)"
     r"|(based\s+on|fits?)\s+my\s+(role|profile|schedule|work)"
+    r"|i('?d| would)\s+like\s+to\s+(explore|learn|study|take)"
     r"|recommend\s+(me\s+)?(a|some|something)",
     re.IGNORECASE,
 )
@@ -62,15 +67,20 @@ _GREETING_RE = re.compile(
 )
 
 _ROUTE_SYSTEM = (
-    "You route a message in an enterprise learning assistant whose goal is to help the "
-    "learner CHOOSE an Azure certification course. Choose ONE route:\n"
-    "- greeting: hi/hello/thanks/who are you/what can you do — onboarding small talk.\n"
-    "- recommend: asks you to suggest/recommend a course, what to learn next, or help choosing.\n"
-    "- study_plan: asks you to build/make a study plan or schedule, or how/when to study.\n"
-    "- foundry_iq: names a specific course/cert/Azure topic, or asks about course content.\n"
+    "You route a message in an enterprise learning platform that teaches Azure across five "
+    "tracks: Cloud & Backend, Data Engineering, AI/ML, DevOps & Platform, Architecture & "
+    "Security. ANY question about these — data, data science, AI, ML, cloud, devops, security, "
+    "architecture, a certification, courses, verticals, or what to learn — is ON-TOPIC "
+    "(off_topic near 0). Only truly unrelated things (sports, weather, cooking, personal "
+    "trivia) are off_topic (near 1).\n"
+    "Choose ONE route:\n"
+    "- greeting: hi/hello/thanks/who are you/what can you do (onboarding small talk).\n"
+    "- recommend: asks to suggest/recommend/explore courses, what to learn next, what tracks "
+    "or verticals exist, or help choosing (in ANY of the five tracks).\n"
+    "- study_plan: asks to build/make a study plan or schedule, or how/when to study.\n"
+    "- foundry_iq: asks about the CONTENT of a specific course/cert/Azure topic.\n"
     "- work_iq: asks about THEIR OWN schedule, workload, meetings, capacity, or study timing.\n"
-    "- general: off-topic or anything else.\n"
-    "Also rate off_topic 0..1 (0 = enterprise-learning, 1 = far off such as sports/weather).\n"
+    "- general: only genuinely off-platform topics.\n"
     'Reply ONLY with JSON: {"route":"greeting|recommend|study_plan|foundry_iq|work_iq|general",'
     '"reasoning":"<short>","off_topic":0..1,"confidence":0..1}.'
 )
@@ -175,10 +185,10 @@ def route(
 
 
 def _parse_decision(raw: str, text: str, grounding: CourseGrounding | None) -> RouteDecision:
-    """Parse the model's JSON; fall back to the heuristic on any malformed reply."""
+    """Parse the model's JSON; correct it when it over-rejects an on-platform topic."""
     try:
         data = json.loads(raw)
-        return RouteDecision(
+        decision = RouteDecision(
             route=Route(str(data["route"])),
             reasoning=str(data.get("reasoning", "")) or "Model routing.",
             off_topic=float(data.get("off_topic", 0.0)),
@@ -186,3 +196,20 @@ def _parse_decision(raw: str, text: str, grounding: CourseGrounding | None) -> R
         )
     except (json.JSONDecodeError, KeyError, ValueError, TypeError):
         return classify(text, grounding=grounding)
+
+    # The LLM sometimes flags an on-platform learning topic (data science, AI, a
+    # vertical) as off-topic and dumps it to GENERAL. Trust the grounded heuristic
+    # over that: if the deterministic classifier finds a real on-platform route,
+    # or the text names one of our tracks, use it instead of a bad nudge.
+    if decision.route is Route.GENERAL and decision.off_topic >= 0.4:
+        heuristic = classify(text, grounding=grounding)
+        if heuristic.route is not Route.GENERAL:
+            return heuristic
+        if vertical_from_text(text) is not None:
+            return RouteDecision(
+                route=Route.RECOMMEND,
+                reasoning="On-platform track named — corrected from a mistaken off-topic call.",
+                off_topic=0.1,
+                confidence=0.6,
+            )
+    return decision

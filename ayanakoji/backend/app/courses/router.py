@@ -148,7 +148,7 @@ def list_course_assessments(course_id: str, session: SessionDep) -> list[Assessm
 def accept_course(course_id: str, body: AcceptCourse, session: SessionDep) -> CourseRead:
     """Enroll the learner: set the chat's ``catalog_id`` and bump status to attempt 1.
 
-    Per-learner enrollment is just ``courses WHERE persona_id`` — the accepted
+    Per-learner enrollment is just ``courses WHERE persona_id``, the accepted
     course lives in the same row the chat is in, so no separate table is needed.
     """
     repo = CourseRepository(session)
@@ -194,7 +194,7 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
 
     The SSE stream carries the full pipeline: per-phase telemetry, answer tokens, a
     blocked toast (jailbreak), an explicit error (providers down), and an optional
-    course suggestion — every event is one of the typed ``PipelineEvent`` shapes.
+    course suggestion, every event is one of the typed ``PipelineEvent`` shapes.
     """
     repo = CourseRepository(session)
     course = _require(repo.get(course_id), course_id)
@@ -259,7 +259,7 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
 
 @router.post("/{course_id}/pace", response_model=CourseRead, summary="Set the study pace")
 def set_pace(course_id: str, body: SetPace, session: SessionDep) -> CourseRead:
-    """Set the course's pace (slower|normal|faster) — the gate before a plan is built."""
+    """Set the course's pace (slower|normal|faster), the gate before a plan is built."""
     repo = CourseRepository(session)
     course = _require(repo.get(course_id), course_id)
     course.pace = body.pace
@@ -316,7 +316,7 @@ def module_content(course_id: str, module_id: str, session: SessionDep) -> Modul
 @router.post(
     "/{course_id}/modules/{module_id}/complete",
     response_model=list[ModuleRead],
-    summary="Mark a module complete (sequential — only the active module)",
+    summary="Mark a module complete (sequential, only the active module)",
 )
 def complete_module(course_id: str, module_id: str, session: SessionDep) -> list[ModuleRead]:
     """Mark the *currently available* module complete; returns the updated list.

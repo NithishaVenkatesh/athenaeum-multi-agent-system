@@ -1,4 +1,4 @@
-"""The agentic pipeline spine — plain-Python orchestrator over the nodes.
+"""The agentic pipeline spine, plain-Python orchestrator over the nodes.
 
 Flow (each arrow is an accept; a reject exits early with an explicit event):
 
@@ -56,11 +56,11 @@ logger = logging.getLogger(__name__)
 
 _BLOCKED_MESSAGE = (
     "That message looks like an attempt to override how I work, so I can't act on it. "
-    "I'm here to help with Azure certifications and your enterprise learning — ask me about a "
+    "I'm here to help with Azure certifications and your enterprise learning, ask me about a "
     "topic or course and we'll dig in."
 )
 _SERVICES_DOWN_MESSAGE = (
-    "Sorry — the AI services are unavailable right now. Please try again in a moment."
+    "Sorry, the AI services are unavailable right now. Please try again in a moment."
 )
 _STREAM_BROKE_MESSAGE = "The reply was interrupted before it finished. Please resend your message."
 
@@ -169,7 +169,7 @@ def run_pipeline(
     try:
         for token in reply.tokens:
             yield TokenEvent(token=token)
-    except Exception as exc:  # noqa: BLE001 — surface, never swallow, a stream break
+    except Exception as exc:  # noqa: BLE001, surface, never swallow, a stream break
         logger.warning("answer stream broke: %s", exc)
         yield ErrorEvent(message=_STREAM_BROKE_MESSAGE)
         yield DoneEvent(route=decision.route)

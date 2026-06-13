@@ -1,10 +1,10 @@
 """The three answer agents the router dispatches to.
 
-- ``answer_general`` — no tools; a helpful reply plus a platform nudge whose
+- ``answer_general``, no tools; a helpful reply plus a platform nudge whose
   strength scales with how off-topic the turn is.
-- ``answer_foundry`` — tool scope: course grounding only. Grounded, cited answer
+- ``answer_foundry``, tool scope: course grounding only. Grounded, cited answer
   over approved catalog content, followed by the 'pursue this course?' tool.
-- ``answer_work`` — tool scope: the Work IQ persona read only. A work-aware reply
+- ``answer_work``, tool scope: the Work IQ persona read only. A work-aware reply
   grounded in the learner's own (synthetic) schedule signals.
 
 Every agent returns an :class:`AgentReply`: telemetry (built once the winning
@@ -15,6 +15,7 @@ stream a deterministic reply word-by-word (mirroring ``courses/service.py``).
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import date
@@ -35,7 +36,7 @@ from app.agent.contracts import (
 )
 from app.agent.grounding import CourseGrounding, get_grounding
 from app.agent.llm import Capability, ModelRouter, StreamHandle
-from app.agent.recommend import recommend_courses
+from app.agent.recommend import recommend_courses, recommend_overview, vertical_from_text
 from app.agent.study_plan import build_study_plan
 from app.catalog.loader import get_course as get_catalog_course
 from app.config import Settings, get_settings
@@ -86,7 +87,7 @@ def _answer_telemetry(
 
 _NUDGE_LIGHT = (
     "End with a brief, warm invitation to explore the platform's Azure certification "
-    "courses — one short sentence, not pushy."
+    "courses, one short sentence, not pushy."
 )
 _NUDGE_MEDIUM = (
     "Answer helpfully, then note in one sentence that this assistant is primarily for "
@@ -148,7 +149,8 @@ def answer_general(
     router = router or ModelRouter(settings)
     system = (
         "You are Athenaeum, an enterprise learning assistant focused on Azure certifications. "
-        "Be helpful and concise. " + _nudge_for(decision.off_topic)
+        "Be helpful and concise. Do not use em dashes; use commas or periods. "
+        + _nudge_for(decision.off_topic)
     )
     handle: StreamHandle = router.stream(
         Capability.WORKHORSE,
@@ -185,7 +187,7 @@ def _foundry_offline(sources: list[GroundingSource]) -> str:
     refs = ", ".join(s.ref for s in sources)
     return (
         f"(offline mode) Here's what our approved content covers on this. {lead.title} "
-        f"addresses it directly — {lead.snippet} You can dig deeper in the linked modules "
+        f"addresses it directly, {lead.snippet} You can dig deeper in the linked modules "
         f"[{refs}]. Want a study plan built around this?"
     )
 
@@ -211,7 +213,7 @@ def answer_foundry(
     reasoning = (
         f"Grounded on {len(sources)} approved module(s): {', '.join(s.ref for s in sources)}."
         if sources
-        else "No approved content matched — answering with an explicit 'not covered'."
+        else "No approved content matched, answering with an explicit 'not covered'."
     )
 
     if settings.llm_offline:
@@ -234,8 +236,8 @@ def answer_foundry(
     system = (
         "You are Athenaeum's course tutor. Answer ONLY from the approved sources below; cite "
         "the module id in square brackets like [cb-c01-m02] for each claim. If the sources do "
-        "not cover the question, say so plainly — never invent content.\n\nSOURCES:\n"
-        + (_sources_block(sources) or "(none)")
+        "not cover the question, say so plainly, never invent content. Do not use em "
+        "dashes; use commas or periods.\n\nSOURCES:\n" + (_sources_block(sources) or "(none)")
     )
     handle = router.stream(
         Capability.WORKHORSE,
@@ -357,8 +359,9 @@ def answer_work(
     router = router or ModelRouter(settings)
     system = (
         "You are Athenaeum's study coach. Use ONLY the learner's work signals below to tailor "
-        "timing and load. Quote only these numbers; do not invent figures. If meeting load is "
-        "above 20 h/week, recommend a lighter plan.\n\nWORK SIGNALS: " + _work_facts(persona)
+        "timing and load. Quote only these numbers; do not invent figures. Do not use em "
+        "dashes; use commas or periods. If meeting load is above 20 h/week, recommend a "
+        "lighter plan.\n\nWORK SIGNALS: " + _work_facts(persona)
     )
     handle = router.stream(
         Capability.WORKHORSE,
@@ -382,8 +385,29 @@ def answer_work(
 # ── Greeting + Recommend (course selection; tool scope: persona + catalog) ──────
 
 
-def _recommend_for(persona: Persona | None, taken: list[TakenCourse]) -> list[CourseSuggestion]:
-    """Profile-based course options for a persona (empty if no profile)."""
+# "What tracks / verticals / courses exist" → show the platform's breadth.
+_BREADTH_RE = re.compile(
+    r"what\s+(verticals|tracks|topics|paths?|courses|areas)\b"
+    r"|what\s+can\s+i\s+learn|all\s+(the\s+)?(courses|tracks|verticals)"
+    r"|what\s+(do|does)\s+(you|the platform)\s+(offer|teach|have)",
+    re.IGNORECASE,
+)
+
+
+def _recommend_for(
+    persona: Persona | None, taken: list[TakenCourse], *, text: str = ""
+) -> list[CourseSuggestion]:
+    """Course options for a persona, honoring an explicitly requested topic.
+
+    If the message names a vertical (e.g. "data science"), recommend from THAT
+    track; if it asks about the platform's breadth, show one course per track;
+    otherwise fall back to the learner's profile.
+    """
+    requested = vertical_from_text(text) if text else None
+    if requested is not None:
+        return recommend_courses(vertical=requested, target_cert="", taken=taken, k=3)
+    if text and _BREADTH_RE.search(text):
+        return recommend_overview()
     if persona is None:
         return []
     return recommend_courses(
@@ -411,12 +435,12 @@ def answer_greeting(
 
     who = f" {persona.codename}" if persona else ""
     greeting = (
-        f"Hi{who} — welcome to Athenaeum. I help you choose and prepare for an Azure "
+        f"Hi{who}, welcome to Athenaeum. I help you choose and prepare for an Azure "
         "certification course. Tell me a topic or cert you're aiming for, or say "
         "“suggest a course” and I'll recommend one that fits your role."
     )
     suggestion = (
-        SuggestionEvent(prompt="Or jump straight in — here's a fit for your path:", options=options)
+        SuggestionEvent(prompt="Or jump straight in, here's a fit for your path:", options=options)
         if options
         else None
     )
@@ -438,13 +462,26 @@ def answer_greeting(
     )
 
 
-def _recommend_narration(persona: Persona, options: list[CourseSuggestion]) -> str:
+def _track_name(vertical: str) -> str:
+    return vertical.replace("-", " ").title()
+
+
+def _recommend_narration(
+    options: list[CourseSuggestion], *, persona: Persona | None, requested_vertical: str | None
+) -> str:
     titles = ", ".join(o.title for o in options)
-    return (
-        f"Based on your work as a {persona.role_title} heading toward "
-        f"{persona.learning.target_cert}, here's what I'd suggest next: {titles}. "
-        "Pick one below to start preparing."
-    )
+    if requested_vertical is not None:
+        return (
+            f"Here are courses in the {_track_name(requested_vertical)} track you asked about: "
+            f"{titles}. Pick one below to start preparing."
+        )
+    if persona is not None:
+        return (
+            f"Based on your work as a {persona.role_title} heading toward "
+            f"{persona.learning.target_cert}, here's what I'd suggest next: {titles}. "
+            "Pick one below to start preparing."
+        )
+    return f"Here's what I'd suggest: {titles}. Pick one below to start preparing."
 
 
 def answer_recommend(
@@ -456,13 +493,14 @@ def answer_recommend(
     repo: WorkIQRepository | None = None,
     settings: Settings | None = None,
 ) -> AgentReply:
-    """Recommend the natural-next course(s) from the learner's profile + progress."""
+    """Recommend course(s), honoring a requested topic over the profile default."""
     settings = settings or get_settings()
     repo = repo or get_repository()
     persona = repo.get_persona(persona_id)
-    options = _recommend_for(persona, taken)
+    options = _recommend_for(persona, taken, text=text)
+    requested_vertical = vertical_from_text(text)
 
-    if persona is None or not options:
+    if not options:
         reply = (
             "I couldn't find a profile to base a recommendation on. Tell me which Azure topic "
             "or certification you're interested in and I'll point you to the right course."
@@ -483,9 +521,15 @@ def answer_recommend(
         prompt="Pick one to start preparing:" if len(options) > 1 else "Want to start this course?",
         options=options,
     )
+    scope = (
+        f"the {_track_name(requested_vertical)} track (as requested)"
+        if requested_vertical is not None
+        else f"{persona.role_title} -> {persona.learning.target_cert}"
+        if persona is not None
+        else "the catalog"
+    )
     reasoning = (
-        f"Recommended {len(options)} course(s) for {persona.codename} "
-        f"({persona.role_title} → {persona.learning.target_cert}): "
+        f"Recommended {len(options)} course(s) for {scope}: "
         + ", ".join(o.catalog_id for o in options)
         + "."
     )
@@ -493,25 +537,35 @@ def answer_recommend(
     if settings.llm_offline:
         return AgentReply(
             telemetry=_answer_telemetry(
-                summary="Recommended courses from your profile",
+                summary="Recommended courses to choose from",
                 reasoning=reasoning,
                 route=Route.RECOMMEND,
                 sources=[],
                 model="offline",
                 tier=None,
             ),
-            tokens=_offline_stream(_recommend_narration(persona, options)),
+            tokens=_offline_stream(
+                _recommend_narration(
+                    options, persona=persona, requested_vertical=requested_vertical
+                )
+            ),
             suggestion=suggestion,
         )
 
     router = router or ModelRouter(settings)
     catalogue = "; ".join(f"{o.title} ({o.cert}, {o.level})" for o in options)
+    learner_ctx = (
+        f"The learner asked about the {_track_name(requested_vertical)} track."
+        if requested_vertical is not None
+        else f"Learner: {persona.role_title}, working toward {persona.learning.target_cert}."
+        if persona is not None
+        else "No learner profile available."
+    )
     system = (
         "You are Athenaeum's enrollment advisor. Recommend ONLY from the candidate courses "
-        "below — these were chosen for this learner's role and progress. Be warm and brief "
-        "(2-3 sentences); end by inviting them to pick one. Do not invent courses.\n\n"
-        f"LEARNER: {persona.role_title}, working toward {persona.learning.target_cert}.\n"
-        f"CANDIDATES: {catalogue}"
+        "below. Be warm and brief (2-3 sentences) and end by inviting them to pick one. Do not "
+        "invent courses. Do not use em dashes; use commas or periods.\n\n"
+        f"{learner_ctx}\nCANDIDATES: {catalogue}"
     )
     handle = router.stream(
         Capability.WORKHORSE,
@@ -520,7 +574,7 @@ def answer_recommend(
     )
     return AgentReply(
         telemetry=_answer_telemetry(
-            summary="Recommended courses from your profile",
+            summary="Recommended courses to choose from",
             reasoning=reasoning,
             route=Route.RECOMMEND,
             sources=[],
@@ -536,7 +590,7 @@ def answer_recommend(
 
 
 _PACE_PROMPT = (
-    "Before I build your plan — how do you want to pace it? Slower spreads the work out, "
+    "Before I build your plan, how do you want to pace it? Slower spreads the work out, "
     "normal is balanced, faster is intensive."
 )
 
@@ -571,7 +625,7 @@ def _need_course_reply(
 ) -> AgentReply:
     options = _recommend_for(persona, taken)
     reply = (
-        "Let's pick a course first — then I'll build a study plan around your schedule. "
+        "Let's pick a course first, then I'll build a study plan around your schedule. "
         "Here are options that fit your role."
         if options
         else "Choose a course first and I'll build a study plan that fits your schedule."
@@ -579,7 +633,7 @@ def _need_course_reply(
     return AgentReply(
         telemetry=_answer_telemetry(
             summary="Need a chosen course before planning",
-            reasoning="No course linked — offered options to choose first."
+            reasoning="No course linked, offered options to choose first."
             if options
             else "No course linked and no profile to recommend from.",
             route=Route.STUDY_PLAN,
@@ -624,7 +678,7 @@ def answer_study_plan(
         return AgentReply(
             telemetry=_answer_telemetry(
                 summary="Asked the learner's pace before planning",
-                reasoning="Course chosen but no pace set — pace gates the plan.",
+                reasoning="Course chosen but no pace set, pace gates the plan.",
                 route=Route.STUDY_PLAN,
                 sources=[],
                 model="offline" if settings.llm_offline else None,
@@ -647,7 +701,7 @@ def answer_study_plan(
         start_date=start_date or date.today(),
         settings=settings,
     )
-    if plan is None:  # course has no modules — should not happen for catalog courses
+    if plan is None:  # course has no modules, should not happen for catalog courses
         return AgentReply(
             telemetry=_answer_telemetry(
                 summary="Could not build a plan",
@@ -684,11 +738,11 @@ def answer_study_plan(
     router = router or ModelRouter(settings)
     system = (
         "You are Athenaeum's study coach presenting a study plan. The plan below was computed "
-        "deterministically from the learner's real calendar — narrate it warmly in 3-4 "
+        "deterministically from the learner's real calendar, narrate it warmly in 3-4 "
         "sentences. Quote ONLY the numbers and dates given; never invent figures. Note that the "
         "study time comes from slots already in their week and modules are done in order with a "
-        "complete-by date each. End by encouraging them to start module 1.\n\nPLAN: "
-        + _plan_facts(plan)
+        "complete-by date each. Do not use em dashes; use commas or periods. End by "
+        "encouraging them to start module 1.\n\nPLAN: " + _plan_facts(plan)
     )
     handle = router.stream(
         Capability.WORKHORSE,

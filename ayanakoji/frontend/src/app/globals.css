@@ -220,3 +220,10 @@
   color: var(--muted-foreground);
   margin: 0.8em 0;
 }
+
+/* In-bubble markdown: tighter than the Modules tab prose. */
+.prose-chat :first-child { margin-top: 0; }
+.prose-chat :last-child { margin-bottom: 0; }
+.prose-chat h1, .prose-chat h2, .prose-chat h3 { margin-top: 0.7em; font-size: 1rem; }
+.prose-chat p { margin: 0.4em 0; }
+.prose-chat ul, .prose-chat ol { margin: 0.4em 0; }

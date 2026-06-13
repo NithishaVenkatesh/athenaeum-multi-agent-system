@@ -122,6 +122,23 @@ export function StudyPlanCard({ plan, courseId }: { plan: StudyPlan; courseId?: 
                   by {fmtDate(m.complete_before)}
                 </span>
               </div>
+              {/* Day-level time blocks — the exact sessions that cover this module. */}
+              {m.scheduled.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {m.scheduled.map((b, i) => (
+                    <span
+                      key={`${m.module_id}-${i}`}
+                      className="border-border/60 bg-background/60 text-muted-foreground inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px]"
+                    >
+                      <span className="text-foreground/80 font-medium">W{b.week}</span>
+                      <span className="capitalize">{b.day}</span>
+                      <span className="tabular-nums">
+                        {b.start}-{b.end}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </li>
         ))}

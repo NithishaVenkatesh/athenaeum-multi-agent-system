@@ -1,6 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
+import ReactMarkdown from "react-markdown";
 
 import { cn } from "@/lib/utils";
 
@@ -25,13 +26,20 @@ export function MessageBubble({
     >
       <div
         className={cn(
-          "max-w-[78%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap",
+          "max-w-[78%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
           isUser
-            ? "bg-primary text-primary-foreground rounded-br-md"
+            ? "bg-primary text-primary-foreground rounded-br-md whitespace-pre-wrap"
             : "bg-card text-foreground border-border rounded-bl-md border",
         )}
       >
-        {content}
+        {/* User text is literal; assistant replies render as markdown. */}
+        {isUser ? (
+          content
+        ) : (
+          <div className="prose-athenaeum prose-chat">
+            <ReactMarkdown>{content}</ReactMarkdown>
+          </div>
+        )}
         {streaming && (
           <span className="bg-brand ml-1 inline-block h-3.5 w-1.5 translate-y-0.5 animate-pulse rounded-sm" />
         )}

@@ -128,22 +128,7 @@ def screen(
         verdict = InjectionVerdict(blocked=False, reason="Passed regex pre-filter (offline).")
         return verdict, _telemetry(verdict, model="regex-prefilter", tier=None)
 
-    # 3) Prompt Guard 2 — a model trained for injection/jailbreak detection.
-    guard_fn = guard_fn or (lambda t: _groq_guard_score(t, settings))
-    score = guard_fn(text)
-    if score is not None:
-        blocked = score >= settings.guard_block_threshold
-        verdict = InjectionVerdict(
-            blocked=blocked,
-            reason=(
-                f"Prompt Guard jailbreak probability {score:.2f} "
-                f"(threshold {settings.guard_block_threshold:.2f})."
-            ),
-            confidence=score if blocked else 1.0 - score,
-        )
-        return verdict, _telemetry(verdict, model=settings.groq_model_guard, tier=None)
-
-    # 4) Guard unavailable → general-LLM classifier confirms anything regex missed.
+    # 3) Azure FIRST (provider-order directive): the Foundry/Azure classifier decides.
     router = router or ModelRouter(settings)
     try:
         result = router.complete(
@@ -153,14 +138,45 @@ def screen(
             max_tokens=120,
         )
         verdict = _parse_verdict(result.text)
+        if verdict.blocked:
+            return verdict, _telemetry(verdict, model=result.model, tier=result.tier)
+        # Azure said clean → confirm with the purpose-built Prompt Guard as a net.
+        guard_verdict = _prompt_guard_verdict(text, settings, guard_fn)
+        if guard_verdict is not None and guard_verdict.blocked:
+            return guard_verdict, _telemetry(
+                guard_verdict, model=settings.groq_model_guard, tier=None
+            )
         return verdict, _telemetry(verdict, model=result.model, tier=result.tier)
     except AllProvidersDown:
-        # 5) Fail open: every model is unreachable, but the regex pre-filter cleared it.
-        # Do NOT block a clean message just because the network is down.
+        # 4) Azure unreachable → fall back to Groq Prompt Guard 2 (the order's fallback).
+        guard_verdict = _prompt_guard_verdict(text, settings, guard_fn)
+        if guard_verdict is not None:
+            return guard_verdict, _telemetry(
+                guard_verdict, model=settings.groq_model_guard, tier=None
+            )
+        # 5) Fail open: everything unreachable, but the regex pre-filter cleared it.
         verdict = InjectionVerdict(
             blocked=False, reason="Regex pre-filter passed; classifiers unavailable."
         )
         return verdict, _telemetry(verdict, model="regex-prefilter", tier=None)
+
+
+def _prompt_guard_verdict(
+    text: str, settings: Settings, guard_fn: GuardFn | None
+) -> InjectionVerdict | None:
+    """Groq Prompt Guard 2 verdict (the fallback / secondary net), or None if down."""
+    score = (guard_fn or (lambda t: _groq_guard_score(t, settings)))(text)
+    if score is None:
+        return None
+    blocked = score >= settings.guard_block_threshold
+    return InjectionVerdict(
+        blocked=blocked,
+        reason=(
+            f"Prompt Guard jailbreak probability {score:.2f} "
+            f"(threshold {settings.guard_block_threshold:.2f})."
+        ),
+        confidence=score if blocked else 1.0 - score,
+    )
 
 
 def _parse_verdict(raw: str) -> InjectionVerdict:

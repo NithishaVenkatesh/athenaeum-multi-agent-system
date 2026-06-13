@@ -1,9 +1,9 @@
-"""Deterministic course recommendation — the natural next course for a learner.
+"""Deterministic course recommendation, the natural next course for a learner.
 
 Given the learner's profile (vertical + target cert from Work IQ) and the courses
 they have already taken, rank the catalog's course ladder and return the courses
 they should choose next: prereq-satisfied first, foundational → advanced. Pure
-functions over the catalog graph (no LLM) — the recommendation is auditable and
+functions over the catalog graph (no LLM), the recommendation is auditable and
 reproducible (master-plan A-104); an agent only narrates it.
 """
 
@@ -19,6 +19,83 @@ from app.catalog.loader import default_catalog_path
 from app.config import Settings, get_settings
 
 _DEFAULT_K = 3
+
+# Topic keywords → catalog vertical, so "data science" recommends data courses
+# (respecting what the learner ASKED for, not just their profile default).
+_VERTICAL_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "data-engineering": (
+        "data engineering",
+        "data science",
+        "data analytics",
+        "data pipeline",
+        "lakehouse",
+        "etl",
+        "spark",
+        "fabric",
+        "synapse",
+        "dp-203",
+        "dp-700",
+        "warehouse",
+    ),
+    "ai-ml": (
+        "ai-ml",
+        "machine learning",
+        "artificial intelligence",
+        "deep learning",
+        "ai-102",
+        "cognitive",
+        "openai",
+        "ml model",
+        " ai ",
+        " ml ",
+    ),
+    "devops-platform": (
+        "devops",
+        "ci/cd",
+        "cicd",
+        "platform engineering",
+        "pipelines",
+        "az-400",
+        "kubernetes",
+        "gitops",
+        "release",
+    ),
+    "architecture-security": (
+        "architecture",
+        "security",
+        "az-305",
+        "sc-100",
+        "zero trust",
+        "governance",
+        "identity",
+        "infrastructure design",
+    ),
+    "cloud-backend": (
+        "cloud",
+        "backend",
+        "app service",
+        "azure functions",
+        "cosmos",
+        "az-204",
+        "serverless",
+        "web api",
+    ),
+}
+
+
+def vertical_from_text(text: str) -> str | None:
+    """The catalog vertical a learner's message is about, or None if unspecific.
+
+    Lets a recommendation honor an explicitly requested topic (e.g. "data
+    science") over the learner's profile-default track.
+    """
+    lowered = f" {text.lower()} "
+    scores = {
+        vertical: sum(1 for kw in keywords if kw in lowered)
+        for vertical, keywords in _VERTICAL_KEYWORDS.items()
+    }
+    best = max(scores, key=lambda v: scores[v])
+    return best if scores[best] > 0 else None
 
 
 @dataclass(frozen=True)
@@ -44,7 +121,7 @@ def _vertical_for_cert(catalog_path: str, cert: str) -> str | None:
         return None
     needle = cert.lower()
     for node in _load_graph(catalog_path):
-        # Vertical certs can be compound ("AZ-305 + SC-100") — match on containment.
+        # Vertical certs can be compound ("AZ-305 + SC-100"), match on containment.
         if node.cert and needle in node.cert.lower():
             return node.vertical
     return None
@@ -85,6 +162,25 @@ def _to_suggestion(node: CatalogNode, reason: str) -> CourseSuggestion:
     )
 
 
+def recommend_overview(settings: Settings | None = None) -> list[CourseSuggestion]:
+    """One foundational course per vertical, the platform's breadth, choosable.
+
+    Answers "what verticals / tracks / courses exist" with a starting course in
+    each of the five tracks rather than a profile-scoped list.
+    """
+    settings = settings or get_settings()
+    path = str(settings.athenaeum_catalog_path or default_catalog_path())
+    graph = _load_graph(path)
+    seen: set[str] = set()
+    out: list[CourseSuggestion] = []
+    for node in sorted(graph, key=lambda n: (n.vertical, n.order)):
+        if node.vertical in seen:
+            continue
+        seen.add(node.vertical)
+        out.append(_to_suggestion(node, f"Start of the {node.vertical_title} track."))
+    return out
+
+
 def recommend_courses(
     *,
     vertical: str | None,
@@ -97,7 +193,7 @@ def recommend_courses(
     """The next courses a learner should choose, best first.
 
     The candidate pool spans the learner's *current* vertical and the vertical of
-    their *target* certification (often different — e.g. on AZ-204, targeting
+    their *target* certification (often different, e.g. on AZ-204, targeting
     AZ-305), so a learner mid-career sees real choices across both tracks. A course
     counts as *completed* when its status is negative (passed). The natural next is
     the lowest-order untaken course whose prereqs are all completed; if none

@@ -142,7 +142,7 @@ class CourseGrounding:
         return [
             GroundingSource(
                 ref=d.ref,
-                title=f"{d.course_title} — {d.title}",
+                title=f"{d.course_title}: {d.title}",
                 snippet=d.snippet,
                 kind="course",
             )

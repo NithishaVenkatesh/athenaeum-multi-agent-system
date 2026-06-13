@@ -13,7 +13,7 @@ calendar (master-plan §13). Nothing is hardcoded or guessed:
 - **Modules are scheduled sequentially** into the repeating weekly slots; each
   gets the concrete sessions that cover it and a "complete before" date.
 
-An LLM only narrates the result — every number here is computed and auditable.
+An LLM only narrates the result, every number here is computed and auditable.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ from app.workiq.models import DaySchedule, Persona
 MODULE_BASE_MINUTES = 40
 MINUTES_PER_OBJECTIVE = 18
 MINUTES_PER_SKILL = 8
-SAFETY_HEADROOM = 1.5  # internal buffer so estimates run generous — never surfaced
+SAFETY_HEADROOM = 1.5  # internal buffer so estimates run generous, never surfaced
 SESSION_GRANULARITY = 15  # round estimates to a tidy quarter-hour
 PACE_FACTOR: dict[Pace, float] = {Pace.SLOWER: 1.35, Pace.NORMAL: 1.0, Pace.FASTER: 0.75}
 
@@ -186,7 +186,7 @@ def _capacity_reason(slots: list[WeeklySlot], weekly_hours: float) -> str:
         f"{s.day.capitalize()} {_to_hhmm(s.start)}–{_to_hhmm(s.end)}" for s in slots[:4]
     )
     return (
-        f"I found {weekly_hours:g} h of study time already in your week — {shown}"
+        f"I found {weekly_hours:g} h of study time already in your week, {shown}"
         + ("…" if len(slots) > 4 else "")
         + ". I'll reuse this every week."
     )
