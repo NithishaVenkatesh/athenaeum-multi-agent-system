@@ -95,25 +95,41 @@ function sseFetch(chunks: string[]) {
 }
 
 describe("streamMessage", () => {
-  it("emits a token per SSE event, even across chunk boundaries", async () => {
-    // The second event is deliberately split across two network chunks.
+  it("dispatches typed pipeline events, even across chunk boundaries", async () => {
+    // The token event is deliberately split across two network chunks.
     vi.stubGlobal(
       "fetch",
       sseFetch([
-        'data: {"token": "Hello"}\n\n',
-        'data: {"to',
-        'ken": " world"}\n\ndata: {"done": true}\n\n',
+        'data: {"type": "token", "token": "Hel',
+        'lo"}\n\ndata: {"type": "token", "token": " world"}\n\ndata: {"type": "done", "route": "general", "suggested": false}\n\n',
       ]),
     );
 
     const tokens: string[] = [];
-    await streamMessage("c1", "hi", (token) => tokens.push(token));
+    let done = false;
+    await streamMessage("c1", "hi", {
+      onToken: (token) => tokens.push(token),
+      onDone: () => {
+        done = true;
+      },
+    });
 
     expect(tokens).toEqual(["Hello", " world"]);
+    expect(done).toBe(true);
+  });
+
+  it("routes a blocked event to onBlocked", async () => {
+    vi.stubGlobal(
+      "fetch",
+      sseFetch(['data: {"type": "blocked", "reason": "nope"}\n\n']),
+    );
+    let blocked = "";
+    await streamMessage("c1", "hack", { onBlocked: (reason) => (blocked = reason) });
+    expect(blocked).toBe("nope");
   });
 
   it("throws when the response is not ok", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 500, body: null })));
-    await expect(streamMessage("c1", "hi", () => {})).rejects.toThrow(/500/);
+    await expect(streamMessage("c1", "hi", {})).rejects.toThrow(/500/);
   });
 });

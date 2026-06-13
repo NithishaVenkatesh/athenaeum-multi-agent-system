@@ -173,16 +173,67 @@ export function listAssessments(
   });
 }
 
+// ── Agent pipeline event protocol (mirrors app/agent/contracts.py) ────────────
+
+export type Route = "foundry_iq" | "work_iq" | "general";
+
+export interface GroundingSource {
+  ref: string;
+  title: string;
+  snippet: string;
+  kind: "course" | "work" | "catalog";
+  url: string | null;
+}
+
+export interface PhaseTelemetry {
+  phase: "injection_gate" | "router" | "answer";
+  status: "running" | "passed" | "blocked" | "error";
+  summary: string;
+  reasoning: string;
+  provider: string | null;
+  model: string | null;
+  tier: number | null;
+  latency_ms: number | null;
+  route: Route | null;
+  sources: GroundingSource[];
+}
+
+export interface CourseSuggestion {
+  catalog_id: string;
+  title: string;
+  cert: string;
+  pitch: string;
+  prep_points: string[];
+}
+
+export type PipelineEvent =
+  | { type: "phase"; phase: PhaseTelemetry }
+  | { type: "token"; token: string }
+  | { type: "suggestion"; suggestion: CourseSuggestion }
+  | { type: "blocked"; reason: string }
+  | { type: "error"; message: string }
+  | { type: "done"; route: Route | null; suggested: boolean };
+
+export interface StreamHandlers {
+  onPhase?: (phase: PhaseTelemetry) => void;
+  onToken?: (token: string) => void;
+  onSuggestion?: (suggestion: CourseSuggestion) => void;
+  onBlocked?: (reason: string) => void;
+  onError?: (message: string) => void;
+  onDone?: (info: { route: Route | null; suggested: boolean }) => void;
+}
+
 /**
- * Send a message and stream the assistant reply over SSE.
+ * Send a message and stream the full agent pipeline over SSE.
  *
- * Calls `onToken` for each streamed token and resolves when the stream closes.
- * The backend persists both turns; the caller only needs the live tokens.
+ * Dispatches each typed pipeline event to the matching handler. The backend
+ * persists both turns; the caller drives live UI (phase trace, tokens, the
+ * course suggestion, a blocked toast, or an explicit error).
  */
 export async function streamMessage(
   courseId: string,
   content: string,
-  onToken: (token: string) => void,
+  handlers: StreamHandlers,
   signal?: AbortSignal,
 ): Promise<void> {
   const response = await fetch(
@@ -213,11 +264,39 @@ export async function streamMessage(
     for (const event of events) {
       const line = event.trim();
       if (!line.startsWith("data:")) continue;
-      const payload = JSON.parse(line.slice(5).trim()) as {
-        token?: string;
-        done?: boolean;
-      };
-      if (typeof payload.token === "string") onToken(payload.token);
+      const payload = JSON.parse(line.slice(5).trim()) as PipelineEvent;
+      dispatchEvent(payload, handlers);
     }
   }
+}
+
+function dispatchEvent(event: PipelineEvent, handlers: StreamHandlers): void {
+  switch (event.type) {
+    case "phase":
+      handlers.onPhase?.(event.phase);
+      break;
+    case "token":
+      handlers.onToken?.(event.token);
+      break;
+    case "suggestion":
+      handlers.onSuggestion?.(event.suggestion);
+      break;
+    case "blocked":
+      handlers.onBlocked?.(event.reason);
+      break;
+    case "error":
+      handlers.onError?.(event.message);
+      break;
+    case "done":
+      handlers.onDone?.({ route: event.route, suggested: event.suggested });
+      break;
+  }
+}
+
+/** Accept a suggested course: link it to this chat and start attempt 1. */
+export function acceptCourse(courseId: string, catalogId: string): Promise<Course> {
+  return requestJson<Course>(`/api/courses/${courseId}/accept`, {
+    method: "POST",
+    body: JSON.stringify({ catalog_id: catalogId }),
+  });
 }

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Fraunces } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
 import { ColosseumBackdrop } from "@/components/colosseum-backdrop";
 import { PersonaProvider } from "@/components/persona-provider";
@@ -39,6 +40,11 @@ export default function RootLayout({
       <body className="bg-paper flex min-h-full flex-col">
         <ColosseumBackdrop />
         <PersonaProvider>{children}</PersonaProvider>
+        <Toaster
+          position="top-center"
+          richColors
+          toastOptions={{ className: "font-sans" }}
+        />
       </body>
     </html>
   );
