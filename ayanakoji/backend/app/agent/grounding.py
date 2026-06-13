@@ -34,6 +34,8 @@ _STOPWORDS = frozenset(_STOPWORD_TEXT.split())
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 _TOP_K = 4
 _MIN_SCORE = 1
+# A source must score at least this fraction of the top match to count as grounding.
+_RELATIVE_CUTOFF = 0.5
 
 
 @dataclass(frozen=True)
@@ -47,7 +49,8 @@ class GroundingDoc:
     cert: str
     vertical: str
     title: str  # module title
-    text: str  # summary + objectives, lowercased index text
+    snippet: str  # module summary + objectives (the material an answer grounds on)
+    text: str  # lowercased index text for scoring
 
 
 def _tokenize(text: str) -> list[str]:
@@ -63,11 +66,16 @@ def _load_docs(catalog_path: str) -> tuple[GroundingDoc, ...]:
         cert = vertical.get("primary_cert", "")
         for course in vertical["courses"]:
             for module in course.get("modules", []):
-                objectives = " ".join(module.get("objectives", []))
+                objectives = module.get("objectives", [])
+                summary = module.get("summary", "")
                 skills = " ".join(module.get("grounded_skills", []))
                 index_text = " ".join(
-                    (module["title"], module.get("summary", ""), objectives, skills)
+                    (module["title"], summary, " ".join(objectives), skills)
                 ).lower()
+                # The material an answer actually grounds on: module summary + objectives.
+                snippet = summary
+                if objectives:
+                    snippet = f"{summary} Objectives: {'; '.join(objectives)}."
                 docs.append(
                     GroundingDoc(
                         ref=module["id"],
@@ -77,6 +85,7 @@ def _load_docs(catalog_path: str) -> tuple[GroundingDoc, ...]:
                         cert=cert,
                         vertical=vertical["id"],
                         title=module["title"],
+                        snippet=snippet,
                         text=index_text,
                     )
                 )
@@ -119,7 +128,13 @@ class CourseGrounding:
         scored = sorted(
             ((d, _score(terms, d)) for d in pool), key=lambda ds: ds[1], reverse=True
         )
-        return tuple(d for d, s in scored if s >= _MIN_SCORE)
+        kept = [(d, s) for d, s in scored if s >= _MIN_SCORE]
+        if not kept:
+            return ()
+        # Keep only matches near the top score so weak, generic hits don't pose as
+        # grounding — credibility of the "sources" panel depends on this.
+        cutoff = max(_MIN_SCORE, kept[0][1] * _RELATIVE_CUTOFF)
+        return tuple(d for d, s in kept if s >= cutoff)
 
     def search(
         self, query: str, *, catalog_id: str | None = None, k: int = _TOP_K
@@ -130,7 +145,7 @@ class CourseGrounding:
             GroundingSource(
                 ref=d.ref,
                 title=f"{d.course_title} — {d.title}",
-                snippet=d.course_summary,
+                snippet=d.snippet,
                 kind="course",
             )
             for d in ranked
