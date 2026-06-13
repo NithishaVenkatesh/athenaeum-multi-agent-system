@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from app import __version__
 from app.config import get_settings
+from app.workiq.router import router as workiq_router
 
 
 class HealthResponse(BaseModel):
@@ -49,6 +50,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Synthetic Work IQ read service (GET-only).
+    app.include_router(workiq_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     def health() -> HealthResponse:
