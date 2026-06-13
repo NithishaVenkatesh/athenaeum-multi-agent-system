@@ -20,6 +20,13 @@ dev = [
     "ruff>=0.8",
     "mypy>=1.13",
 ]
+# Azure / Microsoft Foundry SDKs. Optional group (not installed in the offline
+# CI lane) so the web skeleton + unit tests stay cloud-free and fast.
+foundry = [
+    "openai>=1.54",
+    "azure-identity>=1.19",
+    "azure-ai-projects>=1.0.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -46,7 +53,19 @@ warn_unused_ignores = true
 disallow_untyped_defs = true
 plugins = ["pydantic.mypy"]
 
+# Optional Foundry SDKs may be absent in the offline lane; tolerate missing stubs.
+[[tool.mypy.overrides]]
+module = ["openai.*", "azure.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 addopts = "-q --cov=app --cov-report=term-missing --cov-fail-under=80"
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = ["integration: tests that hit live Azure/Foundry (need creds + foundry group)"]
+
+[tool.coverage.run]
+# app/foundry.py is a cloud adapter exercised by the live smoke + integration test,
+# not the offline unit gate (its SDKs aren't installed in CI). Keep it out of the
+# offline coverage number so the gate measures deterministic, testable logic.
+omit = ["app/foundry.py", "tests/*", "scripts/*"]

@@ -28,3 +28,16 @@ uv run ruff format --check . # format
 uv run mypy app              # types
 uv run pytest                # tests + coverage (>=80%)
 ```
+
+## Microsoft Foundry / Azure OpenAI
+Cloud SDKs live in the optional `foundry` dependency group (kept out of the
+offline CI lane). Credentials come from `.env` (git-ignored) — see
+`.env.example`. `app/config.py` fails loud via `require_foundry()` when values
+are missing or placeholders.
+
+```bash
+uv sync --group foundry                          # install Azure/OpenAI SDKs
+uv run --group foundry python scripts/foundry_smoke.py   # ~0-cost connectivity probe
+uv run --group foundry pytest -m integration     # live integration test (needs creds)
+```
+
