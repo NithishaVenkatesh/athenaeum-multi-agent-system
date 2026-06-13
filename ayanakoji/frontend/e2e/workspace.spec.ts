@@ -39,6 +39,13 @@ test("learner signs in, starts a course, views assessments, and signs out", asyn
   await page.getByRole("tab", { name: "Chat" }).click();
   await expect(page.getByText(/offline mode/i)).toBeVisible({ timeout: 15_000 });
 
+  // Rename the chat from the chooser's edit icon (modal); the shell title updates.
+  await page.getByRole("button", { name: "Choose a chat" }).click();
+  await page.getByRole("button", { name: /^Rename/ }).click();
+  await page.getByLabel("Chat name").fill("Functions, end to end");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("Functions, end to end")).toBeVisible();
+
   // Sign out returns to the chooser.
   await page.getByRole("button", { name: /sign out/i }).click();
   await expect(

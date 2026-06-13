@@ -80,7 +80,7 @@ export function CourseSwitcher() {
                       event.preventDefault();
                       openRename(course);
                     }}
-                    className="text-muted-foreground hover:text-foreground hover:bg-background rounded-md p-1 opacity-0 transition group-hover/item:opacity-100 focus-visible:opacity-100"
+                    className="text-muted-foreground hover:text-foreground hover:bg-background rounded-md p-1 opacity-70 transition hover:opacity-100 focus-visible:opacity-100"
                   >
                     <Pencil className="size-3.5" />
                   </button>
