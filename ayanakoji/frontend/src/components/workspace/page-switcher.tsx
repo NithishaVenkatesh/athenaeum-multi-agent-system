@@ -1,15 +1,22 @@
 "use client";
 
 /**
- * Chat ↔ Assessments switcher for the active course. Only rendered once a chat
- * record exists (a course id is in the route); a brand-new chat has no
- * assessments view to switch to.
+ * Chat ↔ Assessments switcher for the active course. Pinned to the horizontal
+ * center of the viewport (independent of the left/right top-bar content) and
+ * shown only once a course exists in the route. The active choice is marked by a
+ * single box that springs across to whichever tab is clicked (shared layoutId).
  */
 
+import { MotionConfig, motion } from "framer-motion";
 import { usePathname, useRouter } from "next/navigation";
 
 import { parseChatRoute, type ChatPage } from "@/lib/chat-route";
 import { cn } from "@/lib/utils";
+
+const TABS: { key: ChatPage; label: string }[] = [
+  { key: "chat", label: "Chat" },
+  { key: "assessments", label: "Assessments" },
+];
 
 export function PageSwitcher() {
   const pathname = usePathname();
@@ -18,36 +25,42 @@ export function PageSwitcher() {
 
   if (!courseId) return null;
 
-  const tabs: { key: ChatPage; label: string; href: string }[] = [
-    { key: "chat", label: "Chat", href: `/chat/${courseId}` },
-    { key: "assessments", label: "Assessments", href: `/chat/${courseId}/assessments` },
-  ];
-
   return (
-    <div
-      role="tablist"
-      aria-label="Course view"
-      className="border-border bg-card inline-flex items-center gap-1 rounded-full border p-1"
-    >
-      {tabs.map((tab) => {
-        const selected = tab.key === page;
-        return (
-          <button
-            key={tab.key}
-            role="tab"
-            aria-selected={selected}
-            onClick={() => router.push(tab.href)}
-            className={cn(
-              "rounded-full px-3.5 py-1 text-sm font-medium transition-colors",
-              selected
-                ? "bg-brand text-brand-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {tab.label}
-          </button>
-        );
-      })}
-    </div>
+    <MotionConfig reducedMotion="user">
+      <div
+        role="tablist"
+        aria-label="Course view"
+        className="border-border bg-card/90 absolute top-1/2 left-1/2 z-10 inline-flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-xl border p-1 shadow-sm backdrop-blur-sm"
+      >
+        {TABS.map((tab) => {
+          const selected = tab.key === page;
+          const href =
+            tab.key === "chat" ? `/chat/${courseId}` : `/chat/${courseId}/assessments`;
+          return (
+            <button
+              key={tab.key}
+              role="tab"
+              aria-selected={selected}
+              onClick={() => router.push(href)}
+              className={cn(
+                "relative rounded-lg px-3.5 py-1 text-sm font-medium transition-colors",
+                selected
+                  ? "text-brand-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {selected && (
+                <motion.span
+                  layoutId="page-switcher-active"
+                  className="bg-brand absolute inset-0 rounded-lg"
+                  transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                />
+              )}
+              <span className="relative z-10">{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </MotionConfig>
   );
 }
