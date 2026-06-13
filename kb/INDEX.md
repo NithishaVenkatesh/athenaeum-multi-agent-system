@@ -67,6 +67,6 @@ related: [other-doc-slugs]
 - [azure-setup.md](iq/azure-setup.md) — Deploy-to-Azure infra, env vars, regions, model deployments, free-tier gotchas. `azure` `infra` `howto`
 
 ### planning/
-- [plan.md](planning/plan.md) — Phased build plan against the deadline. `plan`
-- [decisions.md](planning/decisions.md) — Decision log. `decision`
-- [progress.md](planning/progress.md) — Running progress log / session memory. `plan`
+- [master-plan.md](planning/master-plan.md) — **CANONICAL plan (v4)**: decisions, architecture, IQ, orchestration, security, eval, cost, rubric traceability. `plan` `master`
+- [build-spec.md](planning/build-spec.md) — **Exact code-level build reference**: repo tree, Pydantic contracts, orchestrator skeletons, SDK call patterns, per-module DoD. Buildable with no extra context. `plan` `code` `reference`
+- [plan.md](planning/plan.md) — v1 system-design reference (superseded by master-plan). `plan`

@@ -18,15 +18,15 @@ related: [plan, decisions, judging-rubric, agent-architecture, research-gaps, re
 
 > **Track:** Reasoning Agents (Microsoft Foundry). **Challenge:** A — Enterprise Learning System. **Deadline:** **2026-06-14 23:59 PT (PDT, UTC−7)** = ~2026-06-15 12:29 PM IST. **Goal:** undisputed #1 + "Best Use of IQ Tools."
 
-> ⛔ **EXECUTION REALITY (2026-06-13, from adversarial review w40jybwer).** The repo is **markdown only — zero implementation** (no `src/`, no `data/synthetic/`, no tests, no CI). Judges score the *working project + 5-min video + public repo*, not this plan. **A plan scores nothing.** With ~1 day left, the plan is now **FROZEN** and the only rational move is to ship the **de-risked critical path** (§0.1) end-to-end, mock-first. Every change below v2→v3 exists to make that path correct, honest, and buildable in the time left.
+> 🧭 **STATUS (2026-06-13, v4).** This plan is the **build blueprint**. The companion **[build-spec.md](build-spec.md)** is the *exact code-level reference* — repo tree, every Pydantic contract, the orchestrator skeleton, prompt templates, ontology/synthetic data, SDK call patterns, and per-module acceptance criteria — written so the system can be implemented **with no additional context**. "No code yet" is fine; the goal is a reference precise enough to build fast and correctly. Cost is optimized sensibly, not stingily (§25).
 
-### 0.1 The de-risked critical path (what actually gets built, in order)
-1. **Repo scaffold + `FORCE_MOCK_MODE` mock pipeline** running the full learner flow with **zero credentials** (the demo can never fail).
-2. **Plain-Python orchestrator** (winner-proven: sequential + `ThreadPoolExecutor` fan-out + `if verdict: loop`) — **NOT** the MAF graph (demoted to EXTRA, §A-101).
+### 0.1 Fastest correct implementation order (mirror in build-spec.md)
+1. **Repo scaffold + shared Pydantic contracts** (build-spec §2–§3) + `FORCE_MOCK_MODE` deterministic mock tier — the full learner flow runs with **zero credentials** before any cloud call (demo can never fail; also the test substrate).
+2. **MAF Workflows graph spine** (`agent_framework`, GA v1.0) driving Foundry agents as executors (§5, A-101) — with the **identical-logic plain-Python orchestrator as the guaranteed fallback** (`ORCHESTRATOR=maf|python`, same trace).
 3. **Foundry IQ** grounded Curator + Assessment (citations + activity log).
-4. **Admin Trace view built against the mock first** (the demo's money shot, §21) + **circuit breaker** (§5.6) — front-loaded, not P3.
-5. **Submission artifacts in parallel from hour 0**: README skeleton + synthetic-data disclaimer, architecture diagram, video script, MS Learn usernames, public-repo + secret scan.
-6. Everything labelled `EXTRA`/`STRETCH` is touched **only after** a complete demoable system + recorded video exist and are frozen.
+4. **Admin Trace built against the mock first** (the demo's money shot, §21) + **circuit breaker** (§5.6) — front-loaded.
+5. **Submission artifacts from hour 0**: README + synthetic disclaimer, architecture diagram, video script (§4A), MS Learn usernames, public repo + secret scan.
+6. `EXTRA`/`STRETCH` items only after a complete demoable system + recorded video exist.
 
 ---
 
@@ -78,7 +78,8 @@ Each is a committed decision with rationale and a revisit-trigger. Extends [deci
 
 | ID | Decision | Why | Revisit if |
 |----|----------|-----|-----------|
-| **A-101 (revised v3)** | **Orchestration spine CORE = plain-Python orchestrator** (explicit function: sequential dependent steps + `ThreadPoolExecutor` fan-out + `if verdict==NOT_YET: loop` + typed Pydantic handoffs) — the winner-proven pattern. **MAF Workflows** (`agent_framework.WorkflowBuilder`, supersteps/conditional edges/checkpointing/HITL) = **EXTRA swap-in**, adopted only if it comes up green by end of P2. **Agents = Foundry Agent Service** agents via the **Foundry SDK** (`azure-ai-projects`/`azure-ai-agents`) in both cases. | A judge in a 5-min video cannot perceive "BSP superstep barrier" vs "a function calling two agents in a thread pool" — same diagram, same ~50% latency cut, same streamed trace. The MAF "agents-in-workflows" combo is the least-proven, highest-risk integration in the build (no verified recipe; young package, churning signatures) and buys ~zero perceivable rubric points over plain orchestration. Shipping plain-Python first de-risks the whole demo; MAF is a same-trace upgrade if time allows. Both honor "Foundry SDK owns the agents." | MAF graph validated working in hour-1 spike → promote to CORE and render identical trace. |
+| **A-101 (FINAL, v4 — orchestration)** | **Spine CORE = MAF Workflows graph** (`agent_framework`, **GA v1.0**, Apr 2026): code-first directed graph of executors + **conditional edges** + BSP supersteps + **checkpointing** + streaming + HITL, **driving Foundry Agent Service agents as executors** (`azure-ai-projects`/`azure-ai-agents`). **Guaranteed fallback = identical-logic plain-Python orchestrator** (same typed handoffs, same `TraceEvent` stream) selected by `ORCHESTRATOR=maf\|python` — the demo survives even if MAF fights back. **Optional showpiece (EXTRA) = a Foundry portal *visual* Workflow** (YAML + Power Fx) re-creating the same graph for a "real Foundry-native workflow" beat in the video. | This is the most-Foundry-native graph **in code**: Foundry's own `azure-ai-projects` exposes **no code graph API** (only Connected Agents = hub-and-spoke delegation, and the **visual** Workflows builder which is Power-Fx/YAML, portal-centric, and **doesn't support hosted/pro-code agents**). The Foundry workflow doc itself directs pro-code orchestration to **MAF workflows**. MAF gives real graph control (the branch + loop + fan-out you want) while staying testable/mockable/zero-credential; agents/IQ/memory/telemetry/eval remain pure Foundry SDK. GA v1.0 removes the earlier bleeding-edge risk. | A graph proves unnecessary for the simple topology → the plain-Python fallback is already the same thing; ship it and skip MAF. |
+| **A-101b** | **Connected Agents (`azure-ai-projects`) deliberately NOT the spine.** | Hub-and-spoke agent-as-tool delegation, not a graph — no first-class conditional edges/loops/checkpointing. Useful only for the simplest delegation; our topology needs branch+loop+fan-out. | Topology collapses to pure delegation. |
 | **A-102 (revised v3)** | **Foundry IQ = the one deep, real IQ layer. Fabric IQ = `ontology-as-code` semantic engine (CORE, $0, demo-safe), documented as the "Fabric-IQ-pattern" model; real Fabric IQ Ontology binding = STRETCH, narrative-only unless spike-verified.** Work IQ = `WorkContextProvider` interface, synthetic backend CORE, real MCP backend STRETCH. | "Must use Fabric + Foundry IQ." But: Fabric IQ is GA at the *product* level while its **Ontology and the Fabric→Foundry integration are PREVIEW** (Build 2026), and the repo's own ground truth ([fabric-iq.md](../iq/fabric-iq.md)) says there is no public Fabric IQ SDK/cookbook. Staking the IQ-prize case on an unbuildable real binding is a liability a probing judge exposes. The "Best Use of IQ Tools" case is fully carried by **Foundry IQ (real, deep, verified recipes)** + the **honest Fabric-IQ-pattern ontology** modeled 1:1 on the real Ontology schema. | A 5-min spike on the actual subscription provisions Fabric Ontology + binds to Foundry → promote real backend; else keep code backend and say so in Honest Gaps. |
 | **A-103 (revised v3)** | **Reasoning model only where reasoning is judged**, routed by a cheap complexity classifier *before* the first call. Reasoning tier = current GA o-series reasoning model (verify deployability on the student sub in `eastus2`; `o4-mini` works on the deadline but **retires 2026-10-16** — pin a current GA reasoning tier as forward path) for assessment-scoring critique, manager synthesis, hard routing. Workhorse = `gpt-4o-mini` (**retires 2026-10-01**, forward path `gpt-4.1-mini`) for structured/narration. `text-embedding-3-large` for vectors. **o-series config:** `reasoning_effort` low/med/high, **no `temperature`/`top_p`** (400 on o-series), `developer` role not `system`. All Azure OpenAI = credit-eligible. | Track is *Reasoning Agents*; spend reasoning tokens where they show. Student subs get **no quota increases** — verify default quota suffices before committing; mock tier guarantees the demo regardless. | Cost ceiling breached, quota throttle, or cheaper GA reasoning tier ships. |
 | **A-104** | **Deterministic over LLM wherever a formula is correct.** Skill-gap, capacity, allocation, scoring, risk, slot selection, aggregation, knowledge-tracing = pure functions. LLMs only for intake parsing, narration, question generation, and critique. | Arithmetic correctness beats prompt variance; auditable; reproducible; cheaper; "use real algorithms where LLMs aren't needed" (winner takeaway). | n/a — principle. |
@@ -158,13 +159,13 @@ Mapped 1:1 to the challenge brief's 7-step baseline flow ([challenge-a-brief.md]
 
 ---
 
-## 5. Orchestration spine — `CORE` plain-Python / `EXTRA` MAF graph
+## 5. Orchestration spine — `CORE` MAF graph (plain-Python fallback)
 
-**The graph below is logical — it is the same diagram and the same streamed trace whether implemented as CORE plain-Python or EXTRA MAF.** Build CORE first; swap MAF in only if the hour-1 spike is green (A-101).
+**The graph below is the same diagram and the same streamed trace in both implementations.** CORE is MAF; the plain-Python orchestrator is the drop-in fallback (`ORCHESTRATOR=maf|python`), so the demo never depends on the framework behaving.
 
-**CORE — plain-Python orchestrator:** an explicit `run_learner(session)` function: sequential dependent steps, `concurrent.futures.ThreadPoolExecutor` for the StudyPlan∥Engagement fan-out, an `if verdict == NOT_YET and loop_ok: replan()` branch, typed Pydantic handoffs between calls (§8.1), and an append-only `TraceEvent` emitted per hop (§19). No framework. This is exactly what the last winner shipped (and documented *why* `asyncio.gather` fails inside the agent-service event loop).
+**CORE — MAF Workflows** (`agent_framework.WorkflowBuilder`, GA v1.0): directed graph of **executors**/**edges**; **Pregel/BSP supersteps** with a sync barrier; deterministic execution; **checkpointing at superstep boundaries**; **conditional edges** (route on message content); build-time validation (type/reachability/edges); HITL pause/resume (`RequestInfoExecutor`/`RequestInfoEvent`); streaming events for the live Admin Trace. Agent nodes are **Foundry Agent Service agents** ("Executors can be AI agents or custom logic"). Confirm the exact import surface (`WorkflowBuilder`, `start_executor=`, `add_edge(..., condition=)`) against the installed `agent-framework` version in the hour-1 spike (build-spec §4).
 
-**EXTRA — MAF Workflows** (`agent_framework.WorkflowBuilder`): directed graph of **executors**/**edges**; **Pregel/BSP supersteps** with a sync barrier; deterministic execution; **checkpointing at superstep boundaries**; **conditional edges**; build-time validation (type/reachability/edges); HITL pause/resume (`RequestInfoExecutor`). Verified against MAF Workflows docs (Learn, updated 2026-04-29) — capabilities are real; the risk is the young package's churning import surface (`WorkflowBuilder`, `start_executor=`, `add_edge(condition=)`) and the unproven agents-as-executors wiring. Confirm against the installed version in the spike.
+**FALLBACK — plain-Python orchestrator** (`ORCHESTRATOR=python`): an explicit `run_learner(session)` — sequential dependent steps, `concurrent.futures.ThreadPoolExecutor` for the StudyPlan∥Engagement fan-out, `if verdict==NOT_YET and loop_ok: replan()`, typed Pydantic handoffs (§8.1), identical `TraceEvent` per hop (§19). Exactly what the last winner shipped (incl. *why* `asyncio.gather` fails inside the agent-service event loop). Guarantees the demo regardless of MAF.
 
 ### 5.1 Node types (plain-Python functions in CORE; MAF executors in EXTRA)
 - **Agent node** — calls a Foundry Agent Service agent (Foundry SDK), typed Pydantic in/out. All LLM agents (§6).
@@ -519,13 +520,12 @@ Conventional commits. Branch protection on `main`. CI is itself a Reliability/Sa
 | Container Apps (EXTRA) | scale-to-zero | ~$0–2 | — |
 | **Total (CORE path)** | | **~$15–35** | |
 
-**Hard credit-protection controls (not optional):**
-- **Enforced teardown** of AI Search (and F2 if used): an `azd` post-demo hook / nightly cron deletes the resource group; never leave Search running idle.
-- **Account-level Azure Cost Management budget alert at $50** with an action group that emails and (ideally) auto-stops Search + Fabric. The §5.6 circuit breaker is **per-conversation only** and does **not** protect the subscription.
-- **R-cost (§30):** the student credit is a hard ceiling — at exhaustion the subscription **auto-disables mid-build**. Worst case (Search left a month) ~$245; with F2 +~$262. Budget the failure mode, not just the happy path.
-- Consider **Basic tier** Search (~$75/mo) if it satisfies semantic-config/agentic-retrieval for a 10-doc KB — halves the blast radius.
+**Budget stance (v4): no hard cap — spend where it improves the result, with basic hygiene so nothing is wasted while idle.** Use **Standard-tier** AI Search confidently; use the reasoning model freely where reasoning is judged; attempting the **real Fabric F2** backend and **hosted deployment** is fine if they provision. Not stingy, not wasteful. Sensible controls:
+- **Teardown when idle** (good practice, not panic): an `azd` post-demo hook / cron deletes the resource group overnight so a forgotten Standard-Search (~$0.34/hr) or F2 (~$0.36/hr) doesn't burn credit doing nothing. Reprovision is ~5 min.
+- **One Azure Cost Management budget alert** (e.g. $75) as a smoke detector — informational, so spend is *visible*, not capped. (The §5.6 circuit breaker is per-conversation; this is the account-level view.)
+- **Right-size, don't under-buy:** stay on Standard Search (Basic may lack semantic-config/agentic-retrieval — don't risk the core feature to save a few dollars).
 
-**Cost optimizations baked in:** model routing (§A-103), prompt caching (cache_read 50–90% cheaper, real & tracked §19), LLM response cache (§24), deterministic components replacing LLM calls (§13), `minimal` retrieval effort skips the planning LLM where grounding-depth isn't needed. Work IQ synthetic = $0; Fabric IQ code backend = $0.
+**Cost optimizations baked in (sensible, not stingy):** model routing (§A-103) — reasoning tier only where it shows; prompt caching (cache_read 50–90% cheaper, tracked §19); LLM response cache (§24); deterministic components replace LLM calls where a formula is exact (§13); `minimal` retrieval effort where grounding depth isn't needed. Work IQ synthetic = $0; Fabric IQ code backend = $0. Total lands comfortably within a student credit even with EXTRAs attempted.
 
 ---
 
@@ -555,12 +555,12 @@ Each cut is defended in the Q&A playbook (§29) so judges read intent, not omiss
 Every phase ends demoable; **mock-first, visible-first, submission-artifacts-in-parallel** (re-sequenced v3 for the ~1-day reality). Supersedes [plan.md](plan.md). **Submission artifacts (README skeleton + synthetic disclaimer, architecture diagram, video script, MS Learn usernames, public repo) are drafted from hour 0, in parallel with code — not saved for the end.**
 
 - **P0 Foundation + mock pipeline (first block):** repo scaffold, `.env` ignored, pinned deps; Synthetic Data Generator run (§11) → `data/synthetic/` committed; **mock fixtures + `FORCE_MOCK_MODE` full learner flow running end-to-end with zero credentials** (the demo can now never fail). **Hour-1 spike:** does MAF-graph-wraps-one-Foundry-agent work cleanly? If not, CORE stays plain-Python (A-101). Confirm Search SKU/quota/region on the student sub (§22/§25).
-- **P1 Plain-Python orchestrator + visible artifacts:** `run_learner`/`run_manager` (sequential + ThreadPool fan-out + loop branch + typed handoffs); **Admin Trace view built against the mock** (§21 — the money shot, rendered with zero creds); **circuit breaker** (§5.6). Both front-loaded here, not late.
+- **P1 Orchestration spine + visible artifacts:** **MAF Workflows graph** (`run_learner`/`run_manager` as the graph; agents as executors) **with the plain-Python fallback wired behind `ORCHESTRATOR=`** so both produce the identical `TraceEvent` stream; **Admin Trace view built against the mock** (§21 — the money shot, rendered with zero creds); **circuit breaker** (§5.6). Front-loaded here, not late.
 - **P2 Foundry IQ ground truth:** index synthetic docs → KS → KB; GA extractive retrieval + citations (CORE); wire `knowledge_base_retrieve` MCP; enrich Admin Trace with live activity log if preview API provisions (else keep mock-rendered).
 - **P3 Agents + guardrails:** agents in demo-value order — Curator → Assessment(loop) → StudyPlan → Engagement → ManagerInsights; deterministic components; ONE Grounding Verifier (Curator+Q-Gen); triage/router with principal-bound role gate; guardrails pipeline + **model-based injection scanner** + PII fail-closed; 3-tier fallback; **scripted loop-back + Verifier reject→retry**.
 - **P4 Eval + submission (final block, Jun 14):** offline rule-based eval (~30–40 cases) + `IndirectAttackEvaluator`; finalize README (rubric→evidence + Honest Gaps + synthetic disclaimer); embed architecture diagram; **record 5-min video** (script = §4A learner journey incl. visible loop-back + Verifier reject→retry + IQ query plan + Admin Trace); public repo + secret scan + dependency scan; MS Learn usernames; Discord post.
 
-**Cut lines (frozen priority):** **Keep** — mock pipeline + plain-Python orchestrator + Curator + Assessment + loop + Foundry IQ (extractive) + Fabric-IQ-code + 3-tier fallback + Admin Trace + circuit breaker + README/video. **Cut first (in order)** → MAF graph → live agentic query-plan trace → real Fabric IQ → real Work IQ → A2A → hosted deploy → **cross-session memory + BKT (cut together, §14)** → voting → RAGAS/PyRIT/pass^k/150-case → semantic-convergence + handoff-chain loop guards.
+**Cut lines (priority):** **Keep** — mock pipeline + MAF graph spine (with plain-Python fallback) + Curator + Assessment + loop + Foundry IQ (extractive) + Fabric-IQ-code + 3-tier fallback + Admin Trace + circuit breaker + README/video. **Cut first (in order)** → Foundry portal visual-workflow showpiece → live agentic query-plan trace → real Fabric IQ → real Work IQ → A2A → hosted deploy → **cross-session memory + BKT (cut together, §14)** → voting → RAGAS/PyRIT/pass^k/150-case → semantic-convergence + handoff-chain loop guards. (If MAF itself fights back, the plain-Python fallback **is** the spine — that's a config flip, not a cut.)
 
 **Do-not-touch gate:** **no EXTRA/STRETCH preview integration (MAF, real Fabric, A2A, hosted) is started until a complete demoable system + recorded video exist and are frozen.**
 
@@ -590,7 +590,7 @@ Work IQ synthetic (no Copilot tenant); Fabric IQ demo uses code backend (real bi
 
 ## 30. Risks & open decisions
 - **R0 (highest) — nothing is built, ~1 day left.** Mitigation: the §0.1 de-risked critical path; mock-first; plain-Python over MAF; submission artifacts from hour 0; the do-not-touch gate (§28).
-- **R-cost — student credit is a hard ceiling; subscription auto-disables at exhaustion mid-build.** Mitigation: enforced teardown, $50 budget alert + auto-stop, Basic-tier consideration, F2 spike before use (§25).
+- **R-cost (low, hygiene not constraint) — idle resources waste credit.** No hard budget cap (§25); just teardown-when-idle + a $75 informational budget alert so spend stays visible. Spend freely where it improves the result.
 - **R1 — preview-feature drift, wider than v2 thought.** Preview (not CORE-load-bearing): Foundry IQ *agentic* retrieval (query-plan/synthesis/effort), Foundry managed memory, continuous evaluation + agent-evaluator suite, Fabric IQ Ontology + Foundry integration, incoming A2A. All EXTRA/STRETCH; **CORE rides GA extractive retrieval + offline rule-based eval + OTel spans + ontology-as-code.**
 - **R2 — reasoning-model quota/region on the student sub** (no quota increases) → verify deployability; fallback `gpt-5.1`/`gpt-5-mini`; mock tier guarantees the demo. Note `o4-mini`/`gpt-4o-mini`/`gpt-4o` all retire Oct 2026 — fine on the deadline, pin forward replacements.
 - **R3 — MS Learn MCP rate/availability** → Synthetic Generator caches fetched outlines; runtime use additive only.
@@ -619,6 +619,27 @@ Six independent critics (track-alignment, Foundry-feasibility, credit-cost, scop
 - **Risks expanded** (R0, R-cost, R5; preview list widened) (§30).
 Deferred low-severity items (e.g., SBOM detail, synthetic-PII trace note) folded where cheap.
 
+### v3 → v4 (2026-06-13, orchestration research + winner gap-fill + budget reframe)
+- **Orchestration decided (A-101 FINAL):** MAF Workflows graph (GA v1.0) is the **CORE spine** with the plain-Python orchestrator as a config-flip **fallback** — reverses v3's plain-Python-CORE now that the deadline-risk constraint is relaxed and MAF is confirmed GA. Researched the Foundry-native options: **Foundry visual Workflows** (Power Fx/YAML, portal-only, no hosted-agent support) and **Connected Agents** (delegation, not a graph) — neither is a code-first graph, so MAF-driving-Foundry-agents is the right "graph in code + Foundry SDK for agents" answer.
+- **Budget reframed (§25/§30):** no hard cap — spend where it helps, hygiene (teardown-when-idle + informational $75 alert) not panic; Standard Search + reasoning model + real-Fabric attempts all sanctioned.
+- **Added §32 Demo Engineering** (remaining cert-winner lessons: pre-seeded personas, golden-path script, cached artifacts, public try-it app, `lessons.md` first-class, one-test-per-guard).
+- **Added companion [build-spec.md](build-spec.md)** — exact code-level reference so the system is buildable with no additional context.
+
 ---
 
-*End of master plan v3. Update in place; bump `updated:` and log material changes in [decisions.md](decisions.md).*
+## 32. Demo engineering & remaining cert-winner lessons — `CORE`
+
+The last winner treated *demo engineering as a first-class feature* — it drove both the "I wasn't expecting such a complete entry" judge reaction and the community vote. Items not already covered elsewhere, now explicit:
+
+- **Pre-seeded demo personas** committed to SQLite (`data/demo/personas.db`): a passing learner (GO path), a failing learner (NOT_YET → visible loop-back), a capacity-constrained learner (>20 meeting h), and a mixed team for the manager view. The video's golden path uses these so every scripted beat fires deterministically.
+- **Golden-path demo script** (`docs/demo_script.md`) = the §4A learner+manager journeys, timed to ≤5 min, hitting: cited curation → workload-aware plan → grounded assessment → **Grounding-Verifier reject→re-query** → **NOT_YET loop-back** → manager risk view → **Admin Trace** money shot.
+- **Cached demo artifacts** (`data/demo/`): pre-rendered KB retrieval results + query plans so the demo is instant and survives a flaky network; live path when available, cache otherwise (distinct from the §24 LLM cache).
+- **Public try-it app** (Container Apps, `FORCE_MOCK_MODE` so it needs no credentials and exposes no cost) — anyone (judges, Discord voters) runs the full flow instantly. A measurable community-vote advantage last cycle.
+- **`docs/lessons.md` as a first-class deliverable** — incident log (what broke / root cause / fix / prevention rule) + extracted meta-rules; evidence of the "observable, debuggable discipline" Microsoft praised.
+- **One test per guardrail** (`TestG01…`) and **per deterministic algorithm** — mirrors the winner's per-rule structure; cheap, photographs as rigor.
+- **Registry-driven multi-cert** (§11/ontology) = "generalize one axis beyond the brief" (1 cert → 9 via a registry): adding a cert is one JSON entry.
+- **Config hygiene:** frozen settings dataclass + `_is_placeholder()` so a missing/placeholder env var fails loudly at startup, never silently mid-demo.
+
+---
+
+*End of master plan v4. Canonical plan; exact build reference in [build-spec.md](build-spec.md). Update in place; bump `updated:`.*
