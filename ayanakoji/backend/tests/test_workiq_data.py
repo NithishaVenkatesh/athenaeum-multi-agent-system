@@ -208,6 +208,21 @@ def test_someone_is_on_call_and_someone_has_planned_pto(document: WorkIQDocument
     assert any(p.work_context.pto_days for p in document.personas)
 
 
+def test_ops_categories_are_used(document: WorkIQDocument) -> None:
+    """on_call / incident / deploy are real blocks, not dead enum values."""
+    used = {b.category for p in document.personas for day in p.schedule.days for b in day.blocks}
+    assert {"on_call", "incident", "deploy"} <= used
+
+
+def test_on_call_flag_is_backed_by_calendar_blocks(document: WorkIQDocument) -> None:
+    """If a persona is flagged on-call, their week must actually show on-call work."""
+    ops = {"on_call", "incident", "deploy"}
+    for persona in document.personas:
+        if persona.work_context.on_call.is_on_call:
+            categories = {b.category for day in persona.schedule.days for b in day.blocks}
+            assert categories & ops, f"{persona.employee_id} flagged on-call but no ops blocks"
+
+
 def test_day_summaries_are_derived_from_blocks(document: WorkIQDocument) -> None:
     for persona in document.personas:
         for day in persona.schedule.days:

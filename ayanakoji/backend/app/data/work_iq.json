@@ -1576,14 +1576,14 @@
         },
         "pto_days": [],
         "after_hours_load": "high",
-        "context_switch_score": 0.85,
-        "longest_focus_block_minutes": 90,
+        "context_switch_score": 0.86,
+        "longest_focus_block_minutes": 60,
         "response_latency_minutes": 30
       },
       "work_signals": {
         "employee_id": "EMP-003",
         "meeting_hours_per_week": 22.75,
-        "focus_hours_per_week": 11.75,
+        "focus_hours_per_week": 10.25,
         "preferred_learning_slot": "Morning",
         "collaboration_load": "very-high"
       },
@@ -1945,23 +1945,32 @@
               },
               {
                 "start": "16:30",
-                "end": "18:00",
+                "end": "17:30",
                 "category": "focus",
                 "meter": "focus",
-                "duration_hours": 1.5,
+                "duration_hours": 1.0,
                 "title": "Deep work block",
                 "collaborative": false
+              },
+              {
+                "start": "17:30",
+                "end": "18:00",
+                "category": "incident",
+                "meter": "collab",
+                "duration_hours": 0.5,
+                "title": "Incident response (sev-2)",
+                "collaborative": true
               }
             ],
             "summary": {
               "meeting_hours": 4.75,
-              "focus_hours": 1.75,
+              "focus_hours": 1.25,
               "learning_hours": 1.0,
-              "collab_hours": 0.5,
-              "block_count": 11,
-              "longest_focus_block_minutes": 90,
-              "fragmentation_score": 0.8,
-              "free_capacity_hours": 1.75
+              "collab_hours": 1.0,
+              "block_count": 12,
+              "longest_focus_block_minutes": 60,
+              "fragmentation_score": 0.82,
+              "free_capacity_hours": 1.25
             }
           },
           {
@@ -2069,23 +2078,32 @@
               },
               {
                 "start": "17:00",
-                "end": "18:00",
+                "end": "17:30",
                 "category": "focus",
                 "meter": "focus",
-                "duration_hours": 1.0,
+                "duration_hours": 0.5,
                 "title": "Deep work block",
                 "collaborative": false
+              },
+              {
+                "start": "17:30",
+                "end": "18:00",
+                "category": "deploy",
+                "meter": "collab",
+                "duration_hours": 0.5,
+                "title": "Production deployment window",
+                "collaborative": true
               }
             ],
             "summary": {
               "meeting_hours": 4.25,
-              "focus_hours": 1.25,
+              "focus_hours": 0.75,
               "learning_hours": 1.0,
-              "collab_hours": 1.0,
-              "block_count": 12,
+              "collab_hours": 1.5,
+              "block_count": 13,
               "longest_focus_block_minutes": 60,
-              "fragmentation_score": 0.82,
-              "free_capacity_hours": 1.25
+              "fragmentation_score": 0.83,
+              "free_capacity_hours": 0.75
             }
           },
           {
@@ -2184,11 +2202,20 @@
               },
               {
                 "start": "16:30",
-                "end": "17:30",
+                "end": "17:00",
                 "category": "focus",
                 "meter": "focus",
-                "duration_hours": 1.0,
+                "duration_hours": 0.5,
                 "title": "Deep work block",
+                "collaborative": false
+              },
+              {
+                "start": "17:00",
+                "end": "17:30",
+                "category": "on_call",
+                "meter": "neutral",
+                "duration_hours": 0.5,
+                "title": "On-call shift handoff",
                 "collaborative": false
               },
               {
@@ -2203,13 +2230,13 @@
             ],
             "summary": {
               "meeting_hours": 4.75,
-              "focus_hours": 2.25,
+              "focus_hours": 1.75,
               "learning_hours": 0.0,
               "collab_hours": 0.5,
-              "block_count": 12,
+              "block_count": 13,
               "longest_focus_block_minutes": 60,
-              "fragmentation_score": 0.91,
-              "free_capacity_hours": 2.25
+              "fragmentation_score": 0.92,
+              "free_capacity_hours": 1.75
             }
           }
         ]
@@ -2291,14 +2318,14 @@
         },
         "pto_days": [],
         "after_hours_load": "low",
-        "context_switch_score": 0.93,
+        "context_switch_score": 0.91,
         "longest_focus_block_minutes": 135,
         "response_latency_minutes": 15
       },
       "work_signals": {
         "employee_id": "EMP-004",
         "meeting_hours_per_week": 12.75,
-        "focus_hours_per_week": 19.25,
+        "focus_hours_per_week": 17.75,
         "preferred_learning_slot": "Afternoon",
         "collaboration_load": "medium"
       },
@@ -2607,22 +2634,22 @@
               {
                 "start": "17:30",
                 "end": "18:00",
-                "category": "focus",
-                "meter": "focus",
+                "category": "incident",
+                "meter": "collab",
                 "duration_hours": 0.5,
-                "title": "Deep work block",
-                "collaborative": false
+                "title": "Incident response (sev-2)",
+                "collaborative": true
               }
             ],
             "summary": {
               "meeting_hours": 2.75,
-              "focus_hours": 2.75,
+              "focus_hours": 2.25,
               "learning_hours": 1.0,
-              "collab_hours": 1.5,
+              "collab_hours": 2.0,
               "block_count": 10,
               "longest_focus_block_minutes": 135,
-              "fragmentation_score": 0.89,
-              "free_capacity_hours": 2.75
+              "fragmentation_score": 0.78,
+              "free_capacity_hours": 2.25
             }
           },
           {
@@ -2703,23 +2730,32 @@
               },
               {
                 "start": "17:00",
-                "end": "18:00",
+                "end": "17:30",
                 "category": "focus",
                 "meter": "focus",
-                "duration_hours": 1.0,
+                "duration_hours": 0.5,
                 "title": "Deep work block",
                 "collaborative": false
+              },
+              {
+                "start": "17:30",
+                "end": "18:00",
+                "category": "deploy",
+                "meter": "collab",
+                "duration_hours": 0.5,
+                "title": "Production deployment window",
+                "collaborative": true
               }
             ],
             "summary": {
               "meeting_hours": 2.25,
-              "focus_hours": 3.25,
+              "focus_hours": 2.75,
               "learning_hours": 1.0,
-              "collab_hours": 1.0,
-              "block_count": 9,
+              "collab_hours": 1.5,
+              "block_count": 10,
               "longest_focus_block_minutes": 135,
-              "fragmentation_score": 0.88,
-              "free_capacity_hours": 3.25
+              "fragmentation_score": 0.89,
+              "free_capacity_hours": 2.75
             }
           },
           {
@@ -2791,11 +2827,20 @@
               },
               {
                 "start": "16:00",
-                "end": "17:30",
+                "end": "17:00",
                 "category": "focus",
                 "meter": "focus",
-                "duration_hours": 1.5,
+                "duration_hours": 1.0,
                 "title": "Deep work block",
+                "collaborative": false
+              },
+              {
+                "start": "17:00",
+                "end": "17:30",
+                "category": "on_call",
+                "meter": "neutral",
+                "duration_hours": 0.5,
+                "title": "On-call shift handoff",
                 "collaborative": false
               },
               {
@@ -2810,13 +2855,13 @@
             ],
             "summary": {
               "meeting_hours": 2.75,
-              "focus_hours": 3.75,
+              "focus_hours": 3.25,
               "learning_hours": 0.0,
               "collab_hours": 1.0,
-              "block_count": 9,
+              "block_count": 10,
               "longest_focus_block_minutes": 135,
               "fragmentation_score": 1.0,
-              "free_capacity_hours": 3.75
+              "free_capacity_hours": 3.25
             }
           }
         ]

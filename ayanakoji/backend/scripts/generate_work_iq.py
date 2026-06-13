@@ -697,6 +697,24 @@ def _collab_reservations(spec: PersonaSpec, weekday: str) -> list[Reservation]:
     return res
 
 
+def _ops_blocks(spec: PersonaSpec, weekday: str) -> list[Block]:
+    """On-call / incident / deployment blocks (end-of-day, never collide with ceremonies).
+
+    Keeps the ``work_context.on_call`` flag honest: an on-call persona's calendar
+    actually shows the incident + handoff, and platform engineers show deploys.
+    """
+    extra = EXTRAS[spec.employee_id]
+    is_on_call = bool(extra["on_call"])
+    blocks: list[Block] = []
+    if spec.vertical == "devops-platform" and weekday == "thu":
+        blocks.append(Block(_t("17:30"), _t("18:00"), "deploy", "Production deployment window"))
+    if is_on_call and weekday == "wed":
+        blocks.append(Block(_t("17:30"), _t("18:00"), "incident", "Incident response (sev-2)"))
+    if is_on_call and weekday == "fri":
+        blocks.append(Block(_t("17:00"), _t("17:30"), "on_call", "On-call shift handoff"))
+    return blocks
+
+
 # Fillable maker-time windows. Outside lunch (13–14) & standup/admin (09:00–09:45).
 _FILL_WINDOWS = [(_t("09:45"), _t("13:00")), (_t("14:00"), _t("18:00"))]
 _AFTERNOON_START = 14 * 60
@@ -775,6 +793,7 @@ def _build_day(spec: PersonaSpec, weekday: str) -> list[Block]:
     if spec.seniority != "manager" and weekday != "wed":
         fixed.append(Block(_t("09:15"), _t("09:45"), "admin", "Inbox & PR triage"))
     fixed += _meeting_plan(spec, weekday, FLAVOR[spec.vertical])
+    fixed += _ops_blocks(spec, weekday)
 
     blocks = _fill_focus(fixed, spec, weekday)
     blocks.sort(key=lambda b: b.start)
