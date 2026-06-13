@@ -1,0 +1,11 @@
+# Local safety net (root .gitignore already covers these).
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.pyc
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+uv.lock
