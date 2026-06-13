@@ -56,6 +56,7 @@ export function PageSwitcher() {
               {selected && (
                 <motion.span
                   layoutId="page-switcher-active"
+                  initial={false}
                   className="bg-brand absolute inset-0 rounded-lg"
                   transition={{ type: "spring", stiffness: 380, damping: 32 }}
                 />

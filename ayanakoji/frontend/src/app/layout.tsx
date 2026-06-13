@@ -41,7 +41,7 @@ export default function RootLayout({
         <ColosseumBackdrop />
         <PersonaProvider>{children}</PersonaProvider>
         <Toaster
-          position="top-center"
+          position="bottom-right"
           richColors
           toastOptions={{ className: "font-sans" }}
         />

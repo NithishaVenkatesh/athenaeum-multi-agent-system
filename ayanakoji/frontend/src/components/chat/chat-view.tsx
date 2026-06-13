@@ -10,6 +10,7 @@
  * transcript; the live trace and suggestion live in this component's state.
  */
 
+import { ArrowDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -90,7 +91,24 @@ export function ChatView({ courseId }: { courseId?: string }) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [atBottom, setAtBottom] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Show a "scroll to bottom" button whenever the latest turn is out of view.
+  useEffect(() => {
+    const target = bottomRef.current;
+    if (!target || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setAtBottom(entry.isIntersecting),
+      { rootMargin: "0px 0px -80px 0px" },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, []);
+
+  function scrollToBottom() {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }
 
   // Load an existing course's persisted conversation (text only; no live trace).
   useEffect(() => {
@@ -311,6 +329,16 @@ export function ChatView({ courseId }: { courseId?: string }) {
       </div>
 
       <div className="bg-paper sticky bottom-0 pb-5 pt-2">
+        {!atBottom && !isEmpty && (
+          <button
+            type="button"
+            onClick={scrollToBottom}
+            aria-label="Scroll to latest"
+            className="border-border bg-card text-muted-foreground hover:text-foreground absolute -top-12 left-1/2 z-10 flex size-9 -translate-x-1/2 items-center justify-center rounded-full border shadow-md transition-colors"
+          >
+            <ArrowDown className="size-4" />
+          </button>
+        )}
         <ChatComposer onSend={handleSend} busy={busy} />
         <p className="text-muted-foreground/70 mt-2 text-center text-xs">
           Answers are grounded and AI-generated. Reasoning is shown for every turn.
