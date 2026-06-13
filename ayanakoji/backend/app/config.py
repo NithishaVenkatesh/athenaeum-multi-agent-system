@@ -42,6 +42,17 @@ class Settings(BaseSettings):
     # Comma-separated list of allowed CORS origins for the Next.js frontend.
     cors_origins: str = "http://localhost:3000"
 
+    # --- Learner workspace persistence (courses, messages, assessments) ---
+    # SQLite by default — zero infra, file-based, fully offline. Override per env.
+    database_url: str = "sqlite:///./ayanakoji.db"
+
+    # Force the deterministic offline LLM path even when Foundry creds are present
+    # (used by CI/E2E/smoke so the chat works without live Azure calls).
+    offline_llm: bool = False
+
+    # Path to the Athenaeum course catalog JSON. None → resolve the in-repo default.
+    athenaeum_catalog_path: str | None = None
+
     # --- Microsoft Foundry / Azure OpenAI (optional until the agent layer is wired) ---
     foundry_project_endpoint: str | None = None
     azure_openai_endpoint: str | None = None
@@ -67,6 +78,11 @@ class Settings(BaseSettings):
                 self.azure_openai_api_key,
             )
         )
+
+    @property
+    def llm_offline(self) -> bool:
+        """Use the deterministic offline LLM path when forced or when Foundry is unset."""
+        return self.offline_llm or not self.foundry_configured
 
     def require_foundry(self) -> FoundryConfig:
         """Return a validated FoundryConfig or raise loudly listing what is missing.

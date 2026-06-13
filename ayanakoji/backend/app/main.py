@@ -6,6 +6,8 @@ Skeleton only — no hackathon/agent logic yet. Provides liveness and a typed
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
 from fastapi import FastAPI
@@ -14,6 +16,7 @@ from pydantic import BaseModel
 
 from app import __version__
 from app.config import get_settings
+from app.db import init_db
 from app.workiq.router import router as workiq_router
 
 
@@ -34,6 +37,13 @@ class PingResponse(BaseModel):
     timestamp: str
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Create the workspace database schema on startup (idempotent ``create_all``)."""
+    init_db()
+    yield
+
+
 def create_app() -> FastAPI:
     """Application factory — keeps construction testable and import-side-effect free."""
     settings = get_settings()
@@ -41,6 +51,7 @@ def create_app() -> FastAPI:
         title="Ayanakoji Backend",
         version=__version__,
         description="Enterprise Learning Agent backend (skeleton).",
+        lifespan=lifespan,
     )
 
     app.add_middleware(
