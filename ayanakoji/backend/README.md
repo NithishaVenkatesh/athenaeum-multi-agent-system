@@ -26,7 +26,10 @@ uv run uvicorn app.main:app --reload --port 8000
 A Work-IQ-pattern read layer over a **fabricated** engineering org (Helix
 Dynamics / Team "Atlas"): a senior + junior developer in each of the five
 Athenaeum verticals plus one engineering manager (11 personas), each with a
-realistic Mon–Fri work week at 30-minute resolution.
+realistic Mon–Fri work week at 30-minute resolution, learning preferences
+(study hours, cadence, modality), work context (focus windows, on-call, PTO,
+after-hours load), a synthetic profile (tenure, level, languages), and team
+delivery context (sprint, OKRs, cert targets, capacity policy).
 
 > **Synthetic, demo-only.** Fabricated identifiers (`EMP-001`, `L-1001`,
 > `TEAM-A`); star codenames are fictional personas — no real people, PII, emails,
@@ -49,13 +52,20 @@ Routes (all read-only, under `/api/workiq`):
 | `GET /api/workiq/org` | organization + teams |
 | `GET /api/workiq/verticals` | the five engineering verticals |
 | `GET /api/workiq/personas` | roster (filters: `vertical`, `seniority`, `team_id`) |
-| `GET /api/workiq/personas/{id}` | full persona (role, cert, signals, learner profile, schedule) |
-| `GET /api/workiq/personas/{id}/schedule` | full week schedule |
-| `GET /api/workiq/personas/{id}/schedule/{day}` | one day's timed blocks (`mon`..`fri`) |
-| `GET /api/workiq/personas/{id}/signals` | work signals (Work IQ Dataset 2) |
+| `GET /api/workiq/personas/{id}` | full persona (profile, prefs, context, signals, learner profile, schedule) |
+| `GET /api/workiq/personas/{id}/profile` | synthetic profile/identity |
 | `GET /api/workiq/personas/{id}/learning` | learner profile (Dataset 1) |
+| `GET /api/workiq/personas/{id}/learning/preferences` | learning preferences & cadence |
+| `GET /api/workiq/personas/{id}/work-context` | work mode, focus windows, on-call, PTO |
+| `GET /api/workiq/personas/{id}/availability` | derived availability + weekly free capacity |
+| `GET /api/workiq/personas/{id}/schedule` | full week schedule (each day carries a summary) |
+| `GET /api/workiq/personas/{id}/schedule/{day}` | one day's timed blocks (`mon`..`fri`) + summary |
+| `GET /api/workiq/personas/{id}/signals` | work signals (Work IQ Dataset 2) |
 | `GET /api/workiq/work-signals` | org-wide work signals |
-| `GET /api/workiq/teams/{id}` | team roster |
+| `GET /api/workiq/teams/{id}` | team roster + delivery context |
+| `GET /api/workiq/teams/{id}/sprint` | active sprint |
+| `GET /api/workiq/teams/{id}/okrs` | team OKRs |
+| `GET /api/workiq/teams/{id}/cert-targets` | per-vertical certification targets |
 | `GET /api/workiq/teams/{id}/capacity` | aggregate-only team capacity (manager view) |
 
 ## Quality gates
