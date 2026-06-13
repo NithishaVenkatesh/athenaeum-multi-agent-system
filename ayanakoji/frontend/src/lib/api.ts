@@ -36,3 +36,188 @@ export async function pingBackend(
 
   return (await response.json()) as PingResponse;
 }
+
+// ── Learner workspace contracts (mirror the FastAPI response models) ──────────
+
+export interface PersonaSummary {
+  employee_id: string;
+  codename: string;
+  team_id: string;
+  vertical: string;
+  seniority: "senior" | "junior" | "manager";
+  role_title: string;
+  certification: string;
+  is_manager: boolean;
+  preferred_learning_slot: string;
+}
+
+export interface CatalogCourse {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  level: string;
+  vertical: string;
+  vertical_title: string;
+  primary_cert: string;
+}
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  created_at?: string;
+}
+
+export interface CourseSummary {
+  id: string;
+  persona_id: string;
+  chat_name: string;
+  catalog_id: string | null;
+  status: number;
+  updated_at: string;
+}
+
+export interface Course {
+  id: string;
+  persona_id: string;
+  chat_name: string;
+  catalog_id: string | null;
+  catalog_title: string | null;
+  status: number;
+  messages: ChatMessage[];
+  assessment_ids: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Assessment {
+  id: string;
+  type: "llm" | "choices";
+  is_practice: boolean;
+  created_at: string;
+}
+
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers: {
+      Accept: "application/json",
+      ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      ...init?.headers,
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Request to ${path} failed: ${response.status}`);
+  }
+  return (await response.json()) as T;
+}
+
+/** The 10 learner personas (managers excluded) for the account chooser. */
+export function fetchLearners(signal?: AbortSignal): Promise<PersonaSummary[]> {
+  return requestJson<PersonaSummary[]>(
+    "/api/workiq/personas?learners_only=true",
+    { signal },
+  );
+}
+
+/** The 15 Athenaeum courses a chat may be linked to. */
+export function fetchCatalog(signal?: AbortSignal): Promise<CatalogCourse[]> {
+  return requestJson<CatalogCourse[]>("/api/catalog/courses", { signal });
+}
+
+/** A persona's chats (courses), most-recently-updated first. */
+export function listCourses(
+  personaId: string,
+  signal?: AbortSignal,
+): Promise<CourseSummary[]> {
+  return requestJson<CourseSummary[]>(
+    `/api/courses?persona_id=${encodeURIComponent(personaId)}`,
+    { signal },
+  );
+}
+
+/** Open a new chat (course); its name is generated from the first message. */
+export function createCourse(
+  personaId: string,
+  content: string,
+): Promise<Course> {
+  return requestJson<Course>("/api/courses", {
+    method: "POST",
+    body: JSON.stringify({ persona_id: personaId, content }),
+  });
+}
+
+export function getCourse(courseId: string, signal?: AbortSignal): Promise<Course> {
+  return requestJson<Course>(`/api/courses/${courseId}`, { signal });
+}
+
+export interface CoursePatch {
+  chat_name?: string;
+  catalog_id?: string | null;
+}
+
+/** Rename a chat and/or (un)link its Athenaeum course. */
+export function patchCourse(courseId: string, patch: CoursePatch): Promise<Course> {
+  return requestJson<Course>(`/api/courses/${courseId}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export function listAssessments(
+  courseId: string,
+  signal?: AbortSignal,
+): Promise<Assessment[]> {
+  return requestJson<Assessment[]>(`/api/courses/${courseId}/assessments`, {
+    signal,
+  });
+}
+
+/**
+ * Send a message and stream the assistant reply over SSE.
+ *
+ * Calls `onToken` for each streamed token and resolves when the stream closes.
+ * The backend persists both turns; the caller only needs the live tokens.
+ */
+export async function streamMessage(
+  courseId: string,
+  content: string,
+  onToken: (token: string) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/courses/${courseId}/messages`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify({ content }),
+      signal,
+    },
+  );
+  if (!response.ok || !response.body) {
+    throw new Error(`Message stream failed: ${response.status}`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    // SSE events are separated by a blank line; keep the trailing partial chunk.
+    const events = buffer.split("\n\n");
+    buffer = events.pop() ?? "";
+    for (const event of events) {
+      const line = event.trim();
+      if (!line.startsWith("data:")) continue;
+      const payload = JSON.parse(line.slice(5).trim()) as {
+        token?: string;
+        done?: boolean;
+      };
+      if (typeof payload.token === "string") onToken(payload.token);
+    }
+  }
+}

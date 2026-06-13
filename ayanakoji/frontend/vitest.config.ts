@@ -12,7 +12,9 @@ export default defineConfig({
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
     coverage: {
       provider: "v8",
-      include: ["src/lib/**", "src/components/backend-status.tsx"],
+      include: ["src/lib/**", "src/components/**"],
+      // shadcn-generated primitives are vendored, not our logic to test.
+      exclude: ["src/components/ui/**"],
       reporter: ["text", "lcov"],
     },
   },
