@@ -76,8 +76,13 @@ class WorkIQRepository:
         vertical: str | None = None,
         seniority: str | None = None,
         team_id: str | None = None,
+        learners_only: bool = False,
     ) -> list[Persona]:
-        """All personas, optionally filtered. Filters combine with AND."""
+        """All personas, optionally filtered. Filters combine with AND.
+
+        ``learners_only`` drops managers (e.g. Polaris) so the learner workspace's
+        account chooser only offers personas that take courses.
+        """
         personas = self._doc.personas
         if vertical is not None:
             personas = [p for p in personas if p.vertical == vertical]
@@ -85,6 +90,8 @@ class WorkIQRepository:
             personas = [p for p in personas if p.seniority == seniority]
         if team_id is not None:
             personas = [p for p in personas if p.team_id == team_id]
+        if learners_only:
+            personas = [p for p in personas if not p.is_manager]
         return list(personas)
 
     def list_persona_summaries(
@@ -93,10 +100,16 @@ class WorkIQRepository:
         vertical: str | None = None,
         seniority: str | None = None,
         team_id: str | None = None,
+        learners_only: bool = False,
     ) -> list[PersonaSummary]:
         return [
             PersonaSummary.of(p)
-            for p in self.list_personas(vertical=vertical, seniority=seniority, team_id=team_id)
+            for p in self.list_personas(
+                vertical=vertical,
+                seniority=seniority,
+                team_id=team_id,
+                learners_only=learners_only,
+            )
         ]
 
     def get_persona(self, employee_id: str) -> Persona | None:

@@ -70,9 +70,14 @@ def list_personas(
     vertical: Annotated[str | None, Query(description="Filter by vertical id")] = None,
     seniority: Annotated[Seniority | None, Query(description="Filter by seniority")] = None,
     team_id: Annotated[str | None, Query(description="Filter by team id")] = None,
+    learners_only: Annotated[
+        bool, Query(description="Exclude managers (learner account chooser)")
+    ] = False,
 ) -> list[PersonaSummary]:
     """Compact roster; filters combine with AND."""
-    return repo.list_persona_summaries(vertical=vertical, seniority=seniority, team_id=team_id)
+    return repo.list_persona_summaries(
+        vertical=vertical, seniority=seniority, team_id=team_id, learners_only=learners_only
+    )
 
 
 @router.get("/personas/{employee_id}", response_model=Persona, summary="Full persona")
