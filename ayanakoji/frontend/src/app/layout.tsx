@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Fraunces } from "next/font/google";
 import "./globals.css";
+import { ColosseumBackdrop } from "@/components/colosseum-backdrop";
 import { PersonaProvider } from "@/components/persona-provider";
 
 const geistSans = Geist({
@@ -36,6 +37,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} h-full antialiased`}
     >
       <body className="bg-paper flex min-h-full flex-col">
+        <ColosseumBackdrop />
         <PersonaProvider>{children}</PersonaProvider>
       </body>
     </html>
