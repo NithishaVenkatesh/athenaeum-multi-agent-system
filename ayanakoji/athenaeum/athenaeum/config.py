@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     index_name: str = "athenaeum-courses"
     knowledge_source_name: str = "athenaeum-course-source"
     knowledge_base_name: str = "athenaeum-knowledge-base"
+    # Populated after ingest; the knowledge_base_retrieve MCP endpoint for Foundry agents.
+    knowledge_base_mcp_endpoint: str = ""
 
     content_dir: Path = Field(default=CONTENT_DIR)
     catalog_path: Path = Field(default=CATALOG_PATH)
