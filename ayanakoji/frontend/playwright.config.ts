@@ -25,6 +25,8 @@ export default defineConfig({
       url: "http://localhost:8000/health",
       reuseExistingServer: !isCI,
       timeout: 120_000,
+      // Deterministic offline replies so the chat flow works without Azure creds.
+      env: { OFFLINE_LLM: "true" },
     },
     {
       command: "pnpm dev --port 3000",
