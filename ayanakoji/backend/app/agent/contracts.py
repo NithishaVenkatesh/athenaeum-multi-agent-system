@@ -181,6 +181,7 @@ class PhaseTelemetry(BaseModel):
     tier: int | None = Field(default=None, description="Fallback tier that answered (1-4)")
     latency_ms: int | None = None
     route: Route | None = None
+    state: str | None = Field(default=None, description="Course state at this turn (state graph)")
     sources: list[GroundingSource] = Field(default_factory=list)
 
 

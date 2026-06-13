@@ -19,6 +19,7 @@ from sqlmodel import Session
 
 from app.agent.contracts import Pace, PlanEvent, TakenCourse, TokenEvent
 from app.agent.orchestrator import run_pipeline
+from app.agent.state import derive_course_state
 from app.catalog.content import get_module_content
 from app.catalog.loader import get_course as get_catalog_course
 from app.catalog.loader import is_valid_course_id
@@ -212,6 +213,13 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
 
             taken = _taken_courses(stream_repo, current.persona_id, exclude_id=current.id)
             pace = Pace(current.pace) if current.pace else None
+            existing_modules = stream_repo.list_modules(current.id)
+            course_state = derive_course_state(
+                catalog_id=current.catalog_id,
+                pace=pace,
+                module_count=len(existing_modules),
+                completed_count=sum(1 for m in existing_modules if m.completed),
+            )
             answer_parts: list[str] = []
             final_text = ""  # what gets persisted as the assistant turn
             plan_modules: list[dict[str, object]] | None = None
@@ -222,6 +230,7 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
                 taken=taken,
                 pace=pace,
                 start_date=date.today(),
+                course_state=course_state,
             ):
                 if isinstance(event, TokenEvent):
                     answer_parts.append(event.token)

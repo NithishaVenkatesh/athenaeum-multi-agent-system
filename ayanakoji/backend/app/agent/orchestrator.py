@@ -49,6 +49,7 @@ from app.agent.gate import screen
 from app.agent.grounding import CourseGrounding, get_grounding
 from app.agent.llm import AllProvidersDown, ModelRouter
 from app.agent.router_agent import route
+from app.agent.state import CourseState, transition_note
 from app.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
@@ -112,6 +113,7 @@ def run_pipeline(
     taken: list[TakenCourse] | None = None,
     pace: Pace | None = None,
     start_date: date | None = None,
+    course_state: CourseState | None = None,
     router: ModelRouter | None = None,
     grounding: CourseGrounding | None = None,
     settings: Settings | None = None,
@@ -132,8 +134,13 @@ def run_pipeline(
         yield DoneEvent()
         return
 
-    # ── Node 2: router ─────────────────────────────────────────────────────────
+    # ── Node 2: router (state-conditioned; the graph branches on course state) ──
     decision, route_tel = route(text, router=router, grounding=grounding, settings=settings)
+    if course_state is not None:
+        note = transition_note(course_state, decision.route)
+        route_tel = route_tel.model_copy(
+            update={"state": course_state.value, "reasoning": f"{route_tel.reasoning} ({note})"}
+        )
     yield PhaseEvent(phase=route_tel)
 
     # ── Node 3: answer agent (open stream; all-providers-down → explicit error) ─
