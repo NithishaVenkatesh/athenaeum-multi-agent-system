@@ -1,0 +1,306 @@
+{
+  "name": "Athenaeum",
+  "description": "Enterprise learning catalog across five software-development verticals. Each course is original synthetic content grounded on the public Microsoft certification skills outlines (no proprietary or copied Microsoft text).",
+  "verticals": [
+    {
+      "id": "cloud-backend",
+      "order": 1,
+      "title": "Cloud & Backend Development",
+      "summary": "Build, secure, and integrate production cloud applications on Azure — compute, storage, identity, and service integration.",
+      "primary_cert": "AZ-204",
+      "courses": [
+        {
+          "id": "cb-c01",
+          "order": 1,
+          "slug": "azure-compute-foundations",
+          "title": "Azure Compute & Serverless Foundations",
+          "summary": "Design and operate the compute layer of a cloud application using App Service, Azure Functions, and containers.",
+          "level": "foundational",
+          "grounded_on": "AZ-204 skills outline (2026-01-14), paraphrased — original synthetic content",
+          "source_url": "https://learn.microsoft.com/en-us/credentials/certifications/resources/study-guides/az-204",
+          "prereq_course_ids": [],
+          "modules": [
+            {"id": "cb-c01-m01", "order": 1, "title": "Hosting web APIs with Azure App Service", "summary": "Create, configure, and deploy web apps on App Service with slots and TLS.", "objectives": ["Create and configure an App Service web app for a backend API", "Use deployment slots for zero-downtime releases and slot swaps", "Configure TLS, app settings, and service connections securely"], "grounded_skills": ["Create an Azure App Service Web App", "Configure deployment slots", "Deploy code and containerized solutions", "Configure settings including TLS, API settings, and service connections", "Implement autoscaling"], "prereq_module_ids": []},
+            {"id": "cb-c01-m02", "order": 2, "title": "Event-driven code with Azure Functions", "summary": "Build serverless functions with triggers and input/output bindings.", "objectives": ["Create and configure an Azure Functions app", "Implement triggers using timers, webhooks, and data operations", "Wire input and output bindings to reduce boilerplate"], "grounded_skills": ["Create and configure an Azure Functions app", "Implement input and output bindings", "Implement function triggers by using data operations, timers, and webhooks"], "prereq_module_ids": ["cb-c01-m01"]},
+            {"id": "cb-c01-m03", "order": 3, "title": "Containerized solutions: ACR, ACI, and Container Apps", "summary": "Package and run containers across Azure's container services.", "objectives": ["Build and publish container images to Azure Container Registry", "Run isolated workloads on Azure Container Instances", "Design microservice solutions on Azure Container Apps"], "grounded_skills": ["Create and manage container images for solutions", "Publish an image to Azure Container Registry", "Run containers by using Azure Container Instances", "Create solutions by using Azure Container Apps"], "prereq_module_ids": ["cb-c01-m02"]},
+            {"id": "cb-c01-m04", "order": 4, "title": "Scaling, configuration, and diagnostics", "summary": "Make compute resilient with autoscaling, configuration, and logging.", "objectives": ["Implement autoscaling rules for variable load", "Configure diagnostics and logging for running services", "Choose the right compute service for a workload"], "grounded_skills": ["Implement autoscaling", "Configure and implement diagnostics and logging", "Create solutions by using Azure Container Apps"], "prereq_module_ids": ["cb-c01-m03"]}
+          ]
+        },
+        {
+          "id": "cb-c02",
+          "order": 2,
+          "slug": "cloud-data-and-storage",
+          "title": "Cloud Data & Storage for Developers",
+          "summary": "Persist and serve application data with Azure Cosmos DB and Blob Storage using the SDKs correctly.",
+          "level": "intermediate",
+          "grounded_on": "AZ-204 skills outline (2026-01-14), paraphrased — original synthetic content",
+          "source_url": "https://learn.microsoft.com/en-us/credentials/certifications/resources/study-guides/az-204",
+          "prereq_course_ids": ["cb-c01"],
+          "modules": [
+            {"id": "cb-c02-m01", "order": 1, "title": "Working with Azure Cosmos DB", "summary": "Perform container and item operations with the SDK and pick consistency levels.", "objectives": ["Perform CRUD operations on containers and items via the SDK", "Select an appropriate consistency level for a workload", "Reason about request units and partitioning"], "grounded_skills": ["Perform operations on containers and items by using the SDK", "Set the appropriate consistency level for operations"], "prereq_module_ids": []},
+            {"id": "cb-c02-m02", "order": 2, "title": "Reacting to data with the change feed", "summary": "Build event-driven flows from the Cosmos DB change feed.", "objectives": ["Implement change feed notifications", "Design idempotent change-feed consumers", "Compare change feed with polling"], "grounded_skills": ["Implement change feed notifications", "Perform operations on containers and items by using the SDK"], "prereq_module_ids": ["cb-c02-m01"]},
+            {"id": "cb-c02-m03", "order": 3, "title": "Azure Blob Storage with the SDK", "summary": "Store and manage unstructured data, properties, and metadata.", "objectives": ["Perform blob operations using the appropriate SDK", "Set and retrieve properties and metadata", "Choose access tiers for cost and performance"], "grounded_skills": ["Perform operations on data by using the appropriate SDK", "Set and retrieve properties and metadata"], "prereq_module_ids": ["cb-c02-m01"]},
+            {"id": "cb-c02-m04", "order": 4, "title": "Data lifecycle and storage policies", "summary": "Automate retention and tiering with lifecycle management.", "objectives": ["Implement storage lifecycle management policies", "Automate tiering and expiry of data", "Apply data protection options to blobs"], "grounded_skills": ["Implement storage policies and data lifecycle management", "Set and retrieve properties and metadata"], "prereq_module_ids": ["cb-c02-m03"]}
+          ]
+        },
+        {
+          "id": "cb-c03",
+          "order": 3,
+          "slug": "securing-and-integrating-apps",
+          "title": "Securing & Integrating Cloud Applications",
+          "summary": "Authenticate users, protect secrets, and integrate services with API Management and messaging.",
+          "level": "advanced",
+          "grounded_on": "AZ-204 skills outline (2026-01-14), paraphrased — original synthetic content",
+          "source_url": "https://learn.microsoft.com/en-us/credentials/certifications/resources/study-guides/az-204",
+          "prereq_course_ids": ["cb-c01", "cb-c02"],
+          "modules": [
+            {"id": "cb-c03-m01", "order": 1, "title": "Authentication with the Microsoft identity platform", "summary": "Authenticate and authorize users and apps with Microsoft Entra ID.", "objectives": ["Authenticate users with the Microsoft identity platform", "Authorize apps using Microsoft Entra ID", "Call Microsoft Graph on behalf of a user"], "grounded_skills": ["Authenticate and authorize users by using the Microsoft Identity platform", "Authenticate and authorize users and apps by using Microsoft Entra ID", "Implement solutions that interact with Microsoft Graph"], "prereq_module_ids": []},
+            {"id": "cb-c03-m02", "order": 2, "title": "Secrets, keys, and managed identities", "summary": "Protect configuration and credentials with Key Vault and managed identities.", "objectives": ["Store and retrieve secrets, keys, and certificates from Key Vault", "Use managed identities to avoid credentials in code", "Secure app configuration data"], "grounded_skills": ["Secure app configuration data by using Azure App Configuration or Azure Key Vault", "Develop code that uses keys, secrets, and certificates stored in Azure Key Vault", "Implement Managed Identities for Azure resources", "Create and implement shared access signatures"], "prereq_module_ids": ["cb-c03-m01"]},
+            {"id": "cb-c03-m03", "order": 3, "title": "Publishing APIs with Azure API Management", "summary": "Front, document, secure, and govern APIs with APIM.", "objectives": ["Create an API Management instance and import APIs", "Configure access and subscription keys", "Apply policies for transformation, caching, and rate limiting"], "grounded_skills": ["Create an Azure API Management instance", "Create and document APIs", "Configure access to APIs", "Implement policies for APIs"], "prereq_module_ids": ["cb-c03-m01"]},
+            {"id": "cb-c03-m04", "order": 4, "title": "Event- and message-based integration", "summary": "Decouple services with Event Grid, Event Hubs, Service Bus, and queues.", "objectives": ["Implement event-based solutions with Event Grid and Event Hubs", "Implement message-based solutions with Service Bus and Queue Storage", "Choose between events and messages for a scenario"], "grounded_skills": ["Implement solutions that use Azure Event Grid", "Implement solutions that use Azure Event Hubs", "Implement solutions that use Azure Service Bus", "Implement solutions that use Azure Queue Storage"], "prereq_module_ids": ["cb-c03-m03"]}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "devops-platform",
+      "order": 2,
+      "title": "DevOps & Platform Engineering",
+      "summary": "Deliver software continuously and safely: source control strategy, CI/CD pipelines, infrastructure as code, and secure operations.",
+      "primary_cert": "AZ-400",
+      "courses": [
+        {
+          "id": "do-c01",
+          "order": 1,
+          "slug": "source-control-and-collaboration",
+          "title": "Source Control & Collaboration Strategy",
+          "summary": "Design branching, pull-request, and traceability practices for healthy team delivery.",
+          "level": "foundational",
+          "grounded_on": "AZ-400 skills outline (2026-04-24), paraphrased — original synthetic content",
+          "source_url": "https://learn.microsoft.com/en-us/credentials/certifications/resources/study-guides/az-400",
+          "prereq_course_ids": [],
+          "modules": [
+            {"id": "do-c01-m01", "order": 1, "title": "Choosing a branching strategy", "summary": "Compare trunk-based, feature, and release branching for a team's context.", "objectives": ["Compare trunk-based, feature-branch, and release-branch strategies", "Select a branching model for a given team and release cadence", "Map a branching model to environments"], "grounded_skills": ["Design a branch strategy, including trunk-based, feature branch, and release branch"], "prereq_module_ids": []},
+            {"id": "do-c01-m02", "order": 2, "title": "Pull requests, policies, and protection", "summary": "Enforce quality with branch policies and protection rules.", "objectives": ["Design a pull-request workflow with required reviews", "Apply branch policies and protection rules", "Implement merge restrictions that match risk"], "grounded_skills": ["Design and implement a pull request workflow by using branch policies and branch protection rules", "Implement branch merging restrictions by using branch policies and branch protection rules"], "prereq_module_ids": ["do-c01-m01"]},
+            {"id": "do-c01-m03", "order": 3, "title": "Managing and scaling repositories", "summary": "Handle large files, permissions, and repository scale.", "objectives": ["Manage large files with Git LFS", "Configure repository permissions and tags", "Apply a strategy for scaling a large Git repository"], "grounded_skills": ["Design and implement a strategy for managing large files, including Git LFS", "Configure permissions in the source control repository", "Design a strategy for scaling and optimizing a Git repository", "Configure tags to organize the source control repository"], "prereq_module_ids": ["do-c01-m02"]},
+            {"id": "do-c01-m04", "order": 4, "title": "Traceability and flow of work", "summary": "Connect work items, commits, and dashboards across GitHub and Azure Boards.", "objectives": ["Design traceability from work item to deployment", "Integrate Azure Boards with GitHub repositories", "Build flow metrics like cycle time and lead time"], "grounded_skills": ["Design and implement a structure for the flow of work, including GitHub Flow", "Design and implement integration for tracking work, including GitHub projects, Azure Boards, and repositories", "Design and implement a dashboard, including flow of work, such as cycle times, time to recovery, and lead time"], "prereq_module_ids": ["do-c01-m03"]}
+          ]
+        },
+        {
+          "id": "do-c02",
+          "order": 2,
+          "slug": "cicd-pipelines-and-release",
+          "title": "CI/CD Pipelines & Release Engineering",
+          "summary": "Build robust YAML pipelines with package management, testing gates, and safe deployment strategies.",
+          "level": "intermediate",
+          "grounded_on": "AZ-400 skills outline (2026-04-24), paraphrased — original synthetic content",
+          "source_url": "https://learn.microsoft.com/en-us/credentials/certifications/resources/study-guides/az-400",
+          "prereq_course_ids": ["do-c01"],
+          "modules": [
+            {"id": "do-c02-m01", "order": 1, "title": "Building pipelines with YAML", "summary": "Author multi-stage YAML pipelines with templates and triggers.", "objectives": ["Develop multi-stage pipelines in YAML", "Create reusable templates, variables, and variable groups", "Implement trigger rules and job execution order"], "grounded_skills": ["Develop pipelines by using YAML", "Create reusable pipeline elements, including YAML templates, task groups, variables, and variable groups", "Develop and implement pipeline trigger rules", "Design and implement a strategy for job execution order, including parallelism and multi-stage pipelines"], "prereq_module_ids": []},
+            {"id": "do-c02-m02", "order": 2, "title": "Package management and artifact versioning", "summary": "Manage dependencies and artifacts with feeds and versioning.", "objectives": ["Design package feeds with GitHub Packages or Azure Artifacts", "Apply a dependency versioning strategy (SemVer/CalVer)", "Version pipeline artifacts"], "grounded_skills": ["Recommend package management tools including GitHub Packages and Azure Artifacts", "Design and implement package feeds and views for local and upstream packages", "Design and implement a dependency versioning strategy for code assets and packages, including SemVer and CalVer"], "prereq_module_ids": ["do-c02-m01"]},
+            {"id": "do-c02-m03", "order": 3, "title": "Testing strategy and quality gates", "summary": "Embed tests, coverage, and gates into the pipeline.", "objectives": ["Design a layered testing strategy in pipelines", "Implement quality and release gates", "Integrate code coverage analysis"], "grounded_skills": ["Design a comprehensive testing strategy, including local tests, unit tests, integration tests, and load tests", "Design and implement quality and release gates, including security and governance", "Implement code coverage analysis"], "prereq_module_ids": ["do-c02-m01"]},
+            {"id": "do-c02-m04", "order": 4, "title": "Progressive deployment strategies", "summary": "Ship safely with blue-green, canary, rings, and feature flags.", "objectives": ["Design blue-green, canary, and ring deployments", "Minimize downtime with slots and rolling deployments", "Implement feature flags with App Configuration"], "grounded_skills": ["Design a deployment strategy, including blue-green, canary, ring, progressive exposure, feature flags, and A/B testing", "Plan for minimizing downtime during deployments by using load balancing, rolling deployments, and deployment slot usage and swap", "Implement feature flags by using Azure App Configuration Feature Manager"], "prereq_module_ids": ["do-c02-m03"]}
+          ]
+        },
+        {
+          "id": "do-c03",
+          "order": 3,
+          "slug": "secure-devops-and-observability",
+          "title": "Secure DevOps & Observability",
+          "summary": "Codify infrastructure, manage secrets without leaks, scan for vulnerabilities, and instrument the platform.",
+          "level": "advanced",
+          "grounded_on": "AZ-400 skills outline (2026-04-24), paraphrased — original synthetic content",
+          "source_url": "https://learn.microsoft.com/en-us/credentials/certifications/resources/study-guides/az-400",
+          "prereq_course_ids": ["do-c01", "do-c02"],
+          "modules": [
+            {"id": "do-c03-m01", "order": 1, "title": "Infrastructure as code with Bicep", "summary": "Define and deploy environments as code with desired-state configuration.", "objectives": ["Define an IaC strategy with source control and automated testing", "Author Bicep for repeatable environments", "Implement desired-state configuration"], "grounded_skills": ["Define an IaC strategy, including source control and automation of testing and deployment", "Design and implement desired state configuration for environments, including Azure Resource Manager, Bicep, and Azure Machine Configuration", "Implement a configuration management strategy for application infrastructure"], "prereq_module_ids": []},
+            {"id": "do-c03-m02", "order": 2, "title": "Secrets and secretless authentication", "summary": "Keep credentials out of pipelines with Key Vault and workload identity federation.", "objectives": ["Manage secrets, keys, and certificates with Key Vault", "Implement secretless auth with OIDC/workload identity federation", "Design pipelines to prevent secret leakage"], "grounded_skills": ["Implement and manage secrets, keys, and certificates by using Azure Key Vault", "Implement and manage secrets and secretless authentication (workload identity federation/OpenID Connect) in GitHub Actions and Azure Pipelines", "Design pipelines to prevent leakage of sensitive information"], "prereq_module_ids": ["do-c03-m01"]},
+            {"id": "do-c03-m03", "order": 3, "title": "Security and compliance scanning", "summary": "Automate dependency, code, secret, and container scanning.", "objectives": ["Design a security scanning strategy across the SDLC", "Configure GitHub Advanced Security and Defender for Cloud DevOps", "Automate container and dependency scanning"], "grounded_skills": ["Design a strategy for security and compliance scanning, including dependency, code, secret, and licensing scanning", "Configure GitHub Advanced Security for both GitHub and Azure DevOps", "Automate container scanning, including scanning container images", "Automate analysis of licensing, vulnerabilities, and versioning of open-source components by using Dependabot alerts"], "prereq_module_ids": ["do-c03-m01"]},
+            {"id": "do-c03-m04", "order": 4, "title": "Instrumentation and monitoring", "summary": "Make the platform observable with App Insights and KQL.", "objectives": ["Configure telemetry collection with Application Insights", "Analyze metrics and distributed traces", "Query logs with basic KQL"], "grounded_skills": ["Configure collection of telemetry by using Application Insights, VM Insights, Container Insights", "Inspect distributed tracing by using Application Insights", "Interrogate logs using basic Kusto Query Language (KQL) queries"], "prereq_module_ids": ["do-c03-m03"]}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "data-engineering",
+      "order": 3,
+      "title": "Data Engineering & Analytics",
+      "summary": "Design storage, build batch and streaming data pipelines, and operate analytics platforms on Azure.",
+      "primary_cert": "DP-203 (current path: Microsoft Fabric DP-700)",
+      "courses": [
+        {
+          "id": "de-c01",
+          "order": 1,
+          "slug": "data-storage-and-lakehouse",
+          "title": "Data Storage & Lakehouse Design",
+          "summary": "Lay out data efficiently with partitioning, Data Lake Storage Gen2, Delta Lake, and cataloging.",
+          "level": "foundational",
+          "grounded_on": "DP-203 skills outline (2024-10-24), paraphrased — original synthetic content; current path Fabric DP-700",
+          "source_url": "https://learn.microsoft.com/en-us/credentials/certifications/resources/study-guides/dp-203",
+          "prereq_course_ids": [],
+          "modules": [
+            {"id": "de-c01-m01", "order": 1, "title": "Partition strategies for analytical data", "summary": "Choose partitioning that matches files, analytical, and streaming workloads.", "objectives": ["Design a partition strategy for files and analytical workloads", "Recognize when partitioning helps in Data Lake Storage Gen2", "Avoid common small-file and skew problems"], "grounded_skills": ["Implement a partition strategy for files", "Implement a partition strategy for analytical workloads", "Implement a partition strategy for streaming workloads", "Identify when partitioning is needed in Azure Data Lake Storage Gen2"], "prereq_module_ids": []},
+            {"id": "de-c01-m02", "order": 2, "title": "Data Lake Storage Gen2 and the exploration layer", "summary": "Organize a lake and query it with serverless SQL and Spark.", "objectives": ["Structure a Data Lake Storage Gen2 account", "Query data with serverless SQL and Spark", "Build an exploration layer for analysts"], "grounded_skills": ["Create and execute queries by using a compute solution that leverages SQL serverless and Spark clusters", "Identify when partitioning is needed in Azure Data Lake Storage Gen2"], "prereq_module_ids": ["de-c01-m01"]},
+            {"id": "de-c01-m03", "order": 3, "title": "Delta Lake and the lakehouse pattern", "summary": "Get ACID tables and time travel on the lake with Delta.", "objectives": ["Explain the lakehouse architecture", "Read from and write to a Delta Lake", "Use versioning and time travel for reliability"], "grounded_skills": ["Read from and write to a delta lake", "Develop batch processing solutions by using Azure Data Lake Storage Gen2 and Azure Databricks", "Revert data to a previous state"], "prereq_module_ids": ["de-c01-m02"]},
+            {"id": "de-c01-m04", "order": 4, "title": "Cataloging and lineage with Microsoft Purview", "summary": "Make data discoverable and trustworthy with catalog and lineage.", "objectives": ["Browse and search metadata in a data catalog", "Push data lineage to Microsoft Purview", "Use cataloging to support governance"], "grounded_skills": ["Push new or updated data lineage to Microsoft Purview", "Browse and search metadata in Microsoft Purview Data Catalog"], "prereq_module_ids": ["de-c01-m03"]}
+          ]
+        },
+        {
+          "id": "de-c02",
+          "order": 2,
+          "slug": "batch-data-processing",
+          "title": "Batch Data Processing & Pipelines",
+          "summary": "Ingest and transform data at scale with Spark, T-SQL, and orchestrated pipelines.",
+          "level": "intermediate",
+          "grounded_on": "DP-203 skills outline (2024-10-24), paraphrased — original synthetic content; current path Fabric DP-700",
+          "source_url": "https://learn.microsoft.com/en-us/credentials/certifications/resources/study-guides/dp-203",
+          "prereq_course_ids": ["de-c01"],
+          "modules": [
+            {"id": "de-c02-m01", "order": 1, "title": "Ingest and transform with Apache Spark", "summary": "Cleanse, reshape, and enrich data using Spark.", "objectives": ["Transform data using Apache Spark", "Cleanse data and handle duplicates and missing values", "Normalize and denormalize for the target model"], "grounded_skills": ["Transform data by using Apache Spark", "Cleanse data", "Handle duplicate data", "Handle missing data", "Normalize and denormalize data"], "prereq_module_ids": []},
+            {"id": "de-c02-m02", "order": 2, "title": "Transforming with T-SQL and Synapse", "summary": "Use set-based T-SQL transforms and load patterns.", "objectives": ["Transform data with T-SQL in Synapse", "Load data efficiently into a SQL pool", "Handle JSON and encoding transforms"], "grounded_skills": ["Transform data by using Transact-SQL (T-SQL) in Azure Synapse Analytics", "Use PolyBase to load data to a SQL pool", "Shred JSON", "Encode and decode data"], "prereq_module_ids": ["de-c02-m01"]},
+            {"id": "de-c02-m03", "order": 3, "title": "Orchestrating pipelines with Data Factory", "summary": "Build, schedule, and version data pipelines.", "objectives": ["Create and schedule pipelines in Data Factory/Synapse", "Trigger and manage batch runs", "Version pipeline artifacts"], "grounded_skills": ["Create data pipelines", "Manage data pipelines in Azure Data Factory or Azure Synapse Pipelines", "Schedule data pipelines in Data Factory or Azure Synapse Pipelines", "Implement version control for pipeline artifacts", "Trigger batches"], "prereq_module_ids": ["de-c02-m02"]},
+            {"id": "de-c02-m04", "order": 4, "title": "Incremental loads, upserts, and error handling", "summary": "Make batch jobs reliable and restartable.", "objectives": ["Design incremental data loads", "Implement upserts and handle failed loads", "Configure exception handling and validation"], "grounded_skills": ["Design and implement incremental data loads", "Upsert batch data", "Handle failed batch loads", "Validate batch loads", "Configure exception handling"], "prereq_module_ids": ["de-c02-m03"]}
+          ]
+        },
+        {
+          "id": "de-c03",
+          "order": 3,
+          "slug": "realtime-analytics-streaming",
+          "title": "Real-Time Analytics & Streaming",
+          "summary": "Process events as they arrive with Stream Analytics, Event Hubs, and Spark structured streaming.",
+          "level": "advanced",
+          "grounded_on": "DP-203 skills outline (2024-10-24), paraphrased — original synthetic content; current path Fabric DP-700",
+          "source_url": "https://learn.microsoft.com/en-us/credentials/certifications/resources/study-guides/dp-203",
+          "prereq_course_ids": ["de-c01", "de-c02"],
+          "modules": [
+            {"id": "de-c03-m01", "order": 1, "title": "Stream processing with Stream Analytics and Event Hubs", "summary": "Stand up an end-to-end streaming ingestion and processing path.", "objectives": ["Create a stream processing solution with Stream Analytics and Event Hubs", "Reason about ingestion throughput and partitions", "Deliver results to a sink reliably"], "grounded_skills": ["Create a stream processing solution by using Stream Analytics and Azure Event Hubs", "Process data across partitions", "Process within one partition"], "prereq_module_ids": []},
+            {"id": "de-c03-m02", "order": 2, "title": "Spark structured streaming", "summary": "Process unbounded data with structured streaming.", "objectives": ["Process data using Spark structured streaming", "Handle schema drift in streams", "Write streaming output to Delta"], "grounded_skills": ["Process data by using Spark structured streaming", "Handle schema drift", "Read from and write to a delta lake"], "prereq_module_ids": ["de-c03-m01"]},
+            {"id": "de-c03-m03", "order": 3, "title": "Windowing, watermarking, and time", "summary": "Aggregate over time correctly with windows and watermarks.", "objectives": ["Create windowed aggregates", "Configure checkpoints and watermarking", "Process time-series and late-arriving data"], "grounded_skills": ["Create windowed aggregates", "Configure checkpoints and watermarking during processing", "Process time series data", "Handle late-arriving data"], "prereq_module_ids": ["de-c03-m02"]},
+            {"id": "de-c03-m04", "order": 4, "title": "Monitoring, scaling, and optimization", "summary": "Keep streaming pipelines healthy and cost-effective.", "objectives": ["Monitor stream processing health", "Scale resources for throughput", "Optimize and troubleshoot pipelines"], "grounded_skills": ["Monitor stream processing", "Scale resources", "Optimize pipelines for analytical or transactional purposes", "Handle interruptions", "Monitor data pipeline performance"], "prereq_module_ids": ["de-c03-m03"]}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ai-ml",
+      "order": 4,
+      "title": "AI & Machine Learning Engineering",
+      "summary": "Build production AI solutions on Azure: generative AI and RAG, language and document intelligence, and vision and knowledge mining.",
+      "primary_cert": "AI-102",
+      "courses": [
+        {
+          "id": "ai-c01",
+          "order": 1,
+          "slug": "generative-ai-with-azure-openai",
+          "title": "Generative AI Solutions with Azure OpenAI",
+          "summary": "Deploy models, engineer prompts, ground with RAG, and operate generative AI responsibly.",
+          "level": "foundational",
+          "grounded_on": "AI-102 skills outline (2025-12-23), paraphrased — original synthetic content",
+          "source_url": "https://learn.microsoft.com/en-us/credentials/certifications/resources/study-guides/ai-102",
+          "prereq_course_ids": [],
+          "modules": [
+            {"id": "ai-c01-m01", "order": 1, "title": "Provisioning and deploying models in Microsoft Foundry", "summary": "Create AI resources and deploy the right generative model.", "objectives": ["Provision an Azure OpenAI / Foundry resource", "Select and deploy an appropriate model", "Call the model via SDK and REST"], "grounded_skills": ["Provision an Azure OpenAI in Foundry Models resource", "Select and deploy an Azure OpenAI model", "Integrate Azure OpenAI into your own application", "Deploy AI models using the appropriate deployment options"], "prereq_module_ids": []},
+            {"id": "ai-c01-m02", "order": 2, "title": "Prompt engineering and templates", "summary": "Control generation with prompts, parameters, and templates.", "objectives": ["Apply prompt engineering techniques", "Configure parameters that control generative behavior", "Use prompt templates in a solution"], "grounded_skills": ["Apply prompt engineering techniques to improve responses", "Configure parameters to control generative behavior", "Utilize prompt templates in your generative AI solution", "Submit prompts to generate code and natural language responses"], "prereq_module_ids": ["ai-c01-m01"]},
+            {"id": "ai-c01-m03", "order": 3, "title": "Retrieval-augmented generation (RAG)", "summary": "Ground a model in your own data to reduce hallucination.", "objectives": ["Implement a RAG pattern grounding a model in your data", "Design chunking and retrieval for grounding", "Cite sources in grounded answers"], "grounded_skills": ["Implement a RAG pattern by grounding a model in your data", "Implement a prompt flow solution", "Integrate your project into an application with Microsoft Foundry SDK"], "prereq_module_ids": ["ai-c01-m02"]},
+            {"id": "ai-c01-m04", "order": 4, "title": "Evaluation, monitoring, and responsible AI", "summary": "Measure quality and apply safety controls.", "objectives": ["Evaluate models and flows", "Configure content safety, filters, and prompt shields", "Monitor a generative solution in production"], "grounded_skills": ["Evaluate models and flows", "Implement responsible AI, including content filters and blocklists", "Prevent harmful behavior, including prompt shields and harm detection", "Configure model monitoring and diagnostic settings"], "prereq_module_ids": ["ai-c01-m03"]}
+          ]
+        },
+        {
+          "id": "ai-c02",
+          "order": 2,
+          "slug": "language-and-document-intelligence",
+          "title": "Language & Document Intelligence",
+          "summary": "Extract meaning from text and documents with Azure AI Language, Document Intelligence, and Speech.",
+          "level": "intermediate",
+          "grounded_on": "AI-102 skills outline (2025-12-23), paraphrased — original synthetic content",
+          "source_url": "https://learn.microsoft.com/en-us/credentials/certifications/resources/study-guides/ai-102",
+          "prereq_course_ids": ["ai-c01"],
+          "modules": [
+            {"id": "ai-c02-m01", "order": 1, "title": "Analyzing and translating text", "summary": "Extract entities, sentiment, key phrases, and PII; translate text.", "objectives": ["Extract key phrases and entities from text", "Determine sentiment and detect language", "Detect PII and translate text and documents"], "grounded_skills": ["Extract key phrases and entities", "Determine sentiment of text", "Detect the language used in text", "Detect personally identifiable information (PII) in text", "Translate text and documents by using the Azure Translator"], "prereq_module_ids": []},
+            {"id": "ai-c02-m02", "order": 2, "title": "Custom language models and question answering", "summary": "Build conversational language understanding and Q&A projects.", "objectives": ["Create intents, entities, and utterances", "Train, evaluate, and deploy a language understanding model", "Build a custom question answering knowledge base"], "grounded_skills": ["Create intents, entities, and add utterances", "Train, evaluate, deploy, and test a language understanding model", "Create a custom question answering project", "Add question-and-answer pairs and import sources for question answering"], "prereq_module_ids": ["ai-c02-m01"]},
+            {"id": "ai-c02-m03", "order": 3, "title": "Document Intelligence", "summary": "Extract structured data from documents with prebuilt and custom models.", "objectives": ["Use prebuilt models to extract data from documents", "Train and publish a custom document model", "Compose models for mixed document types"], "grounded_skills": ["Provision a Document Intelligence resource", "Use prebuilt models to extract data from documents", "Implement a custom document intelligence model", "Train, test, and publish a custom document intelligence model", "Create a composed document intelligence model"], "prereq_module_ids": ["ai-c02-m01"]},
+            {"id": "ai-c02-m04", "order": 4, "title": "Speech and translation solutions", "summary": "Add speech-to-text, text-to-speech, and speech translation.", "objectives": ["Implement text-to-speech and speech-to-text", "Improve speech output with SSML", "Translate speech-to-text and speech-to-speech"], "grounded_skills": ["Implement text-to-speech and speech-to-text using Azure Speech", "Improve text-to-speech by using Speech Synthesis Markup Language (SSML)", "Translate speech-to-speech and speech-to-text by using the Azure Speech service"], "prereq_module_ids": ["ai-c02-m02"]}
+          ]
+        },
+        {
+          "id": "ai-c03",
+          "order": 3,
+          "slug": "vision-and-knowledge-mining",
+          "title": "Computer Vision & Knowledge Mining",
+          "summary": "Analyze images and video and build search over enterprise content with Azure AI Search.",
+          "level": "advanced",
+          "grounded_on": "AI-102 skills outline (2025-12-23), paraphrased — original synthetic content",
+          "source_url": "https://learn.microsoft.com/en-us/credentials/certifications/resources/study-guides/ai-102",
+          "prereq_course_ids": ["ai-c01", "ai-c02"],
+          "modules": [
+            {"id": "ai-c03-m01", "order": 1, "title": "Analyzing images and extracting text", "summary": "Use vision features and OCR to understand images.", "objectives": ["Select visual features for image processing", "Detect objects and generate tags", "Extract printed and handwritten text with OCR"], "grounded_skills": ["Select visual features to meet image processing requirements", "Detect objects in images and generate image tags", "Extract text from images using Azure Vision", "Convert handwritten text using Azure Vision"], "prereq_module_ids": []},
+            {"id": "ai-c03-m02", "order": 2, "title": "Custom vision models", "summary": "Train classification and object-detection models on your images.", "objectives": ["Choose between classification and object detection", "Label, train, and evaluate a custom model", "Publish and consume a custom vision model"], "grounded_skills": ["Choose between image classification and object detection models", "Label images", "Train a custom image model, including image classification and object detection", "Evaluate custom vision model metrics", "Publish a custom vision model", "Consume a custom vision model"], "prereq_module_ids": ["ai-c03-m01"]},
+            {"id": "ai-c03-m03", "order": 3, "title": "Extracting insights from video", "summary": "Use Video Indexer and spatial analysis for video.", "objectives": ["Extract insights from video with Video Indexer", "Detect presence and movement with spatial analysis", "Choose video features for a scenario"], "grounded_skills": ["Use Azure AI Video Indexer to extract insights from a video or live stream", "Use Azure Vision Spatial Analysis to detect presence and movement of people in video"], "prereq_module_ids": ["ai-c03-m01"]},
+            {"id": "ai-c03-m04", "order": 4, "title": "Knowledge mining with Azure AI Search", "summary": "Build an index with skillsets, semantic, and vector search.", "objectives": ["Provision Azure AI Search and define an index and skillset", "Create data sources and run indexers", "Implement semantic and vector search"], "grounded_skills": ["Provision an Azure AI Search resource, create an index, and define a skillset", "Create data sources and indexers", "Create and run an indexer", "Implement semantic and vector store solutions", "Query an index, including syntax, sorting, filtering, and wildcards"], "prereq_module_ids": ["ai-c03-m02"]}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "architecture-security",
+      "order": 5,
+      "title": "Cloud Solution Architecture & Security",
+      "summary": "Design Azure infrastructure, identity, governance, resilience, and Zero-Trust security solutions.",
+      "primary_cert": "AZ-305 + SC-100",
+      "courses": [
+        {
+          "id": "as-c01",
+          "order": 1,
+          "slug": "designing-azure-infrastructure",
+          "title": "Designing Azure Infrastructure",
+          "summary": "Choose compute, network, storage, and application architectures that fit workload requirements.",
+          "level": "foundational",
+          "grounded_on": "AZ-305 skills outline (2026-04-17), paraphrased — original synthetic content",
+          "source_url": "https://learn.microsoft.com/en-us/credentials/certifications/resources/study-guides/az-305",
+          "prereq_course_ids": [],
+          "modules": [
+            {"id": "as-c01-m01", "order": 1, "title": "Designing compute solutions", "summary": "Match VM, container, serverless, and batch compute to requirements.", "objectives": ["Specify compute components from workload requirements", "Recommend VM, container, and serverless solutions", "Design compute for batch processing"], "grounded_skills": ["Specify components of a compute solution based on workload requirements", "Recommend a virtual machine-based solution", "Recommend a container-based solution", "Recommend a serverless-based solution", "Recommend a compute solution for batch processing"], "prereq_module_ids": []},
+            {"id": "as-c01-m02", "order": 2, "title": "Designing network solutions", "summary": "Connect, secure, and optimize Azure networking.", "objectives": ["Recommend connectivity to internet and on-premises", "Optimize network performance and security", "Design load-balancing and routing"], "grounded_skills": ["Recommend a connectivity solution that connects Azure resources to the internet", "Recommend a connectivity solution that connects Azure resources to on-premises networks", "Recommend a solution to optimize network performance", "Recommend a load-balancing and routing solution"], "prereq_module_ids": ["as-c01-m01"]},
+            {"id": "as-c01-m03", "order": 3, "title": "Designing data storage solutions", "summary": "Choose relational and non-relational storage for cost and performance.", "objectives": ["Recommend storage for relational data and tiers", "Recommend storage for semi-structured and unstructured data", "Balance features, performance, and cost"], "grounded_skills": ["Recommend a solution for storing relational data", "Recommend a database service tier and compute tier", "Recommend a solution for storing semi-structured data", "Recommend a solution for storing unstructured data", "Recommend a data storage solution to balance features, performance, and costs"], "prereq_module_ids": ["as-c01-m01"]},
+            {"id": "as-c01-m04", "order": 4, "title": "Designing application architecture", "summary": "Compose messaging, events, caching, and API integration.", "objectives": ["Recommend messaging and event-driven architectures", "Recommend caching and API integration", "Recommend automated deployment and configuration"], "grounded_skills": ["Recommend a messaging architecture", "Recommend an event-driven architecture", "Recommend a solution for API integration", "Recommend a caching solution for applications", "Recommend an automated deployment solution for applications"], "prereq_module_ids": ["as-c01-m03"]}
+          ]
+        },
+        {
+          "id": "as-c02",
+          "order": 2,
+          "slug": "identity-governance-resilience",
+          "title": "Identity, Governance & Resilience",
+          "summary": "Design identity, governance, monitoring, and business-continuity solutions aligned to the Well-Architected Framework.",
+          "level": "intermediate",
+          "grounded_on": "AZ-305 skills outline (2026-04-17), paraphrased — original synthetic content",
+          "source_url": "https://learn.microsoft.com/en-us/credentials/certifications/resources/study-guides/az-305",
+          "prereq_course_ids": ["as-c01"],
+          "modules": [
+            {"id": "as-c02-m01", "order": 1, "title": "Designing identity and access", "summary": "Recommend authentication, identity management, and authorization.", "objectives": ["Recommend an authentication and identity management solution", "Authorize access to Azure and on-premises resources", "Manage secrets, keys, and certificates"], "grounded_skills": ["Recommend an authentication solution", "Recommend an identity management solution", "Recommend a solution for authorizing access to Azure resources", "Recommend a solution to manage secrets, certificates, and keys"], "prereq_module_ids": []},
+            {"id": "as-c02-m02", "order": 2, "title": "Designing governance", "summary": "Structure management groups, subscriptions, policy, and compliance.", "objectives": ["Recommend a management-group and subscription structure", "Design a resource tagging strategy", "Recommend solutions for compliance and identity governance"], "grounded_skills": ["Recommend a structure for management groups, subscriptions, and resource groups, and a strategy for resource tagging", "Recommend a solution for managing compliance", "Recommend a solution for identity governance"], "prereq_module_ids": ["as-c02-m01"]},
+            {"id": "as-c02-m03", "order": 3, "title": "Designing logging and monitoring", "summary": "Recommend logging, log routing, and monitoring solutions.", "objectives": ["Recommend a logging solution", "Recommend a solution for routing logs", "Recommend a monitoring solution"], "grounded_skills": ["Recommend a logging solution", "Recommend a solution for routing logs", "Recommend a monitoring solution"], "prereq_module_ids": ["as-c02-m01"]},
+            {"id": "as-c02-m04", "order": 4, "title": "Designing business continuity", "summary": "Design backup, disaster recovery, and high availability.", "objectives": ["Recommend backup and disaster-recovery solutions", "Design high availability for compute and data", "Meet recovery objectives (RTO/RPO)"], "grounded_skills": ["Recommend a recovery solution for Azure and hybrid workloads that meets recovery objectives", "Recommend a backup and recovery solution for compute", "Recommend a backup and recovery solution for databases", "Recommend a high availability solution for compute", "Recommend a high availability solution for relational data"], "prereq_module_ids": ["as-c02-m03"]}
+          ]
+        },
+        {
+          "id": "as-c03",
+          "order": 3,
+          "slug": "zero-trust-security-architecture",
+          "title": "Zero-Trust Security Architecture",
+          "summary": "Design Zero-Trust security across strategy, operations, infrastructure, and data, per the Microsoft Cybersecurity Reference Architectures.",
+          "level": "advanced",
+          "grounded_on": "SC-100 skills outline (2026-04-27), paraphrased — original synthetic content",
+          "source_url": "https://learn.microsoft.com/en-us/credentials/certifications/resources/study-guides/sc-100",
+          "prereq_course_ids": ["as-c01", "as-c02"],
+          "modules": [
+            {"id": "as-c03-m01", "order": 1, "title": "Zero-Trust strategy, MCRA, and MCSB", "summary": "Align a security strategy to Zero Trust and Microsoft best practices.", "objectives": ["Design a security strategy supporting business resiliency", "Align solutions with MCRA and the cloud security benchmark", "Apply a Zero-Trust rapid modernization plan"], "grounded_skills": ["Design a security strategy to support business resiliency goals", "Design solutions that align with the Microsoft Cybersecurity Reference Architectures (MCRA) and Microsoft cloud security benchmark (MCSB)", "Design solutions that align with best practices for Zero Trust security, including RaMP"], "prereq_module_ids": []},
+            {"id": "as-c03-m02", "order": 2, "title": "Designing security operations", "summary": "Design detection and response with XDR, SIEM, and SOAR.", "objectives": ["Design XDR and SIEM detection and response", "Design SOAR with Sentinel and Defender XDR", "Use MITRE ATT&CK to evaluate coverage"], "grounded_skills": ["Design a solution for detection and response that includes extended detection and response (XDR) and security information and event management (SIEM)", "Design a solution for security orchestration and automated response (SOAR), including Microsoft Sentinel and Microsoft Defender XDR", "Design and evaluate threat detection coverage by using MITRE ATT&CK matrices"], "prereq_module_ids": ["as-c03-m01"]},
+            {"id": "as-c03-m03", "order": 3, "title": "Infrastructure and posture management", "summary": "Manage security posture across hybrid and multicloud.", "objectives": ["Evaluate posture with Defender for Cloud and Secure Score", "Design posture management across hybrid/multicloud", "Specify requirements for securing endpoints and services"], "grounded_skills": ["Evaluate security posture by using Microsoft Defender for Cloud, including the Microsoft cloud security benchmark (MCSB)", "Evaluate security posture by using Microsoft Secure Score", "Design a solution for integrating hybrid and multicloud environments by using Azure Arc", "Specify security requirements for containers and container orchestration"], "prereq_module_ids": ["as-c03-m01"]},
+            {"id": "as-c03-m04", "order": 4, "title": "Securing applications and data", "summary": "Design application and data security with WAF, encryption, and Purview.", "objectives": ["Design a lifecycle strategy for application security", "Secure APIs and applications with WAF and workload identities", "Protect data with classification, encryption, and Defender"], "grounded_skills": ["Design and implement a full lifecycle strategy for application security", "Design a solution for API management and security", "Design solutions that secure applications by using Azure Web Application Firewall (WAF)", "Evaluate solutions for encryption of data at rest and in transit, including Azure Key Vault", "Evaluate solutions for data discovery and classification"], "prereq_module_ids": ["as-c03-m02", "as-c03-m03"]}
+          ]
+        }
+      ]
+    }
+  ]
+}
