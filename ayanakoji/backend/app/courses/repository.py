@@ -9,10 +9,11 @@ standalone session can drive it.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
-from sqlmodel import Session, col, select
+from sqlmodel import Session, col, delete, select
 
-from app.courses.models import Assessment, Course, make_message
+from app.courses.models import Assessment, Course, CourseModule, make_message
 
 
 class CourseRepository:
@@ -80,3 +81,52 @@ class CourseRepository:
 
     def assessment_ids(self, course_id: str) -> list[str]:
         return [a.id for a in self.list_assessments(course_id)]
+
+    # ── Study-plan modules (progress system of record) ───────────────────────
+
+    def replace_modules(self, course_id: str, modules: list[dict[str, Any]]) -> None:
+        """Replace a course's scheduled modules (idempotent — a rebuild overwrites).
+
+        Preserves completion: a module already completed stays completed across a
+        re-plan, since progress is the learner's and shouldn't be wiped by a reschedule.
+        """
+        done = {m.module_id: m.completed_at for m in self.list_modules(course_id) if m.completed}
+        self._session.exec(delete(CourseModule).where(col(CourseModule.course_id) == course_id))
+        for data in modules:
+            mid = str(data["module_id"])
+            self._session.add(
+                CourseModule(
+                    course_id=course_id,
+                    module_id=mid,
+                    title=str(data["title"]),
+                    sequence=int(data["sequence"]),
+                    estimated_minutes=int(data["estimated_minutes"]),
+                    complete_before=str(data["complete_before"]),
+                    scheduled=list(data.get("scheduled", [])),
+                    completed=mid in done,
+                    completed_at=done.get(mid),
+                )
+            )
+        self._session.commit()
+
+    def list_modules(self, course_id: str) -> list[CourseModule]:
+        statement = (
+            select(CourseModule)
+            .where(CourseModule.course_id == course_id)
+            .order_by(col(CourseModule.sequence))
+        )
+        return list(self._session.exec(statement).all())
+
+    def get_module(self, course_id: str, module_id: str) -> CourseModule | None:
+        statement = select(CourseModule).where(
+            CourseModule.course_id == course_id, CourseModule.module_id == module_id
+        )
+        return self._session.exec(statement).first()
+
+    def set_module_completed(self, module: CourseModule, *, completed: bool) -> CourseModule:
+        module.completed = completed
+        module.completed_at = datetime.now(UTC) if completed else None
+        self._session.add(module)
+        self._session.commit()
+        self._session.refresh(module)
+        return module

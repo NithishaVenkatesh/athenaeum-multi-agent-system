@@ -127,6 +127,63 @@ def test_post_jailbreak_emits_blocked_event(client: TestClient) -> None:
     assert "token" not in types
 
 
+def test_pace_then_plan_persists_modules_and_completion(client: TestClient) -> None:
+    course_id = _create(client, content="How do Azure Functions work?")["id"]
+    client.post(f"/api/courses/{course_id}/accept", json={"catalog_id": "cb-c01"})
+
+    # Without pace, asking for a plan returns a pace_request (no plan, no modules yet).
+    resp = client.post(f"/api/courses/{course_id}/messages", json={"content": "build a study plan"})
+    types = [e["type"] for e in _parse_sse(resp.text)]
+    assert "pace_request" in types and "plan" not in types
+    assert client.get(f"/api/courses/{course_id}/modules").json() == []
+
+    # Set pace, then the plan builds and its modules are persisted.
+    assert client.post(f"/api/courses/{course_id}/pace", json={"pace": "normal"}).status_code == 200
+    resp = client.post(f"/api/courses/{course_id}/messages", json={"content": "build a study plan"})
+    events = _parse_sse(resp.text)
+    plan = next(e for e in events if e["type"] == "plan")["plan"]
+    assert plan["pace"] == "normal"
+    assert plan["weekly_study_hours"] == 3.0  # grounded in the calendar
+    assert "overestimate_factor" not in plan  # internal — never surfaced
+
+    modules = client.get(f"/api/courses/{course_id}/modules").json()
+    assert len(modules) == 4
+    assert [m["sequence"] for m in modules] == [1, 2, 3, 4]
+    assert modules[0]["locked"] is False and modules[1]["locked"] is True  # sequential
+    assert all(m["complete_before"] for m in modules)
+
+    # Sequential completion: can't skip ahead.
+    assert (
+        client.post(
+            f"/api/courses/{course_id}/modules/{modules[1]['module_id']}/complete"
+        ).status_code
+        == 409
+    )
+    # Complete module 1 → module 2 unlocks.
+    after = client.post(
+        f"/api/courses/{course_id}/modules/{modules[0]['module_id']}/complete"
+    ).json()
+    assert after[0]["completed"] is True
+    assert after[1]["locked"] is False
+
+
+def test_module_content_renders_markdown(client: TestClient) -> None:
+    course_id = _create(client)["id"]
+    resp = client.get(f"/api/courses/{course_id}/modules/cb-c01-m01/content")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["module_id"] == "cb-c01-m01"
+    assert "App Service" in body["content"]  # real module markdown
+    # unknown module → 404
+    assert client.get(f"/api/courses/{course_id}/modules/nope/content").status_code == 404
+
+
+def test_set_pace_validates(client: TestClient) -> None:
+    course_id = _create(client)["id"]
+    assert client.post(f"/api/courses/{course_id}/pace", json={"pace": "normal"}).status_code == 200
+    assert client.post(f"/api/courses/{course_id}/pace", json={"pace": "warp"}).status_code == 422
+
+
 def test_accept_course_links_and_sets_attempt(client: TestClient) -> None:
     course_id = _create(client)["id"]
     resp = client.post(f"/api/courses/{course_id}/accept", json={"catalog_id": "cb-c01"})

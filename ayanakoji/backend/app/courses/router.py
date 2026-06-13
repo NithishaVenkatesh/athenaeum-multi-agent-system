@@ -10,17 +10,19 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
-from app.agent.contracts import TakenCourse, TokenEvent
+from app.agent.contracts import Pace, PlanEvent, TakenCourse, TokenEvent
 from app.agent.orchestrator import run_pipeline
+from app.catalog.content import get_module_content
 from app.catalog.loader import get_course as get_catalog_course
 from app.catalog.loader import is_valid_course_id
-from app.courses.models import Course
+from app.courses.models import Course, CourseModule
 from app.courses.repository import CourseRepository
 from app.courses.schemas import (
     AcceptCourse,
@@ -30,6 +32,9 @@ from app.courses.schemas import (
     CourseRead,
     CourseSummary,
     MessageIn,
+    ModuleContentRead,
+    ModuleRead,
+    SetPace,
 )
 from app.courses.service import generate_title
 from app.db import get_session, session_scope
@@ -206,16 +211,23 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
                 return
 
             taken = _taken_courses(stream_repo, current.persona_id, exclude_id=current.id)
+            pace = Pace(current.pace) if current.pace else None
             answer_parts: list[str] = []
             final_text = ""  # what gets persisted as the assistant turn
+            plan_modules: list[dict[str, object]] | None = None
             for event in run_pipeline(
                 body.content,
                 persona_id=current.persona_id,
                 catalog_id=current.catalog_id,
                 taken=taken,
+                pace=pace,
+                start_date=date.today(),
             ):
                 if isinstance(event, TokenEvent):
                     answer_parts.append(event.token)
+                elif isinstance(event, PlanEvent):
+                    # Persist the generated module schedule (progress system of record).
+                    plan_modules = [m.model_dump(mode="json") for m in event.plan.modules]
                 yield _sse(event.model_dump(mode="json"))
                 # Terminal, non-token messages become the persisted transcript text.
                 if event.type == "blocked":
@@ -223,6 +235,8 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
                 elif event.type == "error":
                     final_text = event.message
 
+            if plan_modules is not None:
+                stream_repo.replace_modules(current.id, plan_modules)
             answer = "".join(answer_parts).strip() or final_text
             if answer:
                 stream_repo.append_message(current, role="assistant", content=answer)
@@ -232,3 +246,82 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.post("/{course_id}/pace", response_model=CourseRead, summary="Set the study pace")
+def set_pace(course_id: str, body: SetPace, session: SessionDep) -> CourseRead:
+    """Set the course's pace (slower|normal|faster) — the gate before a plan is built."""
+    repo = CourseRepository(session)
+    course = _require(repo.get(course_id), course_id)
+    course.pace = body.pace
+    course = repo.update(course)
+    return _to_read(course, repo)
+
+
+def _to_module_read(modules: list[CourseModule]) -> list[ModuleRead]:
+    """Project module rows to the API shape, computing the sequential lock state."""
+    out: list[ModuleRead] = []
+    prev_done = True  # the first module is always available
+    for m in modules:
+        out.append(
+            ModuleRead(
+                module_id=m.module_id,
+                title=m.title,
+                sequence=m.sequence,
+                estimated_minutes=m.estimated_minutes,
+                complete_before=m.complete_before,
+                completed=m.completed,
+                locked=not prev_done,
+                scheduled=m.scheduled,
+            )
+        )
+        prev_done = m.completed
+    return out
+
+
+@router.get(
+    "/{course_id}/modules",
+    response_model=list[ModuleRead],
+    summary="The course's scheduled modules + progress (sequential lock)",
+)
+def list_modules(course_id: str, session: SessionDep) -> list[ModuleRead]:
+    repo = CourseRepository(session)
+    _require(repo.get(course_id), course_id)
+    return _to_module_read(repo.list_modules(course_id))
+
+
+@router.get(
+    "/{course_id}/modules/{module_id}/content",
+    response_model=ModuleContentRead,
+    summary="A module's markdown content (for the Modules tab)",
+)
+def module_content(course_id: str, module_id: str, session: SessionDep) -> ModuleContentRead:
+    repo = CourseRepository(session)
+    _require(repo.get(course_id), course_id)
+    content = get_module_content(module_id)
+    if content is None:
+        raise HTTPException(status_code=404, detail=f"no content for module '{module_id}'")
+    return ModuleContentRead(module_id=content.module_id, title=content.title, content=content.body)
+
+
+@router.post(
+    "/{course_id}/modules/{module_id}/complete",
+    response_model=list[ModuleRead],
+    summary="Mark a module complete (sequential — only the active module)",
+)
+def complete_module(course_id: str, module_id: str, session: SessionDep) -> list[ModuleRead]:
+    """Mark the *currently available* module complete; returns the updated list.
+
+    Sequential rule: a module can only be completed if every earlier module is
+    already done (completion is by a test later; this is the manual gate for now).
+    """
+    repo = CourseRepository(session)
+    _require(repo.get(course_id), course_id)
+    modules = repo.list_modules(course_id)
+    target = next((m for m in modules if m.module_id == module_id), None)
+    if target is None:
+        raise HTTPException(status_code=404, detail=f"module '{module_id}' not in this plan")
+    if any(not m.completed for m in modules if m.sequence < target.sequence):
+        raise HTTPException(status_code=409, detail="complete the earlier modules first")
+    repo.set_module_completed(target, completed=True)
+    return _to_module_read(repo.list_modules(course_id))

@@ -34,6 +34,33 @@ class AcceptCourse(BaseModel):
     catalog_id: str = Field(min_length=1, description="Athenaeum course id to enroll in")
 
 
+class SetPace(BaseModel):
+    """Set the study pace for this course (gates plan generation)."""
+
+    pace: str = Field(pattern="^(slower|normal|faster)$", description="slower | normal | faster")
+
+
+class ModuleRead(BaseModel):
+    """One scheduled module with its progress + sequential lock state."""
+
+    module_id: str
+    title: str
+    sequence: int
+    estimated_minutes: int
+    complete_before: str
+    completed: bool
+    locked: bool = Field(description="True until the prior module is completed")
+    scheduled: list[dict[str, Any]]
+
+
+class ModuleContentRead(BaseModel):
+    """A module's rendered-ready markdown content for the Modules tab."""
+
+    module_id: str
+    title: str
+    content: str
+
+
 class CourseSummary(BaseModel):
     """Compact row for the course (chat) chooser."""
 

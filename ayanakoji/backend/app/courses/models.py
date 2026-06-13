@@ -49,9 +49,30 @@ class Course(SQLModel, table=True):
     # against the catalog when set. Named ``catalog_id`` to avoid colliding with ``id``.
     catalog_id: str | None = Field(default=None)
     status: int = Field(default=STATUS_NEW)
+    # Chosen study pace (slower|normal|faster); set before a plan is built.
+    pace: str | None = Field(default=None)
     messages: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON)
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
+
+
+class CourseModule(SQLModel, table=True):
+    """A scheduled module in a course's study plan (the system of record for progress).
+
+    Written when a plan is built (one row per module). Modules are completed
+    sequentially: a module is *available* only once the prior one is completed.
+    """
+
+    id: str = Field(default_factory=_uuid, primary_key=True)
+    course_id: str = Field(foreign_key="course.id", index=True)
+    module_id: str  # catalog module id, e.g. "cb-c01-m01"
+    title: str
+    sequence: int  # 1-based; the order modules must be done in
+    estimated_minutes: int
+    complete_before: str  # ISO date
+    scheduled: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON)
+    completed: bool = Field(default=False)
+    completed_at: datetime | None = Field(default=None)
 
 
 class Assessment(SQLModel, table=True):
