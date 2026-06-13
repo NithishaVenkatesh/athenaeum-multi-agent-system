@@ -25,6 +25,18 @@ class FoundryConfig:
     model_workhorse: str
     model_reasoning: str
     model_embed: str
+    model_fast: str
+
+
+@dataclass(frozen=True)
+class GroqConfig:
+    """Validated Groq config — the 3rd/4th tier of the model fallback chain (§model-routing)."""
+
+    api_key: str
+    base_url: str
+    model_workhorse: str
+    model_fast: str
+    model_reasoning: str
 
 
 class Settings(BaseSettings):
@@ -61,6 +73,16 @@ class Settings(BaseSettings):
     model_workhorse: str = "gpt-4o-mini"
     model_reasoning: str = "o4-mini"
     model_embed: str = "text-embedding-3-large"
+    # Cheap fast-classifier deployment (router / injection-gate). gpt-4o-mini by
+    # default; point at a Phi deployment if you have one — capability, not vanity.
+    model_fast: str = "gpt-4o-mini"
+
+    # --- Groq (fallback provider; tiers 3 & 4 of the Azure→Azure→Groq→Groq chain) ---
+    groq_api_key: str | None = None
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+    groq_model_workhorse: str = "llama-3.3-70b-versatile"
+    groq_model_fast: str = "llama-3.1-8b-instant"
+    groq_model_reasoning: str = "deepseek-r1-distill-llama-70b"
 
     @property
     def cors_origin_list(self) -> list[str]:
@@ -80,9 +102,19 @@ class Settings(BaseSettings):
         )
 
     @property
+    def groq_configured(self) -> bool:
+        """True when a usable Groq API key is present (the fallback provider)."""
+        return not _is_placeholder(self.groq_api_key)
+
+    @property
     def llm_offline(self) -> bool:
-        """Use the deterministic offline LLM path when forced or when Foundry is unset."""
-        return self.offline_llm or not self.foundry_configured
+        """Use the deterministic offline LLM path when forced, or when NO provider is set.
+
+        The agent pipeline can run on Azure *or* Groq; it only drops to the
+        deterministic mock when forced (``OFFLINE_LLM=true``) or when neither
+        provider is configured (zero-credential demo / CI lane).
+        """
+        return self.offline_llm or not (self.foundry_configured or self.groq_configured)
 
     def require_foundry(self) -> FoundryConfig:
         """Return a validated FoundryConfig or raise loudly listing what is missing.
@@ -115,6 +147,20 @@ class Settings(BaseSettings):
             model_workhorse=self.model_workhorse,
             model_reasoning=self.model_reasoning,
             model_embed=self.model_embed,
+            model_fast=self.model_fast,
+        )
+
+    def require_groq(self) -> GroqConfig:
+        """Return a validated GroqConfig or raise loudly if the key is missing."""
+        if _is_placeholder(self.groq_api_key):
+            raise RuntimeError("Groq not configured — missing/placeholder: GROQ_API_KEY")
+        assert self.groq_api_key is not None
+        return GroqConfig(
+            api_key=self.groq_api_key,
+            base_url=self.groq_base_url,
+            model_workhorse=self.groq_model_workhorse,
+            model_fast=self.groq_model_fast,
+            model_reasoning=self.groq_model_reasoning,
         )
 
 

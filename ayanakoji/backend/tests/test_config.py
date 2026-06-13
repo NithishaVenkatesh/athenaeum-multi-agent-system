@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from app.config import FoundryConfig, Settings, _is_placeholder, get_settings
+from app.config import FoundryConfig, GroqConfig, Settings, _is_placeholder, get_settings
 
 
 def test_defaults() -> None:
@@ -72,4 +72,44 @@ def test_require_foundry_returns_config_when_set() -> None:
     assert isinstance(config, FoundryConfig)
     assert config.openai_endpoint == "https://r.openai.azure.com/"
     assert config.model_workhorse == "gpt-4o-mini"
+    assert config.model_fast == "gpt-4o-mini"
     assert config.openai_api_version == "2024-10-21"
+
+
+# --- Groq fallback config gate ---------------------------------------------
+
+
+def test_groq_not_configured_by_default() -> None:
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.groq_configured is False
+    with pytest.raises(RuntimeError) as exc:
+        settings.require_groq()
+    assert "GROQ_API_KEY" in str(exc.value)
+
+
+def test_groq_configured_and_require_returns_config() -> None:
+    settings = Settings(_env_file=None, groq_api_key="gsk_realkey")  # type: ignore[call-arg]
+    assert settings.groq_configured is True
+    config = settings.require_groq()
+    assert isinstance(config, GroqConfig)
+    assert config.base_url == "https://api.groq.com/openai/v1"
+    assert config.model_workhorse == "llama-3.3-70b-versatile"
+    assert config.model_fast == "llama-3.1-8b-instant"
+
+
+def test_llm_offline_false_when_only_groq_configured() -> None:
+    # The pipeline can run on Groq alone — not forced offline just because Azure is unset.
+    # offline_llm=False explicitly overrides the autouse OFFLINE_LLM=true test fixture.
+    settings = Settings(_env_file=None, groq_api_key="gsk_realkey", offline_llm=False)  # type: ignore[call-arg]
+    assert settings.foundry_configured is False
+    assert settings.llm_offline is False
+
+
+def test_llm_offline_true_when_no_provider() -> None:
+    settings = Settings(_env_file=None, offline_llm=False)  # type: ignore[call-arg]
+    assert settings.llm_offline is True
+
+
+def test_offline_forced_overrides_configured_providers() -> None:
+    settings = Settings(_env_file=None, groq_api_key="gsk_realkey", offline_llm=True)  # type: ignore[call-arg]
+    assert settings.llm_offline is True
