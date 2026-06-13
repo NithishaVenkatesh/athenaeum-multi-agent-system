@@ -17,10 +17,13 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass, field
+from datetime import date
 
 from app.agent.contracts import (
     CourseSuggestion,
     GroundingSource,
+    Pace,
+    PaceRequestEvent,
     PhaseName,
     PhaseStatus,
     PhaseTelemetry,
@@ -49,6 +52,7 @@ class AgentReply:
     sources: list[GroundingSource] = field(default_factory=list)
     suggestion: SuggestionEvent | None = None
     plan: StudyPlan | None = None
+    pace_request: PaceRequestEvent | None = None
 
 
 def _offline_stream(text: str) -> Iterator[str]:
@@ -531,29 +535,62 @@ def answer_recommend(
 # ── Study plan (tool scope: catalog course modules + Work IQ schedule) ──────────
 
 
+_PACE_PROMPT = (
+    "Before I build your plan — how do you want to pace it? Slower spreads the work out, "
+    "normal is balanced, faster is intensive."
+)
+
+
 def _plan_offline_narration(plan: StudyPlan) -> str:
-    days = ", ".join(s.day for s in plan.sessions) or "your preferred days"
-    slot = plan.sessions[0].slot.lower() if plan.sessions else "your preferred slot"
+    first = plan.modules[0] if plan.modules else None
+    deadline = f" Aim to finish “{first.title}” by {first.complete_before}." if first else ""
     return (
-        f"(offline mode) Here's a {plan.weeks}-week study plan for {plan.title}. "
-        f"{plan.capacity_reason} That's about {plan.weekly_study_hours:.0f} h/week across "
-        f"{len(plan.modules)} modules ({plan.total_hours:.0f} h total, time over-estimated "
-        f"{plan.overestimate_factor:.0f}× per module to stay safe). I've placed sessions on "
-        f"{days} in your {slot} focus window. See the schedule below."
+        f"(offline mode) Here's your {plan.weeks}-week, {plan.pace.value}-paced plan for "
+        f"{plan.title}. {plan.capacity_reason} That's {plan.weekly_study_hours:g} h/week across "
+        f"{len(plan.modules)} modules ({plan.total_hours:g} h total). You'll work through them in "
+        f"order, each with a complete-by date.{deadline} See the schedule below."
     )
 
 
 def _plan_facts(plan: StudyPlan) -> str:
-    weeks = "; ".join(
-        f"week {w.week}: {', '.join(w.module_titles)} ({w.total_minutes} min)"
-        for w in plan.schedule
+    mods = "; ".join(
+        f"#{m.sequence} {m.title} ({m.estimated_minutes} min, by {m.complete_before})"
+        for m in plan.modules
     )
-    sess = ", ".join(f"{s.day} {s.start}-{s.end}" for s in plan.sessions)
+    sess = ", ".join(f"{s.day} {s.start}-{s.end} ({s.source})" for s in plan.sessions)
     return (
-        f"course={plan.title} ({plan.cert}); weekly_hours={plan.weekly_study_hours}; "
-        f"total_hours={plan.total_hours}; weeks={plan.weeks}; "
-        f"overestimate={plan.overestimate_factor}x; capacity_reason={plan.capacity_reason}; "
-        f"schedule=[{weeks}]; sessions=[{sess}]"
+        f"course={plan.title} ({plan.cert}); pace={plan.pace.value}; "
+        f"weekly_hours={plan.weekly_study_hours}; total_hours={plan.total_hours}; "
+        f"weeks={plan.weeks}; capacity_reason={plan.capacity_reason}; "
+        f"sessions=[{sess}]; modules=[{mods}]"
+    )
+
+
+def _need_course_reply(
+    persona: Persona | None, taken: list[TakenCourse], *, offline: bool
+) -> AgentReply:
+    options = _recommend_for(persona, taken)
+    reply = (
+        "Let's pick a course first — then I'll build a study plan around your schedule. "
+        "Here are options that fit your role."
+        if options
+        else "Choose a course first and I'll build a study plan that fits your schedule."
+    )
+    return AgentReply(
+        telemetry=_answer_telemetry(
+            summary="Need a chosen course before planning",
+            reasoning="No course linked — offered options to choose first."
+            if options
+            else "No course linked and no profile to recommend from.",
+            route=Route.STUDY_PLAN,
+            sources=[],
+            model="offline" if offline else None,
+            tier=None,
+        ),
+        tokens=_offline_stream(reply),
+        suggestion=SuggestionEvent(prompt="Pick a course to plan for:", options=options)
+        if options
+        else None,
     )
 
 
@@ -563,43 +600,42 @@ def answer_study_plan(
     persona_id: str,
     catalog_id: str | None,
     taken: list[TakenCourse],
+    pace: Pace | None = None,
+    start_date: date | None = None,
     router: ModelRouter | None = None,
     repo: WorkIQRepository | None = None,
     settings: Settings | None = None,
 ) -> AgentReply:
-    """Build a workload-aware study plan for the chat's chosen course.
+    """Build the calendar-grounded plan for the chat's chosen course.
 
-    If no course is linked yet, explain that and offer profile-based options to
-    choose first (so the plan has a course to plan for).
+    State-gated: if no course is linked → offer course options; if a course is
+    linked but no pace is set → ask the pace (HITL); only with both → build.
     """
     settings = settings or get_settings()
     repo = repo or get_repository()
     persona = repo.get_persona(persona_id)
-
     course = get_catalog_course(catalog_id) if catalog_id else None
+
     if course is None or persona is None:
-        options = _recommend_for(persona, taken)
-        reply = (
-            "Let's pick a course first — then I'll build a study plan around your schedule. "
-            "Here are options that fit your role."
-            if options
-            else "Choose a course first and I'll build a study plan that fits your schedule."
-        )
+        return _need_course_reply(persona, taken, offline=settings.llm_offline)
+
+    # HITL gate: ask the pace before planning.
+    if pace is None:
         return AgentReply(
             telemetry=_answer_telemetry(
-                summary="Need a chosen course before planning",
-                reasoning="No course linked to this chat — offered options to choose first."
-                if options
-                else "No course linked and no profile to recommend from.",
+                summary="Asked the learner's pace before planning",
+                reasoning="Course chosen but no pace set — pace gates the plan.",
                 route=Route.STUDY_PLAN,
                 sources=[],
                 model="offline" if settings.llm_offline else None,
                 tier=None,
             ),
-            tokens=_offline_stream(reply),
-            suggestion=SuggestionEvent(prompt="Pick a course to plan for:", options=options)
-            if options
-            else None,
+            tokens=_offline_stream(
+                f"Before I build your plan for {course.title}, how fast do you want to go?"
+            ),
+            pace_request=PaceRequestEvent(
+                catalog_id=course.id, title=course.title, prompt=_PACE_PROMPT
+            ),
         )
 
     plan = build_study_plan(
@@ -607,6 +643,8 @@ def answer_study_plan(
         title=course.title,
         cert=course.primary_cert,
         persona=persona,
+        pace=pace,
+        start_date=start_date or date.today(),
         settings=settings,
     )
     if plan is None:  # course has no modules — should not happen for catalog courses
@@ -625,15 +663,14 @@ def answer_study_plan(
         )
 
     reasoning = (
-        f"Deterministic plan for {course.title}: {plan.weeks} weeks @ "
-        f"{plan.weekly_study_hours}h/wk (×{plan.overestimate_factor:.0f} module estimates); "
-        f"{plan.capacity_reason}"
+        f"Calendar-grounded plan for {course.title}: {plan.weeks} weeks @ "
+        f"{plan.weekly_study_hours}h/wk ({plan.pace.value} pace); {plan.capacity_reason}"
     )
 
     if settings.llm_offline:
         return AgentReply(
             telemetry=_answer_telemetry(
-                summary="Built a workload-aware study plan",
+                summary="Built a calendar-grounded study plan",
                 reasoning=reasoning,
                 route=Route.STUDY_PLAN,
                 sources=[],
@@ -647,10 +684,11 @@ def answer_study_plan(
     router = router or ModelRouter(settings)
     system = (
         "You are Athenaeum's study coach presenting a study plan. The plan below was computed "
-        "deterministically from the learner's work schedule — narrate it warmly in 3-4 "
-        "sentences. Quote ONLY the numbers given; never invent figures. Mention that per-module "
-        "time is deliberately over-estimated to stay realistic. End by encouraging them to "
-        "start week 1.\n\nPLAN: " + _plan_facts(plan)
+        "deterministically from the learner's real calendar — narrate it warmly in 3-4 "
+        "sentences. Quote ONLY the numbers and dates given; never invent figures. Note that the "
+        "study time comes from slots already in their week and modules are done in order with a "
+        "complete-by date each. End by encouraging them to start module 1.\n\nPLAN: "
+        + _plan_facts(plan)
     )
     handle = router.stream(
         Capability.WORKHORSE,
@@ -659,7 +697,7 @@ def answer_study_plan(
     )
     return AgentReply(
         telemetry=_answer_telemetry(
-            summary="Built a workload-aware study plan",
+            summary="Built a calendar-grounded study plan",
             reasoning=reasoning,
             route=Route.STUDY_PLAN,
             sources=[],

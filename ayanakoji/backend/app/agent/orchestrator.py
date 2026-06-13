@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterator
+from datetime import date
 
 from app.agent.answer import (
     AgentReply,
@@ -35,6 +36,7 @@ from app.agent.contracts import (
     BlockedEvent,
     DoneEvent,
     ErrorEvent,
+    Pace,
     PhaseEvent,
     PipelineEvent,
     PlanEvent,
@@ -69,6 +71,8 @@ def _dispatch(
     persona_id: str,
     catalog_id: str | None,
     taken: list[TakenCourse],
+    pace: Pace | None,
+    start_date: date | None,
     router: ModelRouter | None,
     grounding: CourseGrounding,
     settings: Settings,
@@ -86,6 +90,8 @@ def _dispatch(
             persona_id=persona_id,
             catalog_id=catalog_id,
             taken=taken,
+            pace=pace,
+            start_date=start_date,
             router=router,
             settings=settings,
         )
@@ -104,6 +110,8 @@ def run_pipeline(
     persona_id: str,
     catalog_id: str | None = None,
     taken: list[TakenCourse] | None = None,
+    pace: Pace | None = None,
+    start_date: date | None = None,
     router: ModelRouter | None = None,
     grounding: CourseGrounding | None = None,
     settings: Settings | None = None,
@@ -136,6 +144,8 @@ def run_pipeline(
             persona_id=persona_id,
             catalog_id=catalog_id,
             taken=taken,
+            pace=pace,
+            start_date=start_date,
             router=router,
             grounding=grounding,
             settings=settings,
@@ -157,6 +167,10 @@ def run_pipeline(
         yield ErrorEvent(message=_STREAM_BROKE_MESSAGE)
         yield DoneEvent(route=decision.route)
         return
+
+    # ── Pace HITL gate (ask before planning) ───────────────────────────────────
+    if reply.pace_request is not None:
+        yield reply.pace_request
 
     # ── Structured study plan (rendered as a schedule card) ────────────────────
     if reply.plan is not None:

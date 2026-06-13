@@ -54,13 +54,34 @@ def test_recommend_flow_offers_profile_based_choices() -> None:
     assert suggestion.options  # personalized options to choose from
 
 
-def test_study_plan_flow_emits_plan_for_linked_course() -> None:
+def test_study_plan_asks_pace_when_unset() -> None:
     events = list(run_pipeline("build me a study plan", persona_id="EMP-001", catalog_id="cb-c01"))
+    kinds = _types(events)
+    assert "pace_request" in kinds  # HITL gate before planning
+    assert "plan" not in kinds
+    assert events[-1].route is Route.STUDY_PLAN
+
+
+def test_study_plan_flow_emits_plan_with_pace() -> None:
+    from datetime import date
+
+    from app.agent.contracts import Pace
+
+    events = list(
+        run_pipeline(
+            "build me a study plan",
+            persona_id="EMP-001",
+            catalog_id="cb-c01",
+            pace=Pace.NORMAL,
+            start_date=date(2026, 6, 15),
+        )
+    )
     kinds = _types(events)
     assert "plan" in kinds
     plan = next(e for e in events if e.type == "plan").plan
     assert plan.catalog_id == "cb-c01"
-    assert plan.overestimate_factor == 2.0
+    assert plan.pace is Pace.NORMAL
+    assert plan.weekly_study_hours == 3.0  # grounded in the calendar, not 0.6×
     assert events[-1].route is Route.STUDY_PLAN
 
 
