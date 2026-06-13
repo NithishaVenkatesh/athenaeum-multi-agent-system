@@ -80,6 +80,54 @@ jobs:
       - name: Build (next)
         run: pnpm build
 
+  e2e:
+    name: E2E (Playwright, FE<->BE)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: "ayanakoji/backend/uv.lock"
+
+      - name: Sync backend (for uvicorn)
+        run: uv sync --python 3.12 --frozen
+        working-directory: ayanakoji/backend
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: ayanakoji/frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: ayanakoji/frontend
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: ayanakoji/frontend
+
+      - name: Run E2E (Playwright boots both servers)
+        run: pnpm e2e
+        working-directory: ayanakoji/frontend
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: ayanakoji/frontend/playwright-report/
+          retention-days: 7
+
   secret-scan:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
