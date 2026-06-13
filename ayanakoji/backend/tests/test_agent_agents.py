@@ -238,8 +238,19 @@ def test_answer_foundry_online_streams_grounded() -> None:
     router = FakeRouter(tokens=["Azure ", "Functions ", "[cb-c01-m02]"])
     reply = answer_foundry("azure functions", router=router, settings=_online())
     assert reply.telemetry.tier == 1
-    assert "".join(reply.tokens) == "Azure Functions [cb-c01-m02]"
+    # The narration is buffered + guard-checked, then re-streamed (a real source's
+    # citation is kept verbatim).
+    assert "".join(reply.tokens).strip() == "Azure Functions [cb-c01-m02]"
     assert reply.sources
+
+
+def test_answer_foundry_scrubs_fabricated_citation() -> None:
+    # The model invents a citation that no grounded source backs; the guard strips it.
+    router = FakeRouter(tokens=["Azure ", "Functions ", "[zz-c99-m99]"])
+    reply = answer_foundry("azure functions", router=router, settings=_online())
+    text = "".join(reply.tokens)
+    assert "[zz-c99-m99]" not in text
+    assert "Azure Functions" in text
 
 
 def test_answer_work_offline_uses_persona_signals() -> None:
@@ -334,3 +345,49 @@ def test_answer_study_plan_without_course_offers_options() -> None:
     assert reply.plan is None
     assert reply.suggestion is not None  # offered courses to pick first
     assert "pick a course" in "".join(reply.tokens).lower()
+
+
+# ── Router: transcript-failure regressions ─────────────────────────────────────
+
+
+def test_router_schedule_edit_and_pace_go_to_study_plan() -> None:
+    # "remove week 2" and "revert to slower pace" must re-plan, not hit work_iq.
+    assert classify("remove the schedules from week 2, I am occupied").route is Route.STUDY_PLAN
+    assert classify("can we revert back to the slower pace instead").route is Route.STUDY_PLAN
+
+
+def test_router_affirmation_resolves_pending_pace() -> None:
+    assert classify("yes", pending="pace").route is Route.STUDY_PLAN
+    # Without a pending action a bare "yes" is not forced into planning.
+    assert classify("yes").route is not Route.STUDY_PLAN
+
+
+def test_router_does_not_misroute_begin_in_to_study_plan() -> None:
+    assert classify("where do I begin in Azure").route is not Route.STUDY_PLAN
+
+
+# ── Course-lock: one course per chat ───────────────────────────────────────────
+
+
+def _a_learner() -> str:
+    from app.workiq.repository import get_repository
+
+    return get_repository().list_personas(learners_only=True)[0].employee_id
+
+
+def test_recommend_is_locked_when_chat_has_a_course() -> None:
+    reply = answer_recommend(
+        "suggest me a different course", persona_id=_a_learner(), taken=[], catalog_id="cb-c01"
+    )
+    assert reply.suggestion is None
+    assert reply.new_chat is not None  # the "start a new chat" CTA
+
+
+def test_greeting_does_not_resuggest_when_chat_has_a_course() -> None:
+    reply = answer_greeting("hey", persona_id=_a_learner(), taken=[], catalog_id="cb-c01")
+    assert reply.suggestion is None
+
+
+def test_recommend_still_suggests_without_a_course() -> None:
+    reply = answer_recommend("suggest me a course", persona_id=_a_learner(), taken=[])
+    assert reply.suggestion is not None

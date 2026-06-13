@@ -15,10 +15,14 @@ that leaked in ungrounded, so a regression is caught rather than shipped.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 
-from app.agent.contracts import StudyPlan
+from app.agent.contracts import GroundingSource, StudyPlan
 
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
+# A bracketed citation an answer makes, e.g. "[cb-c01-m02]". Module ids look like
+# 2-4 lowercase-letter slug segments joined by hyphens; we only police that shape.
+_CITATION = re.compile(r"\[([a-z]{2,}-[a-z0-9-]+)\]", re.IGNORECASE)
 
 
 def numbers_in(text: str) -> set[str]:
@@ -56,3 +60,31 @@ def ungrounded_numbers(narration: str, allowed: set[str]) -> set[str]:
 def plan_narration_is_grounded(narration: str, plan: StudyPlan) -> bool:
     """True iff every number in the narration traces to the computed plan."""
     return not ungrounded_numbers(narration, allowed_plan_numbers(plan))
+
+
+# ── Citation guard (no fabricated module ids) ──────────────────────────────────
+
+
+def cited_refs(text: str) -> list[str]:
+    """Every bracketed citation in an answer, lowercased (e.g. ['cb-c01-m02'])."""
+    return [m.group(1).lower() for m in _CITATION.finditer(text)]
+
+
+def unknown_citations(text: str, allowed_refs: Iterable[str]) -> set[str]:
+    """Cited ids that aren't among the grounding sources (should be empty)."""
+    allowed = {r.lower() for r in allowed_refs}
+    return {ref for ref in cited_refs(text) if ref not in allowed}
+
+
+def strip_unknown_citations(text: str, sources: Iterable[GroundingSource]) -> str:
+    """Remove any bracketed id the answer invented that no source backs.
+
+    The grounded sources are the only legitimate citations; an LLM that fabricates
+    a [module-id] gets it scrubbed so the visible answer never cites a phantom.
+    """
+    allowed = {s.ref.lower() for s in sources}
+
+    def _drop(match: re.Match[str]) -> str:
+        return match.group(0) if match.group(1).lower() in allowed else ""
+
+    return _CITATION.sub(_drop, text)

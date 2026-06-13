@@ -10,12 +10,22 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import date
 
 from app.agent.contracts import PhaseName, PhaseStatus, PhaseTelemetry, Route, RouteDecision
 from app.agent.grounding import CourseGrounding, get_grounding
 from app.agent.llm import AllProvidersDown, Capability, ModelRouter
 from app.agent.recommend import vertical_from_text
+from app.agent.schedule_edit import parse_adjustment, parse_pace
 from app.config import Settings, get_settings
+
+# A bare affirmation ("yes", "sure", "go ahead") only means something in context:
+# it inherits the action the assistant just proposed (e.g. a pending pace question).
+_AFFIRM_RE = re.compile(
+    r"^\s*(yes|yep|yeah|yup|sure|ok(ay)?|please\s+do|go\s+ahead|do\s+it|sounds?\s+good|"
+    r"that\s+works|let'?s\s+do\s+it|absolutely|definitely|please)\b[\s.!]*$",
+    re.IGNORECASE,
+)
 
 # "Help me choose / explore courses" signals → Recommend (profile- or topic-scoped).
 _RECOMMEND_RE = re.compile(
@@ -32,18 +42,15 @@ _RECOMMEND_RE = re.compile(
     r"|recommend\s+(me\s+)?(a|some|something)",
     re.IGNORECASE,
 )
-# "Build / adjust my study plan / schedule" → Study Plan.
+# "Build / adjust my study plan / schedule" → Study Plan. Schedule edits (start
+# later, skip a day, skip a week) and pace changes are detected separately by
+# ``parse_adjustment`` / ``parse_pace`` so this only matches explicit plan asks
+# (it must NOT fire on "where do I begin in Azure").
 _PLAN_RE = re.compile(
     r"\b(study\s+plan|study\s+schedule|learning\s+plan|prep\s+plan|prepare\s+plan)"
-    r"|\b(build|make|create|give|generate|draft|rebuild|redo|adjust|change|update)\b.{0,20}\b(plan|schedule)"
+    r"|\b(build|make|create|give|generate|draft|rebuild|redo|adjust|reschedule)\b.{0,20}\b(plan|schedule)"
     r"|\b(plan|schedule)\b.{0,20}\b(my|the)\s+(study|learning|prep|week)"
-    r"|how\s+should\s+i\s+(study|prepare|schedule)|when\s+do\s+i\s+study"
-    # Schedule edits (start later, skip a day, move things) imply a re-plan.
-    r"|\b(start|begin)\b.{0,20}\b(after|post|from|on|in|next|later)\b"
-    r"|\b(move|push|shift|bump)\b.{0,20}\b(plan|schedule|study|start|later|back|forward)\b"
-    r"|\b(skip|avoid|don'?t\s+use|free\s+up|can'?t\s+(do|study))\b.{0,20}"
-    r"\b(mon|tue|wed|thu|fri|sat|sun|monday|tuesday|wednesday|thursday|friday|"
-    r"saturday|sunday|this\s+week|that\s+hour|the\s+\d)",
+    r"|how\s+should\s+i\s+(study|prepare|schedule)|when\s+do\s+i\s+study",
     re.IGNORECASE,
 )
 # Warm onboarding / small talk → Greeting.
@@ -53,11 +60,17 @@ _GREETING_INTENT_RE = re.compile(
     r"what\s+do\s+you\s+do|help\b|get\s+started)\b",
     re.IGNORECASE,
 )
-# "Ask about my own work" signals → Work IQ.
-_WORK_RE = re.compile(
-    r"\b(my\s+(schedule|calendar|week|day|meetings?|workload|capacity|hours|time)"
-    r"|when\s+should\s+i\s+study|how\s+much\s+time|free\s+time|focus\s+time|on[\s-]?call"
-    r"|too\s+busy|fit\s+(this|it|study)\s+(in|around)|this\s+week\b)",
+# Strong "about my own work" signals → Work IQ even when a course is named.
+_WORK_STRONG_RE = re.compile(
+    r"\bmy\s+(schedule|calendar|week|day|meetings?|workload|capacity|hours|availability)"
+    r"|\b(on[\s-]?call|too\s+busy|overloaded|swamped|collaboration\s+load)\b"
+    r"|\bfree\s+time\b|\bfocus\s+time\b|\bmeeting\s+load\b",
+    re.IGNORECASE,
+)
+# Weaker timing signals → Work IQ only if the turn isn't really about course content.
+_WORK_TIMING_RE = re.compile(
+    r"when\s+should\s+i\s+study|how\s+much\s+time|fit\s+(this|it|study)\s+(in|around)"
+    r"|this\s+week\b",
     re.IGNORECASE,
 )
 # Clearly-not-our-domain topics → general with a stronger nudge.
@@ -92,19 +105,52 @@ _ROUTE_SYSTEM = (
 )
 
 
-def classify(text: str, *, grounding: CourseGrounding | None = None) -> RouteDecision:
+def is_plan_intent(text: str) -> bool:
+    """True for any study-plan ask: a build request, a schedule edit, or a pace change.
+
+    Schedule edits ("start after June 30", "skip Mondays", "remove week 2") and
+    pace changes ("revert to a slower pace") are high-signal re-plan requests; the
+    LLM tends to misroute them to work_iq, so we detect them deterministically.
+    """
+    return bool(
+        _PLAN_RE.search(text)
+        or parse_adjustment(text, today=date.today()) is not None
+        or parse_pace(text) is not None
+    )
+
+
+def _study_plan_decision() -> RouteDecision:
+    return RouteDecision(
+        route=Route.STUDY_PLAN,
+        reasoning="Study-plan request (build, schedule edit, or pace change) for the course.",
+        off_topic=0.0,
+        confidence=0.85,
+    )
+
+
+def classify(
+    text: str,
+    *,
+    grounding: CourseGrounding | None = None,
+    pending: str | None = None,
+) -> RouteDecision:
     """Deterministic intent classifier (offline path + fallback for the online path).
 
-    Priority: plan → recommend → greeting → work → course-content → off-topic → general.
-    Plan outranks recommend so "build me a study plan" plans for the chosen course.
+    Priority: affirmation→pending → plan/edit/pace → recommend → greeting →
+    strong-work → course-content → weak-work-timing → off-topic → general.
+    Course content outranks weak timing words so a question that merely says "how
+    much time" about a real topic still gets a grounded content answer.
     """
-    if _PLAN_RE.search(text):
+    # A bare "yes" only resolves against what the assistant just proposed.
+    if pending == "pace" and _AFFIRM_RE.search(text):
         return RouteDecision(
             route=Route.STUDY_PLAN,
-            reasoning="Asks for a study plan/schedule — build one for the chosen course.",
+            reasoning="Affirmation after a pace question — proceed to build the plan.",
             off_topic=0.0,
-            confidence=0.78,
+            confidence=0.8,
         )
+    if is_plan_intent(text):
+        return _study_plan_decision()
     if _RECOMMEND_RE.search(text):
         return RouteDecision(
             route=Route.RECOMMEND,
@@ -119,7 +165,7 @@ def classify(text: str, *, grounding: CourseGrounding | None = None) -> RouteDec
             off_topic=0.0,
             confidence=0.7,
         )
-    if _WORK_RE.search(text):
+    if _WORK_STRONG_RE.search(text):
         return RouteDecision(
             route=Route.WORK_IQ,
             reasoning="Mentions the learner's own schedule / workload.",
@@ -133,6 +179,13 @@ def classify(text: str, *, grounding: CourseGrounding | None = None) -> RouteDec
             reasoning="Names a course or topic in the catalog — answer + offer to start it.",
             off_topic=0.0,
             confidence=0.7,
+        )
+    if _WORK_TIMING_RE.search(text):
+        return RouteDecision(
+            route=Route.WORK_IQ,
+            reasoning="Asks about study timing / capacity in their week.",
+            off_topic=0.0,
+            confidence=0.65,
         )
     if _OFF_DOMAIN_RE.search(text):
         return RouteDecision(
@@ -162,36 +215,63 @@ def _telemetry(decision: RouteDecision, *, model: str | None, tier: int | None) 
     )
 
 
+def _history_messages(history: list[dict[str, str]] | None) -> list[dict[str, str]]:
+    """The last few turns as chat messages so the router can resolve follow-ups."""
+    if not history:
+        return []
+    recent = history[-4:]
+    return [
+        {"role": "assistant" if m.get("role") == "assistant" else "user", "content": m["content"]}
+        for m in recent
+        if m.get("content")
+    ]
+
+
 def route(
     text: str,
     *,
     router: ModelRouter | None = None,
     grounding: CourseGrounding | None = None,
+    history: list[dict[str, str]] | None = None,
+    pending: str | None = None,
     settings: Settings | None = None,
 ) -> tuple[RouteDecision, PhaseTelemetry]:
-    """Decide the route for a clean turn, with telemetry for the trace."""
+    """Decide the route for a clean turn, with telemetry for the trace.
+
+    ``history`` (recent turns) and ``pending`` (an action the last assistant turn
+    proposed, e.g. "pace") let the router resolve context-dependent follow-ups
+    like a bare "yes" instead of treating each message in isolation.
+    """
     settings = settings or get_settings()
     if settings.llm_offline:
-        decision = classify(text, grounding=grounding)
+        decision = classify(text, grounding=grounding, pending=pending)
         return decision, _telemetry(decision, model="heuristic", tier=None)
 
     router = router or ModelRouter(settings)
     try:
-        result = router.complete(
-            Capability.FAST,
-            [{"role": "system", "content": _ROUTE_SYSTEM}, {"role": "user", "content": text}],
-            json_mode=True,
-            max_tokens=120,
-        )
-        decision = _parse_decision(result.text, text, grounding)
+        messages = [
+            {"role": "system", "content": _ROUTE_SYSTEM},
+            *_history_messages(history),
+            {"role": "user", "content": text},
+        ]
+        result = router.complete(Capability.FAST, messages, json_mode=True, max_tokens=120)
+        decision = _parse_decision(result.text, text, grounding, pending=pending)
         return decision, _telemetry(decision, model=result.model, tier=result.tier)
     except AllProvidersDown:
-        decision = classify(text, grounding=grounding)
+        decision = classify(text, grounding=grounding, pending=pending)
         return decision, _telemetry(decision, model="heuristic (providers down)", tier=None)
 
 
-def _parse_decision(raw: str, text: str, grounding: CourseGrounding | None) -> RouteDecision:
+def _parse_decision(
+    raw: str, text: str, grounding: CourseGrounding | None, *, pending: str | None = None
+) -> RouteDecision:
     """Parse the model's JSON; correct it when it over-rejects an on-platform topic."""
+    # Deterministic, high-signal intents win over the LLM regardless of its call.
+    if pending == "pace" and _AFFIRM_RE.search(text):
+        return classify(text, grounding=grounding, pending=pending)
+    if is_plan_intent(text):
+        return _study_plan_decision()
+
     try:
         data = json.loads(raw)
         decision = RouteDecision(
@@ -201,25 +281,14 @@ def _parse_decision(raw: str, text: str, grounding: CourseGrounding | None) -> R
             confidence=float(data.get("confidence", 0.6)),
         )
     except (json.JSONDecodeError, KeyError, ValueError, TypeError):
-        return classify(text, grounding=grounding)
-
-    # Explicit plan / schedule-edit phrases ("build a plan", "start after June 30",
-    # "skip Mondays") are high-signal and deterministic; the LLM often misroutes
-    # them to work_iq or general, so the regex intent wins.
-    if _PLAN_RE.search(text):
-        return RouteDecision(
-            route=Route.STUDY_PLAN,
-            reasoning="Explicit study-plan or schedule-edit request.",
-            off_topic=0.0,
-            confidence=0.85,
-        )
+        return classify(text, grounding=grounding, pending=pending)
 
     # The LLM sometimes flags an on-platform learning topic (data science, AI, a
     # vertical) as off-topic and dumps it to GENERAL. Trust the grounded heuristic
     # over that: if the deterministic classifier finds a real on-platform route,
     # or the text names one of our tracks, use it instead of a bad nudge.
     if decision.route is Route.GENERAL and decision.off_topic >= 0.4:
-        heuristic = classify(text, grounding=grounding)
+        heuristic = classify(text, grounding=grounding, pending=pending)
         if heuristic.route is not Route.GENERAL:
             return heuristic
         if vertical_from_text(text) is not None:

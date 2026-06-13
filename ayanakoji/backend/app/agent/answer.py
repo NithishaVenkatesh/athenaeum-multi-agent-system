@@ -23,6 +23,7 @@ from datetime import date
 from app.agent.contracts import (
     CourseSuggestion,
     GroundingSource,
+    NewChatEvent,
     Pace,
     PaceRequestEvent,
     PhaseName,
@@ -35,8 +36,14 @@ from app.agent.contracts import (
     TakenCourse,
 )
 from app.agent.grounding import CourseGrounding, get_grounding
+from app.agent.guards import plan_narration_is_grounded, strip_unknown_citations
 from app.agent.llm import Capability, ModelRouter, StreamHandle
-from app.agent.recommend import recommend_courses, recommend_overview, vertical_from_text
+from app.agent.recommend import (
+    recommend_courses,
+    recommend_overview,
+    vertical_from_text,
+    verticals_from_text,
+)
 from app.agent.study_plan import build_study_plan
 from app.catalog.loader import get_course as get_catalog_course
 from app.config import Settings, get_settings
@@ -54,12 +61,23 @@ class AgentReply:
     suggestion: SuggestionEvent | None = None
     plan: StudyPlan | None = None
     pace_request: PaceRequestEvent | None = None
+    new_chat: NewChatEvent | None = None
 
 
 def _offline_stream(text: str) -> Iterator[str]:
     """Stream a fixed reply word-by-word so the offline path looks live."""
     for word in text.split(" "):
         yield word + " "
+
+
+def _collect(handle: StreamHandle) -> str:
+    """Drain a model stream to a single string so a grounding guard can run on it.
+
+    Grounded routes (foundry, study plan) buffer the full narration, validate it
+    against the deterministic sources, then re-stream the cleaned text. Correctness
+    beats live tokens where a fabricated citation or number would otherwise leak.
+    """
+    return "".join(handle.tokens).strip()
 
 
 def _answer_telemetry(
@@ -205,6 +223,10 @@ def answer_foundry(
     grounding = grounding or get_grounding()
     sources = grounding.search(text, catalog_id=catalog_id)
     course = grounding.suggest(text, catalog_id=catalog_id)
+    # Course-lock: never offer to start a DIFFERENT course in a chat that already
+    # has one. We still answer the content question; we just don't pitch a switch.
+    if catalog_id is not None and (course is None or course.catalog_id != catalog_id):
+        course = None
     suggestion = (
         SuggestionEvent(prompt="Want to start this course?", options=[course])
         if course is not None
@@ -244,6 +266,8 @@ def answer_foundry(
         [{"role": "system", "content": system}, {"role": "user", "content": text}],
         max_tokens=800,
     )
+    # Buffer + scrub any fabricated [module-id] the model invents (guard at runtime).
+    cleaned = strip_unknown_citations(_collect(handle), sources)
     return AgentReply(
         telemetry=_answer_telemetry(
             summary="Answered from approved course content",
@@ -253,7 +277,7 @@ def answer_foundry(
             model=handle.model,
             tier=handle.tier,
         ),
-        tokens=handle.tokens,
+        tokens=_offline_stream(cleaned),
         sources=sources,
         suggestion=suggestion,
     )
@@ -403,9 +427,18 @@ def _recommend_for(
     track; if it asks about the platform's breadth, show one course per track;
     otherwise fall back to the learner's profile.
     """
-    requested = vertical_from_text(text) if text else None
-    if requested is not None:
-        return recommend_courses(vertical=requested, target_cert="", taken=taken, k=3)
+    requested = verticals_from_text(text) if text else []
+    if requested:
+        # Span every track the learner named (e.g. "data and AI"), best first,
+        # de-duped, instead of collapsing a multi-topic ask to one guess.
+        merged: list[CourseSuggestion] = []
+        seen: set[str] = set()
+        for vert in requested[:2]:
+            for option in recommend_courses(vertical=vert, target_cert="", taken=taken, k=2):
+                if option.catalog_id not in seen:
+                    seen.add(option.catalog_id)
+                    merged.append(option)
+        return merged[:3]
     if text and _BREADTH_RE.search(text):
         return recommend_overview()
     if persona is None:
@@ -419,21 +452,53 @@ def _recommend_for(
     )
 
 
+def _locked_title(catalog_id: str | None) -> str | None:
+    """The display title of the course a chat is locked to, if any."""
+    if not catalog_id:
+        return None
+    course = get_catalog_course(catalog_id)
+    return course.title if course else catalog_id
+
+
 def answer_greeting(
     text: str,
     *,
     persona_id: str,
     taken: list[TakenCourse],
+    catalog_id: str | None = None,
     repo: WorkIQRepository | None = None,
     settings: Settings | None = None,
 ) -> AgentReply:
-    """Warm welcome that invites the learner to pick a course (offers a head start)."""
+    """Warm welcome that invites the learner to pick a course (offers a head start).
+
+    Course-lock: once a chat is linked to a course, the greeting welcomes the
+    learner back to THAT course and does not re-offer other courses to pick.
+    """
     settings = settings or get_settings()
     repo = repo or get_repository()
     persona = repo.get_persona(persona_id)
-    options = _recommend_for(persona, taken)
-
     who = f" {persona.codename}" if persona else ""
+
+    locked_title = _locked_title(catalog_id)
+    if locked_title is not None:
+        greeting = (
+            f"Hi{who}, welcome back. This chat is your workspace for {locked_title}. "
+            "Ask me anything about it, build or adjust your study plan, or open the Modules tab "
+            "to keep going. To explore a different course, start a new chat."
+        )
+        return AgentReply(
+            telemetry=_answer_telemetry(
+                summary="Welcomed the learner back to their course",
+                reasoning=f"Greeting in a chat already linked to {locked_title} (course-locked).",
+                route=Route.GREETING,
+                sources=[],
+                model="offline" if settings.llm_offline else None,
+                tier=None,
+            ),
+            tokens=_offline_stream(greeting),
+        )
+
+    options = _recommend_for(persona, taken)
     greeting = (
         f"Hi{who}, welcome to Athenaeum. I help you choose and prepare for an Azure "
         "certification course. Tell me a topic or cert you're aiming for, or say "
@@ -484,17 +549,50 @@ def _recommend_narration(
     return f"Here's what I'd suggest: {titles}. Pick one below to start preparing."
 
 
+def _course_locked_reply(locked_title: str, *, offline: bool) -> AgentReply:
+    """One course per chat: decline to suggest another, point to a fresh chat."""
+    message = (
+        f"This chat is set up for {locked_title}, so I keep it to that one course, your plan, "
+        "modules, and progress all stay in here. To explore or start a different course, open a "
+        "new chat and I'll recommend from there."
+    )
+    return AgentReply(
+        telemetry=_answer_telemetry(
+            summary="Held the chat to its course (one course per chat)",
+            reasoning=f"Chat is locked to {locked_title}; declined a cross-course suggestion.",
+            route=Route.RECOMMEND,
+            sources=[],
+            model="offline" if offline else None,
+            tier=None,
+        ),
+        tokens=_offline_stream(message),
+        new_chat=NewChatEvent(
+            prompt="Want a different course? Start a new chat to keep this one clean.",
+            current_title=locked_title,
+        ),
+    )
+
+
 def answer_recommend(
     text: str,
     *,
     persona_id: str,
     taken: list[TakenCourse],
+    catalog_id: str | None = None,
     router: ModelRouter | None = None,
     repo: WorkIQRepository | None = None,
     settings: Settings | None = None,
 ) -> AgentReply:
-    """Recommend course(s), honoring a requested topic over the profile default."""
+    """Recommend course(s), honoring a requested topic over the profile default.
+
+    Course-lock: if this chat already has a course, recommending another would
+    fork its plan/progress, so we decline and steer to a new chat instead.
+    """
     settings = settings or get_settings()
+    locked_title = _locked_title(catalog_id)
+    if locked_title is not None:
+        return _course_locked_reply(locked_title, offline=settings.llm_offline)
+
     repo = repo or get_repository()
     persona = repo.get_persona(persona_id)
     options = _recommend_for(persona, taken, text=text)
@@ -657,6 +755,7 @@ def answer_study_plan(
     pace: Pace | None = None,
     start_date: date | None = None,
     exclude_days: frozenset[str] = frozenset(),
+    skip_weeks: frozenset[int] = frozenset(),
     router: ModelRouter | None = None,
     repo: WorkIQRepository | None = None,
     settings: Settings | None = None,
@@ -701,6 +800,7 @@ def answer_study_plan(
         pace=pace,
         start_date=start_date or date.today(),
         exclude_days=exclude_days,
+        skip_weeks=skip_weeks,
         settings=settings,
     )
     # A schedule edit can remove every study slot; say so instead of an empty plan.
@@ -767,6 +867,11 @@ def answer_study_plan(
         [{"role": "system", "content": system}, {"role": "user", "content": text}],
         max_tokens=500,
     )
+    # Buffer the narration and number-guard it: if the model invented any figure not
+    # in the deterministic plan, fall back to the provably-grounded offline narration.
+    narration = _collect(handle)
+    if not narration or not plan_narration_is_grounded(narration, plan):
+        narration = _plan_offline_narration(plan)
     return AgentReply(
         telemetry=_answer_telemetry(
             summary="Built a calendar-grounded study plan",
@@ -776,6 +881,6 @@ def answer_study_plan(
             model=handle.model,
             tier=handle.tier,
         ),
-        tokens=handle.tokens,
+        tokens=_offline_stream(narration),
         plan=plan,
     )

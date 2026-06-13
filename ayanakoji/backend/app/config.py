@@ -87,6 +87,8 @@ class Settings(BaseSettings):
     groq_model_guard: str = "meta-llama/llama-prompt-guard-2-86m"
     # Block when the guard's jailbreak probability is at/above this.
     guard_block_threshold: float = 0.8
+    # Per-call model timeout (seconds) so a hung provider can't stall a whole turn.
+    llm_timeout_seconds: float = 30.0
 
     @property
     def cors_origin_list(self) -> list[str]:

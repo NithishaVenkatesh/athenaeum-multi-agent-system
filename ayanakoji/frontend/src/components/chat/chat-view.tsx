@@ -10,7 +10,8 @@
  * transcript; the live trace and suggestion live in this component's state.
  */
 
-import { ArrowDown } from "lucide-react";
+import { ArrowDown, MessageSquarePlus } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -28,6 +29,7 @@ import {
   getCourse,
   setPace,
   streamMessage,
+  type NewChat,
   type Pace,
   type PaceRequest,
   type PhaseTelemetry,
@@ -52,6 +54,7 @@ interface AssistantTurn {
   plan: StudyPlan | null;
   paceRequest: PaceRequest | null;
   paceChosen: Pace | null;
+  newChat: NewChat | null;
   error: string | null;
   streaming: boolean;
 }
@@ -69,6 +72,7 @@ function emptyAssistantTurn(): AssistantTurn {
     plan: null,
     paceRequest: null,
     paceChosen: null,
+    newChat: null,
     error: null,
     streaming: true,
   };
@@ -83,6 +87,21 @@ function updateAssistant(
   const turn = next[index];
   if (turn && turn.kind === "assistant") next[index] = patch(turn);
   return next;
+}
+
+/** One course per chat: when locked, offer a fresh chat to explore another course. */
+function NewChatNotice({ newChat }: { newChat: NewChat }) {
+  return (
+    <div className="border-brand/30 bg-brand/5 flex items-center justify-between gap-3 rounded-2xl border px-4 py-3">
+      <p className="text-muted-foreground text-xs text-pretty">{newChat.prompt}</p>
+      <Link
+        href="/chat"
+        className="border-input bg-background hover:bg-accent hover:text-accent-foreground inline-flex shrink-0 items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors"
+      >
+        <MessageSquarePlus className="size-3.5" /> Start a new chat
+      </Link>
+    </div>
+  );
 }
 
 export function ChatView({ courseId }: { courseId?: string }) {
@@ -134,6 +153,7 @@ export function ChatView({ courseId }: { courseId?: string }) {
                   plan: m.meta?.plan ?? null,
                   paceRequest: m.meta?.pace_request ?? null,
                   paceChosen: null,
+                  newChat: m.meta?.new_chat ?? null,
                   error: null,
                   streaming: false,
                 },
@@ -187,6 +207,7 @@ export function ChatView({ courseId }: { courseId?: string }) {
         onSuggestion: (suggestion) => patchLastAssistant((t) => ({ ...t, suggestion })),
         onPlan: (plan) => patchLastAssistant((t) => ({ ...t, plan })),
         onPaceRequest: (paceRequest) => patchLastAssistant((t) => ({ ...t, paceRequest })),
+        onNewChat: (newChat) => patchLastAssistant((t) => ({ ...t, newChat })),
         onBlocked: (reason) => {
           toast.error("Message blocked", { description: reason });
           patchLastAssistant((t) => ({ ...t, text: reason }));
@@ -323,6 +344,7 @@ export function ChatView({ courseId }: { courseId?: string }) {
                   />
                 )}
                 {turn.plan && <StudyPlanCard plan={turn.plan} courseId={activeCourseId} />}
+                {turn.newChat && <NewChatNotice newChat={turn.newChat} />}
               </div>
             ),
           )

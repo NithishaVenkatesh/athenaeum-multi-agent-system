@@ -36,6 +36,21 @@ _TOP_K = 4
 _MIN_SCORE = 1
 # A source must score at least this fraction of the top match to count as grounding.
 _RELATIVE_CUTOFF = 0.5
+# Two-letter topics carry real signal in this domain; keep them despite the length floor.
+_KEEP_SHORT = frozenset({"ai", "ml", "bi", "db", "iam", "vm", "k8s", "ci", "cd"})
+# Synonyms so a learner's phrasing reaches the indexed wording (serverless ↔ functions).
+_SYNONYMS: dict[str, tuple[str, ...]] = {
+    "serverless": ("functions", "function"),
+    "function": ("functions",),
+    "container": ("containers", "kubernetes", "aks"),
+    "auth": ("authentication", "identity"),
+    "login": ("authentication", "identity"),
+    "ml": ("machine", "learning"),
+    "ai": ("cognitive", "openai", "intelligence"),
+    "pipeline": ("pipelines",),
+    "db": ("database", "cosmos", "sql"),
+    "warehouse": ("synapse", "fabric"),
+}
 
 
 @dataclass(frozen=True)
@@ -54,7 +69,19 @@ class GroundingDoc:
 
 
 def _tokenize(text: str) -> list[str]:
-    return [t for t in _TOKEN_RE.findall(text.lower()) if t not in _STOPWORDS and len(t) > 2]
+    return [
+        t
+        for t in _TOKEN_RE.findall(text.lower())
+        if t not in _STOPWORDS and (len(t) > 2 or t in _KEEP_SHORT)
+    ]
+
+
+def _expand(terms: tuple[str, ...]) -> tuple[str, ...]:
+    """Add domain synonyms so a learner's wording reaches the indexed terms."""
+    out = list(terms)
+    for term in terms:
+        out.extend(_SYNONYMS.get(term, ()))
+    return tuple(dict.fromkeys(out))
 
 
 @lru_cache(maxsize=8)
@@ -92,18 +119,23 @@ def _load_docs(catalog_path: str) -> tuple[GroundingDoc, ...]:
     return tuple(docs)
 
 
-def _score(query_terms: tuple[str, ...], doc: GroundingDoc) -> int:
-    """Keyword-overlap score; course title and cert matches weigh extra."""
+def _score(query_terms: tuple[str, ...], doc: GroundingDoc, cert_blob: str) -> int:
+    """Keyword-overlap score; course title and cert matches weigh extra.
+
+    ``cert_blob`` is the query with non-alphanumerics stripped, so a cert typed
+    with a hyphen ("DP-203") still matches the catalog cert ("dp203").
+    """
     if not query_terms:
         return 0
     score = 0
     title_terms = set(_tokenize(doc.course_title))
+    cert_key = doc.cert.lower().replace("-", "").replace(" ", "") if doc.cert else ""
     for term in query_terms:
         score += doc.text.count(term)
         if term in title_terms:
             score += 3
-        if doc.cert and term == doc.cert.lower().replace("-", ""):
-            score += 4
+    if cert_key and cert_key in cert_blob:
+        score += 4
     return score
 
 
@@ -120,12 +152,16 @@ class CourseGrounding:
 
     @lru_cache(maxsize=256)  # noqa: B019 — bounded, instance-scoped query cache (the IQ cache)
     def _ranked(self, query: str, catalog_id: str | None) -> tuple[GroundingDoc, ...]:
-        terms = tuple(dict.fromkeys(_tokenize(query)))  # de-dupe, keep order
+        terms = _expand(tuple(dict.fromkeys(_tokenize(query))))  # de-dupe + synonyms
+        cert_blob = re.sub(r"[^a-z0-9]", "", query.lower())
         pool = self._docs()
         if catalog_id:
-            scoped = tuple(d for d in pool if d.course_id == catalog_id)
-            pool = scoped or pool
-        scored = sorted(((d, _score(terms, d)) for d in pool), key=lambda ds: ds[1], reverse=True)
+            # Scoped to one course: stay scoped (never silently widen to the whole
+            # catalog and cite another course's modules in this one's answer).
+            pool = tuple(d for d in pool if d.course_id == catalog_id)
+        scored = sorted(
+            ((d, _score(terms, d, cert_blob)) for d in pool), key=lambda ds: ds[1], reverse=True
+        )
         kept = [(d, s) for d, s in scored if s >= _MIN_SCORE]
         if not kept:
             return ()

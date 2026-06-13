@@ -62,12 +62,19 @@ export interface CatalogCourse {
   primary_cert: string;
 }
 
+/** A "one course per chat" steer: this chat is locked, open a new one to switch. */
+export interface NewChat {
+  prompt: string;
+  current_title: string | null;
+}
+
 /** Persisted assistant-turn artifacts, so the trace/choices/plan survive reload. */
 export interface MessageMeta {
   phases?: PhaseTelemetry[];
   suggestion?: Suggestion | null;
   plan?: StudyPlan | null;
   pace_request?: PaceRequest | null;
+  new_chat?: NewChat | null;
 }
 
 export interface ChatMessage {
@@ -287,6 +294,7 @@ export type PipelineEvent =
   | { type: "suggestion"; prompt: string; options: CourseSuggestion[] }
   | { type: "plan"; plan: StudyPlan }
   | { type: "pace_request"; catalog_id: string; title: string; prompt: string; options: Pace[] }
+  | { type: "new_chat"; prompt: string; current_title: string | null }
   | { type: "blocked"; reason: string }
   | { type: "error"; message: string }
   | { type: "done"; route: Route | null; suggested: boolean };
@@ -297,6 +305,7 @@ export interface StreamHandlers {
   onSuggestion?: (suggestion: Suggestion) => void;
   onPlan?: (plan: StudyPlan) => void;
   onPaceRequest?: (request: PaceRequest) => void;
+  onNewChat?: (newChat: NewChat) => void;
   onBlocked?: (reason: string) => void;
   onError?: (message: string) => void;
   onDone?: (info: { route: Route | null; suggested: boolean }) => void;
@@ -370,6 +379,9 @@ function dispatchEvent(event: PipelineEvent, handlers: StreamHandlers): void {
         prompt: event.prompt,
         options: event.options,
       });
+      break;
+    case "new_chat":
+      handlers.onNewChat?.({ prompt: event.prompt, current_title: event.current_title });
       break;
     case "blocked":
       handlers.onBlocked?.(event.reason);

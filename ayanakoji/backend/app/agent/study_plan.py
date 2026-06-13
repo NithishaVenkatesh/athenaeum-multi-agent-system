@@ -197,16 +197,28 @@ def _capacity_reason(slots: list[WeeklySlot], weekly_hours: float) -> str:
     )
 
 
+def _next_open_week(week: int, skip_weeks: frozenset[int]) -> int:
+    """Advance past any plan weeks the learner is occupied in (a schedule edit)."""
+    while week in skip_weeks:
+        week += 1
+    return week
+
+
 def schedule_modules(
     estimates: list[tuple[ModuleInfo, int]],
     slots: list[WeeklySlot],
     start_date: date,
+    skip_weeks: frozenset[int] = frozenset(),
 ) -> list[ModulePlan]:
-    """Fill the repeating weekly slots with modules in order; deadline per module."""
+    """Fill the repeating weekly slots with modules in order; deadline per module.
+
+    ``skip_weeks`` are plan-week numbers the learner said they're occupied in;
+    those weeks are left empty and the work flows into the next available week.
+    """
     if not slots:
         return []
     plans: list[ModulePlan] = []
-    week = 1
+    week = _next_open_week(1, skip_weeks)
     slot_idx = 0
     cursor = slots[0].start  # position within the current slot
 
@@ -221,7 +233,7 @@ def schedule_modules(
                 slot_idx += 1
                 if slot_idx >= len(slots):  # next repeating week
                     slot_idx = 0
-                    week += 1
+                    week = _next_open_week(week + 1, skip_weeks)
                 cursor = slots[slot_idx].start
                 continue
             take = min(remaining, avail)
@@ -265,6 +277,7 @@ def build_study_plan(
     pace: Pace = Pace.NORMAL,
     start_date: date,
     exclude_days: frozenset[str] = frozenset(),
+    skip_weeks: frozenset[int] = frozenset(),
     settings: Settings | None = None,
 ) -> StudyPlan | None:
     """Assemble the calendar-grounded, module-level plan, or None if no modules."""
@@ -281,7 +294,7 @@ def build_study_plan(
     weekly_minutes = sum(s.minutes for s in slots)
     weekly_hours = round(weekly_minutes / 60, 1) if weekly_minutes else 0.0
 
-    module_plans = schedule_modules(estimates, slots, start_date)
+    module_plans = schedule_modules(estimates, slots, start_date, skip_weeks)
     weeks = max((b.week for m in module_plans for b in m.scheduled), default=0)
 
     sessions = [

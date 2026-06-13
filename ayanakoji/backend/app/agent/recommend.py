@@ -24,6 +24,8 @@ _DEFAULT_K = 3
 # (respecting what the learner ASKED for, not just their profile default).
 _VERTICAL_KEYWORDS: dict[str, tuple[str, ...]] = {
     "data-engineering": (
+        " data ",  # space-padded so it matches the standalone word, not "database"
+        " analytics ",
         "data engineering",
         "data science",
         "data analytics",
@@ -83,19 +85,25 @@ _VERTICAL_KEYWORDS: dict[str, tuple[str, ...]] = {
 }
 
 
-def vertical_from_text(text: str) -> str | None:
-    """The catalog vertical a learner's message is about, or None if unspecific.
+def verticals_from_text(text: str) -> list[str]:
+    """Every catalog vertical a message is about, best match first (may be empty).
 
-    Lets a recommendation honor an explicitly requested topic (e.g. "data
-    science") over the learner's profile-default track.
+    A multi-topic ask ("data and AI") names more than one track; returning all of
+    them lets the recommender span them instead of collapsing to a single guess.
     """
     lowered = f" {text.lower()} "
     scores = {
         vertical: sum(1 for kw in keywords if kw in lowered)
         for vertical, keywords in _VERTICAL_KEYWORDS.items()
     }
-    best = max(scores, key=lambda v: scores[v])
-    return best if scores[best] > 0 else None
+    hits = [(v, s) for v, s in scores.items() if s > 0]
+    return [v for v, _ in sorted(hits, key=lambda vs: vs[1], reverse=True)]
+
+
+def vertical_from_text(text: str) -> str | None:
+    """The single best catalog vertical a message is about, or None if unspecific."""
+    ranked = verticals_from_text(text)
+    return ranked[0] if ranked else None
 
 
 @dataclass(frozen=True)
@@ -206,6 +214,10 @@ def recommend_courses(
 
     taken_ids = {t.catalog_id for t in taken}
     completed_ids = {t.catalog_id for t in taken if t.status < 0}
+    # A prereq is "satisfied" once it's passed OR already enrolled in. Until the
+    # assessment/pass loop exists nothing is ever status<0, so keying eligibility
+    # only on "passed" would freeze the ladder; enrolled prereqs unlock the next.
+    satisfied_ids = completed_ids | taken_ids
 
     # Pool spans the current vertical + the target-cert vertical (priority-ordered).
     target_vertical = _vertical_for_cert(path, target_cert)
@@ -223,7 +235,7 @@ def recommend_courses(
         suffix = f" for a {role_title}" if role_title else ""
         return f"Next step in the {n.vertical_title} track{suffix}."
 
-    eligible = [n for n in pool if all(p in completed_ids for p in n.prereq_course_ids)]
+    eligible = [n for n in pool if all(p in satisfied_ids for p in n.prereq_course_ids)]
     if eligible:
         ranked = sorted(eligible, key=rank_key)
         return [_to_suggestion(n, next_step_reason(n)) for n in ranked[:k]]

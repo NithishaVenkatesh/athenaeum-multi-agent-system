@@ -237,6 +237,19 @@ class PaceRequestEvent(BaseModel):
     options: list[Pace] = Field(default_factory=lambda: [Pace.SLOWER, Pace.NORMAL, Pace.FASTER])
 
 
+class NewChatEvent(BaseModel):
+    """This chat is locked to its course; steer the learner to open a new chat.
+
+    Emitted when a learner asks to switch / pick another course in a chat that
+    already has one. The frontend renders the prompt with a 'Start a new chat'
+    button so one chat stays one course (clean plan + progress per chat).
+    """
+
+    type: Literal["new_chat"] = "new_chat"
+    prompt: str = Field(description="User-facing line explaining the one-course-per-chat rule")
+    current_title: str | None = Field(default=None, description="The course this chat is locked to")
+
+
 class DoneEvent(BaseModel):
     type: Literal["done"] = "done"
     route: Route | None = None
@@ -249,6 +262,7 @@ PipelineEvent = (
     | SuggestionEvent
     | PlanEvent
     | PaceRequestEvent
+    | NewChatEvent
     | BlockedEvent
     | ErrorEvent
     | DoneEvent

@@ -19,7 +19,7 @@ from sqlmodel import Session
 
 from app.agent.contracts import Pace, PlanEvent, TakenCourse, TokenEvent
 from app.agent.orchestrator import run_pipeline
-from app.agent.schedule_edit import parse_adjustment
+from app.agent.schedule_edit import parse_adjustment, parse_pace
 from app.agent.state import derive_course_state
 from app.catalog.content import get_module_content
 from app.catalog.loader import get_course as get_catalog_course
@@ -158,8 +158,11 @@ def accept_course(course_id: str, body: AcceptCourse, session: SessionDep) -> Co
         raise HTTPException(
             status_code=422, detail=f"'{body.catalog_id}' is not an Athenaeum course id"
         )
+    # Rename the chat to the course once picked, so the sidebar reads as the course.
+    linked = get_catalog_course(body.catalog_id)
     course = repo.update(
         course,
+        chat_name=linked.title if linked else None,
         catalog_id=body.catalog_id,
         set_catalog=True,
         status=STATUS_FIRST_ATTEMPT,
@@ -177,8 +180,30 @@ def _apply_schedule_edit(repo: CourseRepository, course: Course, text: str) -> C
         return course
     course.plan_start = adj.start_date.isoformat() if adj.start_date else course.plan_start
     course.plan_excludes = sorted(set(course.plan_excludes) | adj.exclude_days)
+    course.plan_skip_weeks = sorted(set(course.plan_skip_weeks) | adj.skip_weeks)
     repo.save(course)
     return course
+
+
+def _conversation_context(course: Course) -> tuple[list[dict[str, str]], str | None]:
+    """Recent turns + what the last assistant turn proposed (for follow-up routing).
+
+    ``pending`` is "pace" when the last assistant turn asked the pace, so a bare
+    "yes" resolves to building the plan instead of being read as a new greeting.
+    """
+    history = [
+        {"role": str(m.get("role", "")), "content": str(m.get("content", ""))}
+        for m in course.messages
+        if m.get("content")
+    ]
+    pending: str | None = None
+    for message in reversed(course.messages):
+        if message.get("role") == "assistant":
+            meta = message.get("meta") or {}
+            if meta.get("pace_request"):
+                pending = "pace"
+            break
+    return history, pending
 
 
 def _sse(payload: dict[str, object]) -> str:
@@ -227,14 +252,25 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
                 return
 
             taken = _taken_courses(stream_repo, current.persona_id, exclude_id=current.id)
+            # A pace change in the message ("revert to a slower pace") updates the
+            # course pace before planning, so the re-plan honors it.
+            requested_pace = parse_pace(body.content)
+            if requested_pace is not None and current.catalog_id:
+                current.pace = requested_pace.value
+                stream_repo.save(current)
             pace = Pace(current.pace) if current.pace else None
             # Apply any natural-language schedule edit ("start after June 30",
-            # "skip Mondays") and persist it so it sticks across re-plans.
+            # "skip Mondays", "remove week 2") and persist it across re-plans.
             current = _apply_schedule_edit(stream_repo, current, body.content)
             start_date = (
                 date.fromisoformat(current.plan_start) if current.plan_start else date.today()
             )
             exclude_days = frozenset(current.plan_excludes)
+            skip_weeks = frozenset(current.plan_skip_weeks)
+            # Recent turns + the pending action (e.g. a pace question) for follow-ups
+            # like a bare "yes". The trailing turn is the current message itself.
+            history, pending = _conversation_context(current)
+            history = history[:-1] if history else []
             existing_modules = stream_repo.list_modules(current.id)
             course_state = derive_course_state(
                 catalog_id=current.catalog_id,
@@ -250,6 +286,7 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
             meta_suggestion: dict[str, object] | None = None
             meta_plan: dict[str, object] | None = None
             meta_pace: dict[str, object] | None = None
+            meta_new_chat: dict[str, object] | None = None
             for event in run_pipeline(
                 body.content,
                 persona_id=current.persona_id,
@@ -258,7 +295,10 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
                 pace=pace,
                 start_date=start_date,
                 exclude_days=exclude_days,
+                skip_weeks=skip_weeks,
                 course_state=course_state,
+                history=history or None,
+                pending=pending,
             ):
                 payload = event.model_dump(mode="json")
                 if isinstance(event, TokenEvent):
@@ -272,6 +312,8 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
                     meta_suggestion = {"prompt": payload["prompt"], "options": payload["options"]}
                 elif event.type == "pace_request":
                     meta_pace = payload
+                elif event.type == "new_chat":
+                    meta_new_chat = payload
                 yield _sse(payload)
                 # Terminal, non-token messages become the persisted transcript text.
                 if event.type == "blocked":
@@ -288,6 +330,7 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
                     "suggestion": meta_suggestion,
                     "plan": meta_plan,
                     "pace_request": meta_pace,
+                    "new_chat": meta_new_chat,
                 }
                 stream_repo.append_message(current, role="assistant", content=answer, meta=meta)
 

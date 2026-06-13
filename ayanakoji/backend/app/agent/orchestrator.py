@@ -54,6 +54,16 @@ from app.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
+# Em dashes are banned in user-facing copy (a standing product rule). The model
+# prompts ask for none, but we enforce it on the stream so one can never slip out.
+_EM_DASHES = str.maketrans({"—": ", ", "–": "-", "―": ", "})
+
+
+def _no_em_dashes(tokens: Iterator[str]) -> Iterator[str]:
+    """Strip em/en dashes from a token stream, enforcing the no-em-dash rule."""
+    for token in tokens:
+        yield token.translate(_EM_DASHES)
+
 _BLOCKED_MESSAGE = (
     "That message looks like an attempt to override how I work, so I can't act on it. "
     "I'm here to help with Azure certifications and your enterprise learning, ask me about a "
@@ -75,16 +85,24 @@ def _dispatch(
     pace: Pace | None,
     start_date: date | None,
     exclude_days: frozenset[str],
+    skip_weeks: frozenset[int],
     router: ModelRouter | None,
     grounding: CourseGrounding,
     settings: Settings,
 ) -> AgentReply:
     """Branch to the answer agent for the chosen route (opens the stream)."""
     if decision.route is Route.GREETING:
-        return answer_greeting(text, persona_id=persona_id, taken=taken, settings=settings)
+        return answer_greeting(
+            text, persona_id=persona_id, taken=taken, catalog_id=catalog_id, settings=settings
+        )
     if decision.route is Route.RECOMMEND:
         return answer_recommend(
-            text, persona_id=persona_id, taken=taken, router=router, settings=settings
+            text,
+            persona_id=persona_id,
+            taken=taken,
+            catalog_id=catalog_id,
+            router=router,
+            settings=settings,
         )
     if decision.route is Route.STUDY_PLAN:
         return answer_study_plan(
@@ -95,6 +113,7 @@ def _dispatch(
             pace=pace,
             start_date=start_date,
             exclude_days=exclude_days,
+            skip_weeks=skip_weeks,
             router=router,
             settings=settings,
         )
@@ -116,12 +135,19 @@ def run_pipeline(
     pace: Pace | None = None,
     start_date: date | None = None,
     exclude_days: frozenset[str] = frozenset(),
+    skip_weeks: frozenset[int] = frozenset(),
     course_state: CourseState | None = None,
+    history: list[dict[str, str]] | None = None,
+    pending: str | None = None,
     router: ModelRouter | None = None,
     grounding: CourseGrounding | None = None,
     settings: Settings | None = None,
 ) -> Iterator[PipelineEvent]:
-    """Run one turn through the pipeline, yielding events for the SSE stream."""
+    """Run one turn through the pipeline, yielding events for the SSE stream.
+
+    ``history`` (recent turns) and ``pending`` (the action the last assistant turn
+    proposed) let the router resolve follow-ups like a bare "yes" in context.
+    """
     settings = settings or get_settings()
     grounding = grounding or get_grounding()
     taken = taken or []
@@ -130,7 +156,7 @@ def run_pipeline(
         router = ModelRouter(settings)
 
     # ── Node 1: injection gate (reject → exit) ─────────────────────────────────
-    verdict, gate_tel = screen(text, router=router, settings=settings)
+    verdict, gate_tel = screen(text, router=router, history=history, settings=settings)
     yield PhaseEvent(phase=gate_tel)
     if verdict.blocked:
         yield BlockedEvent(reason=_BLOCKED_MESSAGE)
@@ -138,7 +164,14 @@ def run_pipeline(
         return
 
     # ── Node 2: router (state-conditioned; the graph branches on course state) ──
-    decision, route_tel = route(text, router=router, grounding=grounding, settings=settings)
+    decision, route_tel = route(
+        text,
+        router=router,
+        grounding=grounding,
+        history=history,
+        pending=pending,
+        settings=settings,
+    )
     if course_state is not None:
         note = transition_note(course_state, decision.route)
         route_tel = route_tel.model_copy(
@@ -157,6 +190,7 @@ def run_pipeline(
             pace=pace,
             start_date=start_date,
             exclude_days=exclude_days,
+            skip_weeks=skip_weeks,
             router=router,
             grounding=grounding,
             settings=settings,
@@ -169,9 +203,9 @@ def run_pipeline(
 
     yield PhaseEvent(phase=reply.telemetry)
 
-    # ── Stream the answer tokens (mid-stream break → explicit error) ───────────
+    # ── Stream the answer tokens (em-dash-free; mid-stream break → explicit error) ─
     try:
-        for token in reply.tokens:
+        for token in _no_em_dashes(reply.tokens):
             yield TokenEvent(token=token)
     except Exception as exc:  # noqa: BLE001, surface, never swallow, a stream break
         logger.warning("answer stream broke: %s", exc)
@@ -190,5 +224,9 @@ def run_pipeline(
     # ── The course-selection tool (1+ choosable courses) ───────────────────────
     if reply.suggestion is not None:
         yield reply.suggestion
+
+    # ── Course-lock: steer a "switch course" ask to a fresh chat ───────────────
+    if reply.new_chat is not None:
+        yield reply.new_chat
 
     yield DoneEvent(route=decision.route, suggested=reply.suggestion is not None)

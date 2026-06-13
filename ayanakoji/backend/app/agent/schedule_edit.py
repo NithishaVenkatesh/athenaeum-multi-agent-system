@@ -9,8 +9,10 @@ re-plan respects it.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
+
+from app.agent.contracts import Pace
 
 _MONTHS = {
     "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3,
@@ -51,6 +53,44 @@ _EXCLUDE = re.compile(
     re.IGNORECASE,
 )
 
+# "I'm occupied / busy / away in week 2" → drop that plan week, repacking later.
+_BUSY = (
+    r"(skip|avoid|remove|free\s+up|busy|occupied|unavailable|can'?t|cannot|drop|off|away|out|no)"
+)
+_SKIP_WEEK = re.compile(
+    rf"\b{_BUSY}\b[^.]{{0,30}}?\bweeks?\s+(\d+)\b"
+    rf"|\bweeks?\s+(\d+)\b[^.]{{0,30}}?\b{_BUSY}\b",
+    re.IGNORECASE,
+)
+
+# Speed adjectives, only honored as a pace change when clearly *about* the pace.
+_PACE_SLOWER = (" slower", " slow it down", " ease up", " lighter", " more relaxed",
+                " spread it out", " less intensive", " gentler", " take it slow")  # fmt: skip
+_PACE_FASTER = (" faster", " speed it up", " more intensive", " intensive", " quicker",
+                " pick up the pace", " accelerate", " ramp it up")  # fmt: skip
+_PACE_NORMAL = (" normal pace", " balanced pace", " standard pace", " regular pace",
+                " moderate pace", " back to normal")  # fmt: skip
+# A cue that the message is steering the plan's pace (vs. describing a course topic).
+_PACE_CUES = (" pace", " make it", " go ", " revert", " switch to", " change to",
+              " set it to", " keep it", " dial it", " move to")  # fmt: skip
+
+
+def parse_pace(text: str) -> Pace | None:
+    """A requested pace change (slower|normal|faster), or None if the text isn't one.
+
+    Requires a steering cue (the word "pace" or a verb like "make it / revert")
+    so a topic mention ("an intensive security course") is not read as a pace edit.
+    """
+    t = f" {text.lower()} "
+    has_cue = any(cue in t for cue in _PACE_CUES)
+    if any(p in t for p in _PACE_NORMAL):
+        return Pace.NORMAL
+    if has_cue and any(p in t for p in _PACE_SLOWER):
+        return Pace.SLOWER
+    if has_cue and any(p in t for p in _PACE_FASTER):
+        return Pace.FASTER
+    return None
+
 
 @dataclass(frozen=True)
 class ScheduleAdjustment:
@@ -59,6 +99,7 @@ class ScheduleAdjustment:
     start_date: date | None
     exclude_days: frozenset[str]
     note: str
+    skip_weeks: frozenset[int] = field(default_factory=frozenset)
 
 
 def _resolve_month_day(month: int, day: int, today: date) -> date | None:
@@ -110,15 +151,33 @@ def _parse_excludes(text: str) -> frozenset[str]:
     return frozenset(_WEEKDAYS[m.group(2).lower()] for m in _EXCLUDE.finditer(text))
 
 
+def _parse_skip_weeks(text: str) -> frozenset[int]:
+    """Plan-week numbers the learner says they're occupied in (e.g. 'busy in week 2')."""
+    weeks: set[int] = set()
+    for m in _SKIP_WEEK.finditer(text):
+        num = m.group(2) or m.group(3)
+        if num is not None:
+            weeks.add(int(num))
+    return frozenset(w for w in weeks if w >= 1)
+
+
 def parse_adjustment(text: str, *, today: date) -> ScheduleAdjustment | None:
     """Return a structured adjustment, or None if the text has no schedule edit."""
     start = _parse_start(text, today)
     excludes = _parse_excludes(text)
-    if start is None and not excludes:
+    skip_weeks = _parse_skip_weeks(text)
+    if start is None and not excludes and not skip_weeks:
         return None
     parts: list[str] = []
     if start is not None:
         parts.append(f"start on {start.isoformat()}")
     if excludes:
         parts.append("skip " + ", ".join(sorted(excludes)))
-    return ScheduleAdjustment(start_date=start, exclude_days=excludes, note="; ".join(parts))
+    if skip_weeks:
+        parts.append("skip week(s) " + ", ".join(str(w) for w in sorted(skip_weeks)))
+    return ScheduleAdjustment(
+        start_date=start,
+        exclude_days=excludes,
+        note="; ".join(parts),
+        skip_weeks=skip_weeks,
+    )

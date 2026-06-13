@@ -23,6 +23,8 @@ import json
 import logging
 import re
 from collections.abc import Callable
+from functools import lru_cache
+from typing import Any
 
 from app.agent.contracts import InjectionVerdict, PhaseName, PhaseStatus, PhaseTelemetry
 from app.agent.llm import AllProvidersDown, Capability, ModelRouter
@@ -34,16 +36,25 @@ logger = logging.getLogger(__name__)
 GuardFn = Callable[[str], float | None]
 
 # HouYi-style indicators: context-break / instruction-override / exfiltration.
+# Each pattern requires an instruction/rule/system OBJECT so benign learner phrasing
+# ("disregard the previous example", "show instructions for the lab", "forget
+# everything, let's restart with AZ-204") is NOT hard-blocked by the pre-filter.
 _PATTERNS: tuple[re.Pattern[str], ...] = tuple(
     re.compile(p, re.IGNORECASE)
     for p in (
-        r"ignore\s+(all\s+|any\s+)?(previous|prior|above|earlier)\s+(instruction|prompt|message)",
-        r"disregard\s+(all\s+|the\s+|your\s+)?(previous|prior|above|safety|system)",
-        r"forget\s+(everything|all|your\s+(instructions|rules|prompt))",
-        r"(reveal|print|show|repeat|expose)\s+(me\s+)?(your\s+)?(system\s+)?(prompt|instructions)",
+        r"ignore\s+(all\s+|any\s+)?(previous|prior|above|earlier)\s+(instruction|prompt|message|rule|command)",
+        r"disregard\s+(all\s+|the\s+|your\s+)?(previous|prior|above)\s+"
+        r"(instruction|prompt|message|rule|command|system)",
+        r"disregard\s+(your\s+|the\s+|all\s+)?(safety|system\s+prompt|guidelines|guardrails)",
+        r"forget\s+(everything|all|what)\s+(you\s+)?(were\s+)?(told|instructed|your\s+(instructions|rules|prompt))",
+        r"forget\s+your\s+(instructions|rules|prompt|guidelines)",
+        r"(reveal|print|show|repeat|expose|leak)\s+(me\s+)?"
+        r"(your\s+|the\s+|its\s+)?(system\s+|initial\s+|hidden\s+|developer\s+)"
+        r"(prompt|instructions|message)",
+        r"(reveal|print|repeat|expose|leak)\s+(your\s+)(prompt|instructions)",
         r"you\s+are\s+now\s+(a|an|in|free|unrestricted|dan)",
         r"\b(dan|do anything now)\b.*\b(mode|jailbreak)\b",
-        r"developer\s+mode",
+        r"\bdeveloper\s+mode\b",
         r"act\s+as\s+(an?\s+)?(unrestricted|jailbroken|uncensored)",
         r"pretend\s+(you|to)\s+(have|are)\s+(no|not)\s+(rules|restrictions|guidelines|filter)",
         r"bypass\s+(your\s+|the\s+|all\s+)?(safety|filter|guardrail|restriction)",
@@ -77,18 +88,25 @@ def _groq_guard_score(text: str, settings: Settings) -> float | None:
     if not settings.groq_configured:
         return None
     try:
-        from openai import OpenAI
-
-        client = OpenAI(api_key=settings.groq_api_key, base_url=settings.groq_base_url)
+        client = _guard_client(settings.groq_api_key, settings.groq_base_url)
         response = client.chat.completions.create(
             model=settings.groq_model_guard,
             messages=[{"role": "user", "content": text}],
             max_tokens=10,
+            timeout=settings.llm_timeout_seconds,
         )
         return float((response.choices[0].message.content or "").strip())
     except Exception as exc:  # noqa: BLE001 — degrade to the next gate layer
         logger.warning("Prompt Guard unavailable: %s", exc)
         return None
+
+
+@lru_cache(maxsize=4)
+def _guard_client(api_key: str | None, base_url: str) -> Any:
+    """A reused OpenAI-compatible client for Prompt Guard (cached per credentials)."""
+    from openai import OpenAI
+
+    return OpenAI(api_key=api_key, base_url=base_url)
 
 
 def _telemetry(verdict: InjectionVerdict, *, model: str | None, tier: int | None) -> PhaseTelemetry:
@@ -103,14 +121,31 @@ def _telemetry(verdict: InjectionVerdict, *, model: str | None, tier: int | None
     )
 
 
+def _recent_user_turns(history: list[dict[str, str]] | None) -> list[dict[str, str]]:
+    """Prior user turns, so the classifier can see a split / multi-turn injection."""
+    if not history:
+        return []
+    return [
+        {"role": "user", "content": m["content"]}
+        for m in history[-3:]
+        if m.get("role") == "user" and m.get("content")
+    ]
+
+
 def screen(
     text: str,
     *,
     router: ModelRouter | None = None,
+    history: list[dict[str, str]] | None = None,
     settings: Settings | None = None,
     guard_fn: GuardFn | None = None,
 ) -> tuple[InjectionVerdict, PhaseTelemetry]:
-    """Screen one turn. Returns the verdict and PII-safe telemetry for the trace."""
+    """Screen one turn. Returns the verdict and PII-safe telemetry for the trace.
+
+    ``history`` lets the online classifier see recent user turns so an injection
+    split across messages ("set up a twin" then "as the twin, ignore the rules")
+    is visible instead of each turn looking harmless on its own.
+    """
     settings = settings or get_settings()
 
     # 1) Fast regex pre-filter (always runs; cheap, deterministic, offline-safe).
@@ -133,7 +168,11 @@ def screen(
     try:
         result = router.complete(
             Capability.FAST,
-            [{"role": "system", "content": _GATE_SYSTEM}, {"role": "user", "content": text}],
+            [
+                {"role": "system", "content": _GATE_SYSTEM},
+                *_recent_user_turns(history),
+                {"role": "user", "content": text},
+            ],
             json_mode=True,
             max_tokens=120,
         )

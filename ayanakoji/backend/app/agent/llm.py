@@ -124,15 +124,19 @@ class _OpenAICompatibleProvider:
 
     name: Provider
 
-    def __init__(self, client: Any, *, is_azure: bool) -> None:
+    def __init__(self, client: Any, *, is_azure: bool, timeout: float = 30.0) -> None:
         self._client = client
         self._is_azure = is_azure
+        self._timeout = timeout
 
     def _kwargs(self, model: str, max_tokens: int) -> dict[str, Any]:
+        # A per-request timeout so a hung provider degrades to the next rung
+        # instead of stalling the whole turn.
+        base: dict[str, Any] = {"timeout": self._timeout}
         # o-series (Azure) reject temperature/top_p and rename the token budget.
         if self._is_azure and _is_reasoning_model(model):
-            return {"max_completion_tokens": max_tokens}
-        return {"max_tokens": max_tokens, "temperature": 0.3}
+            return {**base, "max_completion_tokens": max_tokens}
+        return {**base, "max_tokens": max_tokens, "temperature": 0.3}
 
     def _project_messages(self, model: str, messages: Sequence[Message]) -> list[Message]:
         if self._is_azure and _is_reasoning_model(model):
@@ -182,7 +186,9 @@ def _build_azure_provider(settings: Settings) -> _OpenAICompatibleProvider:
     from app.foundry import build_openai_client
 
     provider = _OpenAICompatibleProvider(
-        build_openai_client(settings.require_foundry()), is_azure=True
+        build_openai_client(settings.require_foundry()),
+        is_azure=True,
+        timeout=settings.llm_timeout_seconds,
     )
     provider.name = Provider.AZURE
     return provider
@@ -193,7 +199,9 @@ def _build_groq_provider(settings: Settings) -> _OpenAICompatibleProvider:
 
     config = settings.require_groq()
     client = OpenAI(api_key=config.api_key, base_url=config.base_url)
-    provider = _OpenAICompatibleProvider(client, is_azure=False)
+    provider = _OpenAICompatibleProvider(
+        client, is_azure=False, timeout=settings.llm_timeout_seconds
+    )
     provider.name = Provider.GROQ
     return provider
 

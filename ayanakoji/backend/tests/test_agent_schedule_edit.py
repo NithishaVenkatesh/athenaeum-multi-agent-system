@@ -65,3 +65,37 @@ def test_start_date_shifts_all_module_deadlines() -> None:
     )
     assert early is not None and late is not None
     assert late.modules[0].complete_before > early.modules[0].complete_before
+
+
+def test_parse_pace_requires_a_steering_cue() -> None:
+    from app.agent.contracts import Pace
+    from app.agent.schedule_edit import parse_pace
+
+    assert parse_pace("can we revert back to the slower pace instead") is Pace.SLOWER
+    assert parse_pace("make it faster") is Pace.FASTER
+    assert parse_pace("set it to a normal pace") is Pace.NORMAL
+    # A topic mention is not a pace edit (no false positive).
+    assert parse_pace("I want an intensive course on security") is None
+    assert parse_pace("how do Azure Functions work") is None
+
+
+def test_remove_week_parses_skip_weeks_and_drops_that_week() -> None:
+    adj = parse_adjustment(
+        "remove the schedules from week 2 as I am occupied, move to later slots", today=TODAY
+    )
+    assert adj is not None
+    assert adj.skip_weeks == frozenset({2})
+
+    vega = get_repository().get_persona("EMP-001")
+    assert vega is not None
+    plan = build_study_plan(
+        catalog_id="cb-c01",
+        title="x",
+        cert="AZ-204",
+        persona=vega,
+        start_date=date(2026, 6, 15),
+        skip_weeks=frozenset({2}),
+    )
+    assert plan is not None
+    weeks_used = {b.week for m in plan.modules for b in m.scheduled}
+    assert 2 not in weeks_used

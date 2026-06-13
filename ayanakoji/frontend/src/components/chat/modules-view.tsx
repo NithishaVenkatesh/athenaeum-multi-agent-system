@@ -112,7 +112,7 @@ export function ModulesView({ courseId }: { courseId: string }) {
       <header className="mb-4">
         <h2 className="font-display text-2xl tracking-tight">Modules</h2>
         <p className="text-muted-foreground mt-1 text-sm">
-          {done} of {modules.length} complete · done in order
+          {done} of {modules.length} complete
         </p>
         <div className="bg-muted mt-2 h-1.5 overflow-hidden rounded-full">
           <div
