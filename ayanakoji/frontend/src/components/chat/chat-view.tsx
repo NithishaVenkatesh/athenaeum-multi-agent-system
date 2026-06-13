@@ -17,6 +17,8 @@ import { ChatComposer } from "@/components/chat/chat-composer";
 import { CourseSuggestionCard } from "@/components/chat/course-suggestion-card";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { PipelineTrace } from "@/components/chat/pipeline-trace";
+import { StudyPlanCard } from "@/components/chat/study-plan-card";
+import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/components/workspace/workspace-context";
 import {
   acceptCourse,
@@ -24,6 +26,7 @@ import {
   getCourse,
   streamMessage,
   type PhaseTelemetry,
+  type StudyPlan,
   type Suggestion,
 } from "@/lib/api";
 
@@ -41,6 +44,7 @@ interface AssistantTurn {
   suggestion: Suggestion | null;
   suggestionState: AcceptState;
   chosenId: string | null;
+  plan: StudyPlan | null;
   error: string | null;
   streaming: boolean;
 }
@@ -55,6 +59,7 @@ function emptyAssistantTurn(): AssistantTurn {
     suggestion: null,
     suggestionState: "idle",
     chosenId: null,
+    plan: null,
     error: null,
     streaming: true,
   };
@@ -98,6 +103,7 @@ export function ChatView({ courseId }: { courseId?: string }) {
                   suggestion: null,
                   suggestionState: "idle",
                   chosenId: null,
+                  plan: null,
                   error: null,
                   streaming: false,
                 },
@@ -149,6 +155,7 @@ export function ChatView({ courseId }: { courseId?: string }) {
         onPhase: (phase) => patchLastAssistant((t) => ({ ...t, phases: [...t.phases, phase] })),
         onToken: (token) => patchLastAssistant((t) => ({ ...t, text: t.text + token })),
         onSuggestion: (suggestion) => patchLastAssistant((t) => ({ ...t, suggestion })),
+        onPlan: (plan) => patchLastAssistant((t) => ({ ...t, plan })),
         onBlocked: (reason) => {
           toast.error("Message blocked", { description: reason });
           patchLastAssistant((t) => ({ ...t, text: reason }));
@@ -254,6 +261,17 @@ export function ChatView({ courseId }: { courseId?: string }) {
                     onDecline={() => handleDecline(index)}
                   />
                 )}
+                {turn.suggestionState === "accepted" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs"
+                    onClick={() => handleSend("Build me a study plan for this course")}
+                  >
+                    Build my study plan
+                  </Button>
+                )}
+                {turn.plan && <StudyPlanCard plan={turn.plan} />}
               </div>
             ),
           )

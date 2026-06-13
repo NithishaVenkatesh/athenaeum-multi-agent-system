@@ -175,7 +175,13 @@ export function listAssessments(
 
 // ── Agent pipeline event protocol (mirrors app/agent/contracts.py) ────────────
 
-export type Route = "greeting" | "recommend" | "foundry_iq" | "work_iq" | "general";
+export type Route =
+  | "greeting"
+  | "recommend"
+  | "study_plan"
+  | "foundry_iq"
+  | "work_iq"
+  | "general";
 
 export interface GroundingSource {
   ref: string;
@@ -214,10 +220,51 @@ export interface Suggestion {
   options: CourseSuggestion[];
 }
 
+// ── Study plan (workload-aware schedule) ──────────────────────────────────────
+
+export interface StudySession {
+  day: string;
+  slot: string;
+  start: string;
+  end: string;
+  duration_minutes: number;
+}
+
+export interface ModulePlan {
+  module_id: string;
+  title: string;
+  week: number;
+  estimated_minutes: number;
+  objectives: string[];
+}
+
+export interface WeekPlan {
+  week: number;
+  module_ids: string[];
+  module_titles: string[];
+  total_minutes: number;
+}
+
+export interface StudyPlan {
+  catalog_id: string;
+  title: string;
+  cert: string;
+  weekly_study_hours: number;
+  timeline_multiplier: number;
+  total_hours: number;
+  weeks: number;
+  overestimate_factor: number;
+  modules: ModulePlan[];
+  schedule: WeekPlan[];
+  sessions: StudySession[];
+  capacity_reason: string;
+}
+
 export type PipelineEvent =
   | { type: "phase"; phase: PhaseTelemetry }
   | { type: "token"; token: string }
   | { type: "suggestion"; prompt: string; options: CourseSuggestion[] }
+  | { type: "plan"; plan: StudyPlan }
   | { type: "blocked"; reason: string }
   | { type: "error"; message: string }
   | { type: "done"; route: Route | null; suggested: boolean };
@@ -226,6 +273,7 @@ export interface StreamHandlers {
   onPhase?: (phase: PhaseTelemetry) => void;
   onToken?: (token: string) => void;
   onSuggestion?: (suggestion: Suggestion) => void;
+  onPlan?: (plan: StudyPlan) => void;
   onBlocked?: (reason: string) => void;
   onError?: (message: string) => void;
   onDone?: (info: { route: Route | null; suggested: boolean }) => void;
@@ -288,6 +336,9 @@ function dispatchEvent(event: PipelineEvent, handlers: StreamHandlers): void {
       break;
     case "suggestion":
       handlers.onSuggestion?.({ prompt: event.prompt, options: event.options });
+      break;
+    case "plan":
+      handlers.onPlan?.(event.plan);
       break;
     case "blocked":
       handlers.onBlocked?.(event.reason);

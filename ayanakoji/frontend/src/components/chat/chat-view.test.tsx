@@ -121,6 +121,47 @@ describe("ChatView", () => {
     );
   });
 
+  it("renders a study plan card from a plan event", async () => {
+    mockCreate.mockResolvedValue(course());
+    mockStream.mockImplementation(async (_id, _text, handlers) => {
+      handlers.onToken?.("Here's your plan.");
+      handlers.onPlan?.({
+        catalog_id: "cb-c01",
+        title: "Azure Compute & Serverless Foundations",
+        cert: "AZ-204",
+        weekly_study_hours: 3,
+        timeline_multiplier: 1.67,
+        total_hours: 14,
+        weeks: 4,
+        overestimate_factor: 2,
+        modules: [
+          {
+            module_id: "cb-c01-m01",
+            title: "Hosting web APIs",
+            week: 1,
+            estimated_minutes: 210,
+            objectives: [],
+          },
+        ],
+        schedule: [
+          { week: 1, module_ids: ["cb-c01-m01"], module_titles: ["Hosting web APIs"], total_minutes: 210 },
+        ],
+        sessions: [{ day: "tue", slot: "Morning", start: "11:00", end: "12:00", duration_minutes: 60 }],
+        capacity_reason: "Meeting load is heavy, so the weekly target is reduced.",
+      });
+      handlers.onDone?.({ route: "study_plan", suggested: false });
+    });
+
+    render(<ChatView />);
+    const box = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(box, { target: { value: "build me a study plan" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+
+    await waitFor(() => expect(screen.getByText(/4-week study plan/i)).toBeInTheDocument());
+    expect(screen.getByText("Week 1")).toBeInTheDocument();
+    expect(screen.getByText(/reduced/i)).toBeInTheDocument();
+  });
+
   it("loads and renders an existing conversation without a title heading", async () => {
     mockGet.mockResolvedValue(
       course({

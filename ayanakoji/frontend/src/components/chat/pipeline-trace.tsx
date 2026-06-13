@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 const ROUTE_LABEL: Record<Route, string> = {
   greeting: "Greeting · onboarding",
   recommend: "Recommend · from your profile",
+  study_plan: "Study plan · workload-aware",
   foundry_iq: "Foundry IQ · course content",
   work_iq: "Work IQ · your schedule",
   general: "General",
@@ -35,6 +36,7 @@ const ROUTE_LABEL: Record<Route, string> = {
 const ROUTE_DOT: Record<Route, string> = {
   greeting: "bg-[var(--chart-4)]",
   recommend: "bg-brand",
+  study_plan: "bg-[var(--chart-5)]",
   foundry_iq: "bg-[var(--chart-3)]",
   work_iq: "bg-[var(--chart-2)]",
   general: "bg-muted-foreground",
