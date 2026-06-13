@@ -61,13 +61,17 @@ test("enroll → pick pace → grounded plan → modules tab with sequential loc
   await expect(page.getByText(/Balanced pace/i)).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText(/already in your week/i).first()).toBeVisible();
 
-  // Open the Modules tab → modules are sequential (first active, rest locked).
+  // Open the Modules tab → a navigation index (first active, rest locked).
   await page.getByRole("link", { name: /Open the Modules tab/i }).click();
   await expect(page.getByRole("heading", { name: "Modules", exact: true })).toBeVisible({
     timeout: 15_000,
   });
-  await expect(page.getByText(/Mark module complete/i)).toBeVisible();
+  await expect(page.getByText(/Up next/i)).toBeVisible();
   await expect(page.getByText(/Complete the previous module to unlock/i).first()).toBeVisible();
+
+  // Each module is its own page; the active one can be completed there.
+  await page.getByRole("link", { name: /Module 1/i }).click();
+  await expect(page.getByText(/Mark module complete/i)).toBeVisible({ timeout: 15_000 });
 });
 
 test("greeting welcomes the learner and offers profile-based course options", async ({

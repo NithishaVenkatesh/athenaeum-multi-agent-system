@@ -1,27 +1,17 @@
 "use client";
 
 /**
- * The Modules tab — the study plan's module-level completion view.
- *
- * Modules are done sequentially: the first incomplete, unlocked module is the
- * active one — it expands to show its content (markdown from approved material)
- * and a "Mark complete" action (completion by a test comes later). Earlier
- * modules show as done; later ones are locked until their predecessor is done.
+ * The Modules tab — a navigation index into the course's modules. Each module
+ * is its own page (content + completion). Modules are done in order: the first
+ * incomplete unlocked module is active; completed modules stay accessible to
+ * revisit; later ones are locked until their predecessor is done.
  */
 
-import { CalendarClock, CheckCircle2, Circle, Loader2, Lock } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import { toast } from "sonner";
+import { CalendarClock, CheckCircle2, ChevronRight, Circle, Loader2, Lock } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import {
-  completeModule,
-  getModuleContent,
-  listModules,
-  type CourseModuleProgress,
-  type ModuleContent,
-} from "@/lib/api";
+import { listModules, type CourseModuleProgress } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 function fmtDate(iso: string): string {
@@ -42,58 +32,58 @@ function statusOf(m: CourseModuleProgress): "done" | "active" | "locked" {
   return m.locked ? "locked" : "active";
 }
 
-function ModuleBody({ courseId, moduleId }: { courseId: string; moduleId: string }) {
-  const [content, setContent] = useState<ModuleContent | null>(null);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    getModuleContent(courseId, moduleId)
-      .then((c) => active && setContent(c))
-      .catch(() => active && setError(true));
-    return () => {
-      active = false;
-    };
-  }, [courseId, moduleId]);
-
-  if (error) return <p className="text-muted-foreground text-xs">Content unavailable.</p>;
-  if (!content)
-    return (
-      <p className="text-muted-foreground flex items-center gap-2 text-xs">
-        <Loader2 className="size-3.5 animate-spin" /> Loading content…
-      </p>
+function ModuleRow({ courseId, m }: { courseId: string; m: CourseModuleProgress }) {
+  const status = statusOf(m);
+  const icon =
+    status === "done" ? (
+      <CheckCircle2 className="text-brand size-5" />
+    ) : status === "locked" ? (
+      <Lock className="text-muted-foreground size-5" />
+    ) : (
+      <Circle className="text-brand size-5" />
     );
 
-  return (
-    <div className="prose-athenaeum text-sm leading-relaxed">
-      <ReactMarkdown>{content.content}</ReactMarkdown>
+  const body = (
+    <div
+      className={cn(
+        "flex items-center gap-3 rounded-2xl border p-4 transition-colors",
+        status === "active" ? "border-brand/40 bg-card" : "border-border/70 bg-card/50",
+        status === "locked" ? "opacity-60" : "hover:border-brand/40 cursor-pointer",
+      )}
+    >
+      <span className="shrink-0">{icon}</span>
+      <div className="min-w-0 flex-1">
+        <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-[11px]">
+          <span className="font-medium">Module {m.sequence}</span>
+          <span className="inline-flex items-center gap-1">
+            <CalendarClock className="size-3" /> by {fmtDate(m.complete_before)}
+          </span>
+          <span>~{fmtMinutes(m.estimated_minutes)}</span>
+          {status === "active" && <span className="text-brand font-medium">Up next</span>}
+        </div>
+        <h3 className="font-display text-foreground mt-0.5 text-base tracking-tight">{m.title}</h3>
+        {status === "locked" && (
+          <p className="text-muted-foreground mt-0.5 text-xs">
+            Complete the previous module to unlock.
+          </p>
+        )}
+      </div>
+      {status !== "locked" && <ChevronRight className="text-muted-foreground size-4 shrink-0" />}
     </div>
   );
+
+  if (status === "locked") return body;
+  return <Link href={`/chat/${courseId}/modules/${m.module_id}`}>{body}</Link>;
 }
 
 export function ModulesView({ courseId }: { courseId: string }) {
   const [modules, setModules] = useState<CourseModuleProgress[] | null>(null);
-  const [completing, setCompleting] = useState<string | null>(null);
 
-  const reload = useCallback(() => {
+  useEffect(() => {
     listModules(courseId)
       .then(setModules)
       .catch(() => setModules([]));
   }, [courseId]);
-
-  useEffect(() => reload(), [reload]);
-
-  async function handleComplete(moduleId: string) {
-    setCompleting(moduleId);
-    try {
-      setModules(await completeModule(courseId, moduleId));
-      toast.success("Module complete", { description: "The next module is unlocked." });
-    } catch {
-      toast.error("Could not complete", { description: "Finish the earlier modules first." });
-    } finally {
-      setCompleting(null);
-    }
-  }
 
   if (modules === null) {
     return (
@@ -122,7 +112,7 @@ export function ModulesView({ courseId }: { courseId: string }) {
       <header className="mb-4">
         <h2 className="font-display text-2xl tracking-tight">Modules</h2>
         <p className="text-muted-foreground mt-1 text-sm">
-          {done} of {modules.length} complete
+          {done} of {modules.length} complete · done in order
         </p>
         <div className="bg-muted mt-2 h-1.5 overflow-hidden rounded-full">
           <div
@@ -133,69 +123,11 @@ export function ModulesView({ courseId }: { courseId: string }) {
       </header>
 
       <ol className="space-y-2">
-        {modules.map((m) => {
-          const status = statusOf(m);
-          return (
-            <li
-              key={m.module_id}
-              className={cn(
-                "rounded-2xl border p-4 transition-colors",
-                status === "active"
-                  ? "border-brand/40 bg-card"
-                  : "border-border/70 bg-card/50",
-                status === "locked" && "opacity-60",
-              )}
-            >
-              <div className="flex items-start gap-3">
-                <span className="mt-0.5 shrink-0">
-                  {status === "done" ? (
-                    <CheckCircle2 className="text-brand size-5" />
-                  ) : status === "locked" ? (
-                    <Lock className="text-muted-foreground size-5" />
-                  ) : (
-                    <Circle className="text-brand size-5" />
-                  )}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="text-muted-foreground text-[11px] font-medium">
-                      Module {m.sequence}
-                    </span>
-                    <span className="text-muted-foreground inline-flex items-center gap-1 text-[11px]">
-                      <CalendarClock className="size-3" />
-                      by {fmtDate(m.complete_before)}
-                    </span>
-                    <span className="text-muted-foreground text-[11px]">
-                      ~{fmtMinutes(m.estimated_minutes)}
-                    </span>
-                  </div>
-                  <h3 className="font-display text-foreground mt-0.5 text-base tracking-tight">
-                    {m.title}
-                  </h3>
-
-                  {status === "active" && (
-                    <div className="mt-3 space-y-3">
-                      <ModuleBody courseId={courseId} moduleId={m.module_id} />
-                      <Button
-                        size="sm"
-                        onClick={() => handleComplete(m.module_id)}
-                        disabled={completing === m.module_id}
-                        className="text-xs"
-                      >
-                        {completing === m.module_id ? "Marking…" : "Mark module complete"}
-                      </Button>
-                    </div>
-                  )}
-                  {status === "locked" && (
-                    <p className="text-muted-foreground mt-1 text-xs">
-                      Complete the previous module to unlock.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </li>
-          );
-        })}
+        {modules.map((m) => (
+          <li key={m.module_id}>
+            <ModuleRow courseId={courseId} m={m} />
+          </li>
+        ))}
       </ol>
     </div>
   );
