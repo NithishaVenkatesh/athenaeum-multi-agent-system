@@ -121,7 +121,7 @@ describe("ChatView", () => {
     );
   });
 
-  it("renders a study plan card from a plan event", async () => {
+  it("renders a calendar-grounded plan card from a plan event", async () => {
     mockCreate.mockResolvedValue(course());
     mockStream.mockImplementation(async (_id, _text, handlers) => {
       handlers.onToken?.("Here's your plan.");
@@ -129,25 +129,33 @@ describe("ChatView", () => {
         catalog_id: "cb-c01",
         title: "Azure Compute & Serverless Foundations",
         cert: "AZ-204",
+        pace: "normal",
         weekly_study_hours: 3,
-        timeline_multiplier: 1.67,
-        total_hours: 14,
-        weeks: 4,
-        overestimate_factor: 2,
+        total_hours: 12.5,
+        weeks: 5,
+        start_date: "2026-06-15",
         modules: [
           {
             module_id: "cb-c01-m01",
             title: "Hosting web APIs",
-            week: 1,
-            estimated_minutes: 210,
+            sequence: 1,
+            estimated_minutes: 195,
+            complete_before: "2026-06-29",
+            scheduled: [{ week: 1, day: "tue", start: "11:00", end: "12:00", minutes: 60 }],
             objectives: [],
           },
         ],
-        schedule: [
-          { week: 1, module_ids: ["cb-c01-m01"], module_titles: ["Hosting web APIs"], total_minutes: 210 },
+        sessions: [
+          {
+            day: "tue",
+            slot: "Morning",
+            start: "11:00",
+            end: "12:00",
+            duration_minutes: 60,
+            source: "Cert study",
+          },
         ],
-        sessions: [{ day: "tue", slot: "Morning", start: "11:00", end: "12:00", duration_minutes: 60 }],
-        capacity_reason: "Meeting load is heavy, so the weekly target is reduced.",
+        capacity_reason: "I found 3 h of study time already in your week — Tue 11:00–12:00.",
       });
       handlers.onDone?.({ route: "study_plan", suggested: false });
     });
@@ -157,9 +165,36 @@ describe("ChatView", () => {
     fireEvent.change(box, { target: { value: "build me a study plan" } });
     fireEvent.keyDown(box, { key: "Enter" });
 
-    await waitFor(() => expect(screen.getByText(/4-week study plan/i)).toBeInTheDocument());
-    expect(screen.getByText("Week 1")).toBeInTheDocument();
-    expect(screen.getByText(/reduced/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/Balanced pace/i)).toBeInTheDocument());
+    expect(screen.getByText("Hosting web APIs")).toBeInTheDocument();
+    expect(screen.getByText(/already in your week/i)).toBeInTheDocument();
+    // The internal over-estimate factor is never surfaced.
+    expect(screen.queryByText(/×2|over-estimat/i)).toBeNull();
+  });
+
+  it("shows the pace chooser before building a plan", async () => {
+    mockCreate.mockResolvedValue(course());
+    mockStream.mockImplementation(async (_id, _text, handlers) => {
+      handlers.onToken?.("How fast do you want to go?");
+      handlers.onPaceRequest?.({
+        catalog_id: "cb-c01",
+        title: "Azure Compute & Serverless Foundations",
+        prompt: "How do you want to pace it?",
+        options: ["slower", "normal", "faster"],
+      });
+      handlers.onDone?.({ route: "study_plan", suggested: false });
+    });
+
+    render(<ChatView />);
+    const box = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(box, { target: { value: "build me a study plan" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Normal/i })).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: /Slower/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Faster/i })).toBeInTheDocument();
   });
 
   it("loads and renders an existing conversation without a title heading", async () => {

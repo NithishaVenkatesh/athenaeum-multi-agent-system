@@ -39,7 +39,7 @@ test("course question shows reasoning trace, grounded answer, and enrolls on acc
   await expect(page.getByText(/now your course workspace/i)).toBeVisible({ timeout: 15_000 });
 });
 
-test("after enrolling, building a study plan renders a workload-aware schedule", async ({
+test("enroll → pick pace → grounded plan → modules tab with sequential lock", async ({
   page,
 }) => {
   await signIn(page);
@@ -52,11 +52,22 @@ test("after enrolling, building a study plan renders a workload-aware schedule",
   await page.getByRole("button", { name: /^Choose$/i }).first().click();
   await expect(page.getByText(/now your course workspace/i)).toBeVisible({ timeout: 15_000 });
 
-  // Build a study plan for the chosen course.
+  // Requesting a plan first asks the pace (HITL gate).
   await page.getByRole("button", { name: /Build my study plan/i }).click();
-  await expect(page.getByText(/week study plan/i)).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(/Weekly sessions/i)).toBeVisible();
-  await expect(page.getByText("Week 1")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Normal/i })).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("button", { name: /Normal/i }).click();
+
+  // The calendar-grounded plan renders (pace shown, no over-estimate factor).
+  await expect(page.getByText(/Balanced pace/i)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/already in your week/i).first()).toBeVisible();
+
+  // Open the Modules tab → modules are sequential (first active, rest locked).
+  await page.getByRole("link", { name: /Open the Modules tab/i }).click();
+  await expect(page.getByRole("heading", { name: "Modules", exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page.getByText(/Mark module complete/i)).toBeVisible();
+  await expect(page.getByText(/Complete the previous module to unlock/i).first()).toBeVisible();
 });
 
 test("greeting welcomes the learner and offers profile-based course options", async ({

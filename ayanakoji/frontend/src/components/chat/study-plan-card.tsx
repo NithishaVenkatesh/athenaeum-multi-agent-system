@@ -1,18 +1,32 @@
 "use client";
 
 /**
- * The study-plan card — a workload-aware schedule for the chosen course.
+ * The study-plan card — a calendar-grounded, module-level completion plan.
  *
- * Everything shown is computed deterministically by the backend from the
- * learner's Work IQ signals (meeting load, focus windows, preferred days):
- * per-module time is over-estimated 2×, weekly capacity is reduced when meetings
- * are heavy, and sessions land in the learner's focus window.
+ * Every figure is computed by the backend from the learner's *real* weekly
+ * calendar: study time comes from slots already in their week, modules are done
+ * in order, and each carries a complete-by date. The card links into the Modules
+ * tab where the content is read and progress is tracked.
  */
 
 import { motion, useReducedMotion } from "framer-motion";
-import { CalendarClock, Clock, GraduationCap, Layers, TimerReset } from "lucide-react";
+import {
+  CalendarClock,
+  CalendarDays,
+  CircleCheck,
+  Clock,
+  GaugeCircle,
+  GraduationCap,
+} from "lucide-react";
+import Link from "next/link";
 
-import type { StudyPlan } from "@/lib/api";
+import type { Pace, StudyPlan } from "@/lib/api";
+
+const PACE_LABEL: Record<Pace, string> = {
+  slower: "Relaxed pace",
+  normal: "Balanced pace",
+  faster: "Intensive pace",
+};
 
 function fmtMinutes(total: number): string {
   const h = Math.floor(total / 60);
@@ -20,6 +34,11 @@ function fmtMinutes(total: number): string {
   if (h && m) return `${h}h ${m}m`;
   if (h) return `${h}h`;
   return `${m}m`;
+}
+
+function fmtDate(iso: string): string {
+  const d = new Date(iso + "T00:00:00");
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 function Stat({
@@ -42,7 +61,7 @@ function Stat({
   );
 }
 
-export function StudyPlanCard({ plan }: { plan: StudyPlan }) {
+export function StudyPlanCard({ plan, courseId }: { plan: StudyPlan; courseId?: string }) {
   const reduce = useReducedMotion();
 
   return (
@@ -57,12 +76,15 @@ export function StudyPlanCard({ plan }: { plan: StudyPlan }) {
           <CalendarClock className="size-4.5" />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="bg-brand/10 text-brand inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold">
               <GraduationCap className="size-3" />
               {plan.cert}
             </span>
-            <span className="text-muted-foreground text-[11px]">{plan.weeks}-week study plan</span>
+            <span className="text-muted-foreground inline-flex items-center gap-1 text-[11px]">
+              <GaugeCircle className="size-3" />
+              {PACE_LABEL[plan.pace]}
+            </span>
           </div>
           <h3 className="font-display text-foreground mt-1 text-base leading-tight tracking-tight">
             {plan.title}
@@ -70,83 +92,49 @@ export function StudyPlanCard({ plan }: { plan: StudyPlan }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Stat
-          icon={<Clock className="size-3.5" />}
-          label="per week"
-          value={`${plan.weekly_study_hours}h`}
-        />
-        <Stat
-          icon={<Layers className="size-3.5" />}
-          label="total"
-          value={`${plan.total_hours}h`}
-        />
-        <Stat
-          icon={<CalendarClock className="size-3.5" />}
-          label="weeks"
-          value={`${plan.weeks}`}
-        />
-        <Stat
-          icon={<TimerReset className="size-3.5" />}
-          label="time buffer"
-          value={`${plan.overestimate_factor}×`}
-        />
+      <div className="grid grid-cols-3 gap-2">
+        <Stat icon={<Clock className="size-3.5" />} label="per week" value={`${plan.weekly_study_hours}h`} />
+        <Stat icon={<CalendarDays className="size-3.5" />} label="over" value={`${plan.weeks} wks`} />
+        <Stat icon={<CircleCheck className="size-3.5" />} label="modules" value={`${plan.modules.length}`} />
       </div>
 
-      <p className="text-muted-foreground border-border/50 border-l-2 pl-2.5 text-[11px] leading-relaxed text-pretty">
+      <p className="text-muted-foreground border-brand/40 border-l-2 pl-2.5 text-[11px] leading-relaxed text-pretty">
         {plan.capacity_reason}
       </p>
 
-      {/* Weekly session schedule */}
-      <div>
-        <h4 className="text-muted-foreground mb-1.5 text-[10px] font-semibold tracking-wide uppercase">
-          Weekly sessions
-        </h4>
-        <div className="flex flex-wrap gap-1.5">
-          {plan.sessions.map((s, i) => (
-            <span
-              key={`${s.day}-${i}`}
-              className="border-border/60 bg-background/60 text-foreground/90 inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px]"
-            >
-              <span className="font-medium capitalize">{s.day}</span>
-              <span className="text-muted-foreground">
-                {s.start}–{s.end}
-              </span>
-            </span>
-          ))}
-        </div>
-      </div>
-
-      {/* Week-by-week module schedule */}
+      {/* Module-level completion plan: sequential, each with a deadline */}
       <ol className="space-y-1.5">
-        {plan.schedule.map((week) => (
+        {plan.modules.map((m) => (
           <li
-            key={week.week}
-            className="border-border/60 bg-card/40 rounded-lg border px-3 py-2"
+            key={m.module_id}
+            className="border-border/60 bg-card/40 flex items-start gap-2.5 rounded-lg border px-3 py-2"
           >
-            <div className="flex items-center justify-between">
-              <span className="text-foreground text-xs font-semibold">Week {week.week}</span>
-              <span className="text-muted-foreground text-[10px]">
-                {fmtMinutes(week.total_minutes)}
-              </span>
+            <span className="bg-brand/10 text-brand mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold">
+              {m.sequence}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-foreground text-xs font-medium">{m.title}</div>
+              <div className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2 text-[10px]">
+                <span>{fmtMinutes(m.estimated_minutes)}</span>
+                <span aria-hidden>·</span>
+                <span className="inline-flex items-center gap-1">
+                  <CalendarClock className="size-3" />
+                  by {fmtDate(m.complete_before)}
+                </span>
+              </div>
             </div>
-            <ul className="mt-1 space-y-0.5">
-              {week.module_titles.map((title, i) => (
-                <li key={title} className="text-foreground/80 flex items-baseline gap-1.5 text-[11px]">
-                  <span className="text-brand">•</span>
-                  <span className="flex-1">{title}</span>
-                  <span className="text-muted-foreground tabular-nums">
-                    {fmtMinutes(
-                      plan.modules.find((m) => m.module_id === week.module_ids[i])
-                        ?.estimated_minutes ?? 0,
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
           </li>
         ))}
       </ol>
+
+      {courseId && (
+        <Link
+          href={`/chat/${courseId}/modules`}
+          className="bg-brand text-brand-foreground hover:bg-brand/90 inline-flex h-8 items-center rounded-lg px-3 text-xs font-medium transition-colors"
+        >
+          Open the Modules tab →
+        </Link>
+      )}
     </motion.div>
   );
 }

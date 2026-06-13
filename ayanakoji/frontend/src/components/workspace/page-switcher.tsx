@@ -15,8 +15,13 @@ import { cn } from "@/lib/utils";
 
 const TABS: { key: ChatPage; label: string }[] = [
   { key: "chat", label: "Chat" },
+  { key: "modules", label: "Modules" },
   { key: "assessments", label: "Assessments" },
 ];
+
+function tabHref(courseId: string, page: ChatPage): string {
+  return page === "chat" ? `/chat/${courseId}` : `/chat/${courseId}/${page}`;
+}
 
 export function PageSwitcher() {
   const pathname = usePathname();
@@ -34,8 +39,7 @@ export function PageSwitcher() {
       >
         {TABS.map((tab) => {
           const selected = tab.key === page;
-          const href =
-            tab.key === "chat" ? `/chat/${courseId}` : `/chat/${courseId}/assessments`;
+          const href = tabHref(courseId, tab.key);
           return (
             <button
               key={tab.key}

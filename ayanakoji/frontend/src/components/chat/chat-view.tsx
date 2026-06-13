@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { ChatComposer } from "@/components/chat/chat-composer";
 import { CourseSuggestionCard } from "@/components/chat/course-suggestion-card";
 import { MessageBubble } from "@/components/chat/message-bubble";
+import { PaceChooser } from "@/components/chat/pace-chooser";
 import { PipelineTrace } from "@/components/chat/pipeline-trace";
 import { StudyPlanCard } from "@/components/chat/study-plan-card";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,10 @@ import {
   acceptCourse,
   createCourse,
   getCourse,
+  setPace,
   streamMessage,
+  type Pace,
+  type PaceRequest,
   type PhaseTelemetry,
   type StudyPlan,
   type Suggestion,
@@ -45,6 +49,8 @@ interface AssistantTurn {
   suggestionState: AcceptState;
   chosenId: string | null;
   plan: StudyPlan | null;
+  paceRequest: PaceRequest | null;
+  paceChosen: Pace | null;
   error: string | null;
   streaming: boolean;
 }
@@ -60,6 +66,8 @@ function emptyAssistantTurn(): AssistantTurn {
     suggestionState: "idle",
     chosenId: null,
     plan: null,
+    paceRequest: null,
+    paceChosen: null,
     error: null,
     streaming: true,
   };
@@ -104,6 +112,8 @@ export function ChatView({ courseId }: { courseId?: string }) {
                   suggestionState: "idle",
                   chosenId: null,
                   plan: null,
+                  paceRequest: null,
+                  paceChosen: null,
                   error: null,
                   streaming: false,
                 },
@@ -156,6 +166,7 @@ export function ChatView({ courseId }: { courseId?: string }) {
         onToken: (token) => patchLastAssistant((t) => ({ ...t, text: t.text + token })),
         onSuggestion: (suggestion) => patchLastAssistant((t) => ({ ...t, suggestion })),
         onPlan: (plan) => patchLastAssistant((t) => ({ ...t, plan })),
+        onPaceRequest: (paceRequest) => patchLastAssistant((t) => ({ ...t, paceRequest })),
         onBlocked: (reason) => {
           toast.error("Message blocked", { description: reason });
           patchLastAssistant((t) => ({ ...t, text: reason }));
@@ -223,6 +234,18 @@ export function ChatView({ courseId }: { courseId?: string }) {
     );
   }
 
+  async function handlePace(turnIndex: number, pace: Pace) {
+    if (!activeCourseId) return;
+    setTurns((prev) => updateAssistant(prev, turnIndex, (t) => ({ ...t, paceChosen: pace })));
+    try {
+      await setPace(activeCourseId, pace);
+      await handleSend("Build me a study plan for this course");
+    } catch {
+      setTurns((prev) => updateAssistant(prev, turnIndex, (t) => ({ ...t, paceChosen: null })));
+      toast.error("Could not set pace", { description: "Please try again." });
+    }
+  }
+
   const isEmpty = turns.length === 0;
 
   return (
@@ -271,7 +294,15 @@ export function ChatView({ courseId }: { courseId?: string }) {
                     Build my study plan
                   </Button>
                 )}
-                {turn.plan && <StudyPlanCard plan={turn.plan} />}
+                {turn.paceRequest && (
+                  <PaceChooser
+                    request={turn.paceRequest}
+                    chosen={turn.paceChosen}
+                    busy={busy || turn.paceChosen !== null}
+                    onChoose={(pace) => handlePace(index, pace)}
+                  />
+                )}
+                {turn.plan && <StudyPlanCard plan={turn.plan} courseId={activeCourseId} />}
               </div>
             ),
           )

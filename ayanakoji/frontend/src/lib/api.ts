@@ -220,7 +220,9 @@ export interface Suggestion {
   options: CourseSuggestion[];
 }
 
-// ── Study plan (workload-aware schedule) ──────────────────────────────────────
+// ── Study plan (calendar-grounded, module-level) ──────────────────────────────
+
+export type Pace = "slower" | "normal" | "faster";
 
 export interface StudySession {
   day: string;
@@ -228,36 +230,46 @@ export interface StudySession {
   start: string;
   end: string;
   duration_minutes: number;
+  source: string;
+}
+
+export interface ScheduledBlock {
+  week: number;
+  day: string;
+  start: string;
+  end: string;
+  minutes: number;
 }
 
 export interface ModulePlan {
   module_id: string;
   title: string;
-  week: number;
+  sequence: number;
   estimated_minutes: number;
+  scheduled: ScheduledBlock[];
+  complete_before: string;
   objectives: string[];
-}
-
-export interface WeekPlan {
-  week: number;
-  module_ids: string[];
-  module_titles: string[];
-  total_minutes: number;
 }
 
 export interface StudyPlan {
   catalog_id: string;
   title: string;
   cert: string;
+  pace: Pace;
   weekly_study_hours: number;
-  timeline_multiplier: number;
   total_hours: number;
   weeks: number;
-  overestimate_factor: number;
+  start_date: string;
   modules: ModulePlan[];
-  schedule: WeekPlan[];
   sessions: StudySession[];
   capacity_reason: string;
+}
+
+export interface PaceRequest {
+  catalog_id: string;
+  title: string;
+  prompt: string;
+  options: Pace[];
 }
 
 export type PipelineEvent =
@@ -265,6 +277,7 @@ export type PipelineEvent =
   | { type: "token"; token: string }
   | { type: "suggestion"; prompt: string; options: CourseSuggestion[] }
   | { type: "plan"; plan: StudyPlan }
+  | { type: "pace_request"; catalog_id: string; title: string; prompt: string; options: Pace[] }
   | { type: "blocked"; reason: string }
   | { type: "error"; message: string }
   | { type: "done"; route: Route | null; suggested: boolean };
@@ -274,6 +287,7 @@ export interface StreamHandlers {
   onToken?: (token: string) => void;
   onSuggestion?: (suggestion: Suggestion) => void;
   onPlan?: (plan: StudyPlan) => void;
+  onPaceRequest?: (request: PaceRequest) => void;
   onBlocked?: (reason: string) => void;
   onError?: (message: string) => void;
   onDone?: (info: { route: Route | null; suggested: boolean }) => void;
@@ -340,6 +354,14 @@ function dispatchEvent(event: PipelineEvent, handlers: StreamHandlers): void {
     case "plan":
       handlers.onPlan?.(event.plan);
       break;
+    case "pace_request":
+      handlers.onPaceRequest?.({
+        catalog_id: event.catalog_id,
+        title: event.title,
+        prompt: event.prompt,
+        options: event.options,
+      });
+      break;
     case "blocked":
       handlers.onBlocked?.(event.reason);
       break;
@@ -358,4 +380,62 @@ export function acceptCourse(courseId: string, catalogId: string): Promise<Cours
     method: "POST",
     body: JSON.stringify({ catalog_id: catalogId }),
   });
+}
+
+/** Set the study pace (gates plan generation). */
+export function setPace(courseId: string, pace: Pace): Promise<Course> {
+  return requestJson<Course>(`/api/courses/${courseId}/pace`, {
+    method: "POST",
+    body: JSON.stringify({ pace }),
+  });
+}
+
+// ── Modules (the study plan's progress) ───────────────────────────────────────
+
+export interface CourseModuleProgress {
+  module_id: string;
+  title: string;
+  sequence: number;
+  estimated_minutes: number;
+  complete_before: string;
+  completed: boolean;
+  locked: boolean;
+  scheduled: ScheduledBlock[];
+}
+
+export interface ModuleContent {
+  module_id: string;
+  title: string;
+  content: string;
+}
+
+/** The course's scheduled modules with progress + sequential lock state. */
+export function listModules(
+  courseId: string,
+  signal?: AbortSignal,
+): Promise<CourseModuleProgress[]> {
+  return requestJson<CourseModuleProgress[]>(`/api/courses/${courseId}/modules`, { signal });
+}
+
+/** A module's markdown content for the Modules tab. */
+export function getModuleContent(
+  courseId: string,
+  moduleId: string,
+  signal?: AbortSignal,
+): Promise<ModuleContent> {
+  return requestJson<ModuleContent>(
+    `/api/courses/${courseId}/modules/${moduleId}/content`,
+    { signal },
+  );
+}
+
+/** Mark a module complete (sequential — only the active module). */
+export function completeModule(
+  courseId: string,
+  moduleId: string,
+): Promise<CourseModuleProgress[]> {
+  return requestJson<CourseModuleProgress[]>(
+    `/api/courses/${courseId}/modules/${moduleId}/complete`,
+    { method: "POST" },
+  );
 }
