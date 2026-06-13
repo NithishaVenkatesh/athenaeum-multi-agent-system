@@ -1,4 +1,4 @@
-"""FastAPI application entrypoint for the Ayanakoji backend.
+"""FastAPI application entrypoint for the Athenaeum backend.
 
 Skeleton only — no hackathon/agent logic yet. Provides liveness and a typed
 ``/api/ping`` contract the Next.js frontend uses to verify connectivity.
@@ -50,7 +50,7 @@ def create_app() -> FastAPI:
     """Application factory — keeps construction testable and import-side-effect free."""
     settings = get_settings()
     app = FastAPI(
-        title="Ayanakoji Backend",
+        title="Athenaeum Backend",
         version=__version__,
         description="Enterprise Learning Agent backend (skeleton).",
         lifespan=lifespan,

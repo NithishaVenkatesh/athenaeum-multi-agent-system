@@ -1,5 +1,5 @@
 /**
- * Typed client for the Ayanakoji backend.
+ * Typed client for the Athenaeum backend.
  *
  * Base URL comes from NEXT_PUBLIC_API_BASE_URL (exposed to the browser) and
  * defaults to the local FastAPI dev server. No secrets here — public config only.

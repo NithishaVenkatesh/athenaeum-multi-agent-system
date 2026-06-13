@@ -28,7 +28,7 @@ _TITLE_SYSTEM = (
     "no trailing punctuation."
 )
 _CHAT_SYSTEM = (
-    "You are Ayanakoji, an enterprise learning assistant. Help the learner understand "
+    "You are Athenaeum, an enterprise learning assistant. Help the learner understand "
     "their course topic clearly and concisely, with plain language and concrete examples."
 )
 

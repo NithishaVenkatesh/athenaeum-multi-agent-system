@@ -27,7 +27,7 @@ afterEach(() => {
 
 describe("AccountButton", () => {
   it("shows the signed-in persona and signs out", async () => {
-    window.localStorage.setItem("ayanakoji.persona", JSON.stringify(SAMPLE));
+    window.localStorage.setItem("athenaeum.persona", JSON.stringify(SAMPLE));
 
     render(
       <PersonaProvider>
@@ -39,6 +39,6 @@ describe("AccountButton", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
     expect(replaceMock).toHaveBeenCalledWith("/login");
-    expect(window.localStorage.getItem("ayanakoji.persona")).toBeNull();
+    expect(window.localStorage.getItem("athenaeum.persona")).toBeNull();
   });
 });

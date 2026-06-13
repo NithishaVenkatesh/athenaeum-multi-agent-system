@@ -18,7 +18,7 @@ import {
 
 import type { PersonaSummary } from "@/lib/api";
 
-const STORAGE_KEY = "ayanakoji.persona";
+const STORAGE_KEY = "athenaeum.persona";
 
 interface PersonaContextValue {
   persona: PersonaSummary | null;

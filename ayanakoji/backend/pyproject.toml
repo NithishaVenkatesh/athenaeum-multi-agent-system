@@ -1,7 +1,7 @@
 [project]
-name = "ayanakoji-backend"
+name = "athenaeum-backend"
 version = "0.1.0"
-description = "Ayanakoji — Enterprise Learning Agent backend (FastAPI)"
+description = "Athenaeum — Enterprise Learning Agent backend (FastAPI)"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

@@ -8,7 +8,7 @@ from app.config import FoundryConfig, Settings, _is_placeholder, get_settings
 
 def test_defaults() -> None:
     settings = Settings()
-    assert settings.app_name == "ayanakoji-backend"
+    assert settings.app_name == "athenaeum-backend"
     assert settings.environment == "development"
 
 

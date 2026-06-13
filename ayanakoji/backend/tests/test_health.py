@@ -12,7 +12,7 @@ def test_health_returns_ok(client: TestClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert body["service"] == "ayanakoji-backend"
+    assert body["service"] == "athenaeum-backend"
     assert body["version"] == __version__
 
 
@@ -22,7 +22,7 @@ def test_ping_returns_pong_with_contract(client: TestClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["message"] == "pong"
-    assert body["service"] == "ayanakoji-backend"
+    assert body["service"] == "athenaeum-backend"
     assert body["version"] == __version__
     # timestamp must be a parseable ISO-8601 string
     assert "T" in body["timestamp"]

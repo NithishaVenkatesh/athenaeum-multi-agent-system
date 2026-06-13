@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from fastapi import APIRouter
+
 from app.catalog.loader import get_catalog
 from app.catalog.models import CatalogCourse
-from fastapi import APIRouter
 
 router = APIRouter(prefix="/api/catalog", tags=["catalog"])
 

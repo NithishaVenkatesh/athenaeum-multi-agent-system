@@ -48,7 +48,7 @@ describe("WorkspaceChrome", () => {
   });
 
   it("renders the shell and children when signed in", async () => {
-    window.localStorage.setItem("ayanakoji.persona", JSON.stringify(SAMPLE));
+    window.localStorage.setItem("athenaeum.persona", JSON.stringify(SAMPLE));
     void listCourses; // mocked; keeps the workspace provider from hitting the network
 
     render(

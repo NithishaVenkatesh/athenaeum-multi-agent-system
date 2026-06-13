@@ -16,7 +16,7 @@ const SAMPLE: PersonaSummary = {
   preferred_learning_slot: "Morning",
 };
 
-const STORAGE_KEY = "ayanakoji.persona";
+const STORAGE_KEY = "athenaeum.persona";
 
 function Consumer() {
   const { persona, ready, selectPersona, signOut } = usePersona();

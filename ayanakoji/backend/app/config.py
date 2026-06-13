@@ -36,7 +36,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    app_name: str = "ayanakoji-backend"
+    app_name: str = "athenaeum-backend"
     environment: str = "development"
 
     # Comma-separated list of allowed CORS origins for the Next.js frontend.
@@ -44,7 +44,7 @@ class Settings(BaseSettings):
 
     # --- Learner workspace persistence (courses, messages, assessments) ---
     # SQLite by default — zero infra, file-based, fully offline. Override per env.
-    database_url: str = "sqlite:///./ayanakoji.db"
+    database_url: str = "sqlite:///./athenaeum.db"
 
     # Force the deterministic offline LLM path even when Foundry creds are present
     # (used by CI/E2E/smoke so the chat works without live Azure calls).

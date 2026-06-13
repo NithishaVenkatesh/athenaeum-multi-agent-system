@@ -21,7 +21,7 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "Ayanakoji · Athenaeum",
+  title: "Athenaeum",
   description: "A learning workspace where every course is a conversation.",
 };
 

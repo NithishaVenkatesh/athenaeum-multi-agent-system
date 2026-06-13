@@ -63,7 +63,7 @@ describe("PersonaChooser", () => {
     fireEvent.click(card);
 
     expect(pushMock).toHaveBeenCalledWith("/chat");
-    expect(window.localStorage.getItem("ayanakoji.persona")).toContain("Vega");
+    expect(window.localStorage.getItem("athenaeum.persona")).toContain("Vega");
   });
 
   it("shows an error when the roster cannot be loaded", async () => {

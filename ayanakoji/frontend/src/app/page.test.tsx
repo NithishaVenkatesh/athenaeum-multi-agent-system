@@ -36,7 +36,7 @@ describe("Home", () => {
   });
 
   it("redirects to /chat when a persona is signed in", async () => {
-    window.localStorage.setItem("ayanakoji.persona", JSON.stringify(SAMPLE));
+    window.localStorage.setItem("athenaeum.persona", JSON.stringify(SAMPLE));
     render(
       <PersonaProvider>
         <Home />

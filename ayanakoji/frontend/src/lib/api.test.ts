@@ -4,7 +4,7 @@ import { pingBackend } from "@/lib/api";
 
 const PAYLOAD = {
   message: "pong",
-  service: "ayanakoji-backend",
+  service: "athenaeum-backend",
   version: "0.1.0",
   timestamp: "2026-01-01T00:00:00+00:00",
 };
