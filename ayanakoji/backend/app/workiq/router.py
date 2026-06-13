@@ -13,18 +13,25 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.workiq.models import (
+    Availability,
+    CertTarget,
     DaySchedule,
     LearnerProfile,
+    LearningPreferences,
+    Okr,
     Org,
     Persona,
     PersonaSummary,
+    Profile,
     Seniority,
     ServiceInfo,
+    Sprint,
     Team,
     TeamCapacity,
     Vertical,
     Weekday,
     WeekSchedule,
+    WorkContext,
     WorkSignals,
 )
 from app.workiq.repository import WorkIQRepository, get_repository
@@ -116,6 +123,45 @@ def get_learning(employee_id: str, repo: RepoDep) -> LearnerProfile:
     return _require(repo.get_learning(employee_id), kind="persona", key=employee_id)
 
 
+@router.get(
+    "/personas/{employee_id}/learning/preferences",
+    response_model=LearningPreferences,
+    summary="Learning preferences & cadence (bundle A)",
+)
+def get_learning_preferences(employee_id: str, repo: RepoDep) -> LearningPreferences:
+    """Preferred study hours, session length, days, slot window, modality, and pace."""
+    return _require(repo.get_learning_preferences(employee_id), kind="persona", key=employee_id)
+
+
+@router.get(
+    "/personas/{employee_id}/profile",
+    response_model=Profile,
+    summary="Synthetic profile/identity (bundle E)",
+)
+def get_profile(employee_id: str, repo: RepoDep) -> Profile:
+    return _require(repo.get_profile(employee_id), kind="persona", key=employee_id)
+
+
+@router.get(
+    "/personas/{employee_id}/work-context",
+    response_model=WorkContext,
+    summary="Work context & workload (bundle B)",
+)
+def get_work_context(employee_id: str, repo: RepoDep) -> WorkContext:
+    """Work mode, focus windows, on-call, PTO, after-hours load, and switch score."""
+    return _require(repo.get_work_context(employee_id), kind="persona", key=employee_id)
+
+
+@router.get(
+    "/personas/{employee_id}/availability",
+    response_model=Availability,
+    summary="Derived availability (bundle B)",
+)
+def get_availability(employee_id: str, repo: RepoDep) -> Availability:
+    """When the person is reachable/free: working hours, focus windows, free capacity."""
+    return _require(repo.get_availability(employee_id), kind="persona", key=employee_id)
+
+
 @router.get("/work-signals", response_model=list[WorkSignals], summary="All work signals")
 def list_work_signals(repo: RepoDep) -> list[WorkSignals]:
     """Org-wide Work IQ Dataset 2 surface — one row per persona."""
@@ -125,6 +171,25 @@ def list_work_signals(repo: RepoDep) -> list[WorkSignals]:
 @router.get("/teams/{team_id}", response_model=Team, summary="Team roster")
 def get_team(team_id: str, repo: RepoDep) -> Team:
     return _require(repo.get_team(team_id), kind="team", key=team_id)
+
+
+@router.get("/teams/{team_id}/sprint", response_model=Sprint, summary="Active sprint (bundle F)")
+def get_sprint(team_id: str, repo: RepoDep) -> Sprint:
+    return _require(repo.get_sprint(team_id), kind="team", key=team_id)
+
+
+@router.get("/teams/{team_id}/okrs", response_model=list[Okr], summary="Team OKRs (bundle F)")
+def get_okrs(team_id: str, repo: RepoDep) -> list[Okr]:
+    return _require(repo.get_okrs(team_id), kind="team", key=team_id)
+
+
+@router.get(
+    "/teams/{team_id}/cert-targets",
+    response_model=list[CertTarget],
+    summary="Team certification targets (bundle F)",
+)
+def get_cert_targets(team_id: str, repo: RepoDep) -> list[CertTarget]:
+    return _require(repo.get_cert_targets(team_id), kind="team", key=team_id)
 
 
 @router.get(

@@ -13,17 +13,24 @@ from functools import lru_cache
 from pathlib import Path
 
 from app.workiq.models import (
+    Availability,
+    CertTarget,
     DaySchedule,
     LearnerProfile,
+    LearningPreferences,
+    Okr,
     Org,
     Persona,
     PersonaSummary,
+    Profile,
     ServiceInfo,
+    Sprint,
     Team,
     TeamCapacity,
     Vertical,
     Weekday,
     WeekSchedule,
+    WorkContext,
     WorkIQDocument,
     WorkSignals,
 )
@@ -118,6 +125,40 @@ class WorkIQRepository:
     def get_learning(self, employee_id: str) -> LearnerProfile | None:
         persona = self.get_persona(employee_id)
         return persona.learning if persona else None
+
+    def get_profile(self, employee_id: str) -> Profile | None:
+        persona = self.get_persona(employee_id)
+        return persona.profile if persona else None
+
+    def get_learning_preferences(self, employee_id: str) -> LearningPreferences | None:
+        persona = self.get_persona(employee_id)
+        return persona.learning_preferences if persona else None
+
+    def get_work_context(self, employee_id: str) -> WorkContext | None:
+        persona = self.get_persona(employee_id)
+        return persona.work_context if persona else None
+
+    def get_availability(self, employee_id: str) -> Availability | None:
+        """Derived availability: work-mode/windows/on-call + summed free capacity."""
+        persona = self.get_persona(employee_id)
+        if persona is None:
+            return None
+        free = round(sum(d.summary.free_capacity_hours for d in persona.schedule.days), 2)
+        return Availability.of(persona, free)
+
+    # ── Team delivery context (Bundle F) ─────────────────────────────────────
+
+    def get_sprint(self, team_id: str) -> Sprint | None:
+        team = self.get_team(team_id)
+        return team.sprint if team else None
+
+    def get_okrs(self, team_id: str) -> list[Okr] | None:
+        team = self.get_team(team_id)
+        return list(team.okrs) if team else None
+
+    def get_cert_targets(self, team_id: str) -> list[CertTarget] | None:
+        team = self.get_team(team_id)
+        return list(team.cert_targets) if team else None
 
     # ── Manager surface (aggregate-only) ─────────────────────────────────────
 
