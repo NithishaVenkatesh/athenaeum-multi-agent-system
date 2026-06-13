@@ -153,3 +153,87 @@ def test_distribution_exercises_the_capacity_and_slot_rules(
 def test_repository_loads_the_committed_file(document: WorkIQDocument) -> None:
     repo = WorkIQRepository.from_path(DATA_PATH)
     assert len(repo.list_personas()) == len(document.personas)
+
+
+# ── Enrichment bundles (A / B / E / F) ───────────────────────────────────────
+
+
+def test_preferred_study_days_match_the_schedule(document: WorkIQDocument) -> None:
+    """Bundle A study days must equal the days the schedule actually books learning."""
+    for persona in document.personas:
+        scheduled = {
+            day.day
+            for day in persona.schedule.days
+            if any(b.category == "learning" for b in day.blocks)
+        }
+        assert set(persona.learning_preferences.preferred_study_days) == scheduled, (
+            persona.employee_id
+        )
+
+
+def test_study_window_matches_preferred_slot(document: WorkIQDocument) -> None:
+    for persona in document.personas:
+        window = persona.learning_preferences.study_window
+        if persona.preferred_learning_slot == "Morning":
+            assert window.start == "11:00"
+        else:
+            assert window.start == "16:00"
+
+
+def test_profile_is_synthetic_and_plausible(document: WorkIQDocument) -> None:
+    for persona in document.personas:
+        profile = persona.profile
+        assert profile.level_code in {"L3", "L4", "L5", "L6", "L7"}
+        assert 0 < profile.tenure_months <= 120
+        assert 0 < profile.years_experience <= 20
+        assert profile.languages
+        # start_date is in the past relative to the synthetic week.
+        assert profile.start_date < document.service.week.start
+
+
+def test_work_context_shapes(document: WorkIQDocument) -> None:
+    for persona in document.personas:
+        ctx = persona.work_context
+        assert isinstance(ctx.on_call.dates, list)
+        assert isinstance(ctx.pto_days, list)
+        assert ctx.focus_windows
+        assert 0.0 <= ctx.context_switch_score <= 1.0
+        # When flagged on-call, concrete dates must be present.
+        if ctx.on_call.is_on_call:
+            assert ctx.on_call.dates
+
+
+def test_someone_is_on_call_and_someone_has_planned_pto(document: WorkIQDocument) -> None:
+    assert any(p.work_context.on_call.is_on_call for p in document.personas)
+    assert any(p.work_context.pto_days for p in document.personas)
+
+
+def test_day_summaries_are_derived_from_blocks(document: WorkIQDocument) -> None:
+    for persona in document.personas:
+        for day in persona.schedule.days:
+            meeting = sum(b.duration_hours for b in day.blocks if b.meter == "meeting")
+            collab = sum(b.duration_hours for b in day.blocks if b.meter == "collab")
+            focus = sum(b.duration_hours for b in day.blocks if b.category == "focus")
+            learning = sum(b.duration_hours for b in day.blocks if b.category == "learning")
+            assert day.summary.block_count == len(day.blocks)
+            assert day.summary.meeting_hours == pytest.approx(round(meeting, 2))
+            assert day.summary.collab_hours == pytest.approx(round(collab, 2))
+            assert day.summary.focus_hours == pytest.approx(round(focus, 2))
+            assert day.summary.learning_hours == pytest.approx(round(learning, 2))
+            assert day.summary.free_capacity_hours == pytest.approx(round(focus, 2))
+
+
+def test_weekly_focus_signal_equals_sum_of_day_summaries(document: WorkIQDocument) -> None:
+    """work_signals.focus_hours (focus meter) == sum of per-day focus + learning."""
+    for persona in document.personas:
+        total = sum(d.summary.focus_hours + d.summary.learning_hours for d in persona.schedule.days)
+        assert persona.work_signals.focus_hours_per_week == pytest.approx(round(total, 2))
+
+
+def test_team_delivery_context_present(document: WorkIQDocument) -> None:
+    team = document.org.teams[0]
+    assert team.sprint.number > 0
+    assert len(team.okrs) >= 1
+    assert {t.vertical for t in team.cert_targets} == {v.id for v in document.verticals}
+    policy = team.capacity_policy.target_study_hours_by_seniority
+    assert set(policy) == {"senior", "junior", "manager"}

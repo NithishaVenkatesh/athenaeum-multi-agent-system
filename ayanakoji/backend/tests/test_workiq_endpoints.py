@@ -92,6 +92,54 @@ def test_signals_and_learning(client: TestClient) -> None:
     assert client.get(f"{BASE}/personas/EMP-999/learning").status_code == 404
 
 
+def test_learning_preferences_endpoint(client: TestClient) -> None:
+    prefs = client.get(f"{BASE}/personas/EMP-002/learning/preferences").json()
+    assert prefs["preferred_study_hours_per_week"] == 8
+    assert prefs["preferred_study_days"]
+    assert prefs["study_window"]["start"] == "16:00"  # afternoon learner
+    assert client.get(f"{BASE}/personas/EMP-999/learning/preferences").status_code == 404
+
+
+def test_profile_endpoint(client: TestClient) -> None:
+    profile = client.get(f"{BASE}/personas/EMP-009/profile").json()
+    assert profile["level_code"] in {"L3", "L4", "L5", "L6", "L7"}
+    assert profile["languages"]
+    assert client.get(f"{BASE}/personas/EMP-999/profile").status_code == 404
+
+
+def test_work_context_endpoint(client: TestClient) -> None:
+    ctx = client.get(f"{BASE}/personas/EMP-003/work-context").json()
+    assert ctx["work_mode"] in {"office", "remote", "hybrid"}
+    assert ctx["on_call"]["is_on_call"] is True
+    assert ctx["focus_windows"]
+    assert client.get(f"{BASE}/personas/EMP-999/work-context").status_code == 404
+
+
+def test_availability_endpoint(client: TestClient) -> None:
+    avail = client.get(f"{BASE}/personas/EMP-001/availability").json()
+    assert avail["employee_id"] == "EMP-001"
+    assert avail["weekly_free_capacity_hours"] > 0
+    assert client.get(f"{BASE}/personas/EMP-999/availability").status_code == 404
+
+
+def test_day_schedule_carries_summary(client: TestClient) -> None:
+    day = client.get(f"{BASE}/personas/EMP-001/schedule/mon").json()
+    summary = day["summary"]
+    assert summary["block_count"] == len(day["blocks"])
+    assert "fragmentation_score" in summary
+    assert "free_capacity_hours" in summary
+
+
+def test_team_sprint_okrs_cert_targets(client: TestClient) -> None:
+    assert client.get(f"{BASE}/teams/TEAM-A/sprint").json()["number"] == 24
+    okrs = client.get(f"{BASE}/teams/TEAM-A/okrs").json()
+    assert len(okrs) == 3 and all("key_results" in o for o in okrs)
+    targets = client.get(f"{BASE}/teams/TEAM-A/cert-targets").json()
+    assert len(targets) == 5
+    for path in ("sprint", "okrs", "cert-targets"):
+        assert client.get(f"{BASE}/teams/TEAM-NOPE/{path}").status_code == 404
+
+
 def test_all_work_signals(client: TestClient) -> None:
     rows = client.get(f"{BASE}/work-signals").json()
     assert len(rows) == 11

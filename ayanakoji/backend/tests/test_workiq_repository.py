@@ -95,6 +95,62 @@ def test_list_work_signals_one_row_per_persona(repo: WorkIQRepository) -> None:
     assert {s.employee_id for s in signals} == {p.employee_id for p in repo.list_personas()}
 
 
+# ── Enrichment bundles A / B / E ─────────────────────────────────────────────
+
+
+def test_profile_found_and_missing(repo: WorkIQRepository) -> None:
+    profile = repo.get_profile("EMP-003")
+    assert profile is not None
+    assert profile.level_code == "L6"
+    assert "Go" in profile.languages
+    assert repo.get_profile("EMP-999") is None
+
+
+def test_learning_preferences_found_and_missing(repo: WorkIQRepository) -> None:
+    prefs = repo.get_learning_preferences("EMP-002")
+    assert prefs is not None
+    assert prefs.preferred_study_hours_per_week == 8
+    assert prefs.pace == "intensive"
+    assert repo.get_learning_preferences("EMP-999") is None
+
+
+def test_work_context_found_and_missing(repo: WorkIQRepository) -> None:
+    ctx = repo.get_work_context("EMP-003")
+    assert ctx is not None
+    assert ctx.on_call.is_on_call is True
+    assert ctx.on_call.dates
+    assert repo.get_work_context("EMP-999") is None
+
+
+def test_availability_sums_free_capacity(repo: WorkIQRepository) -> None:
+    avail = repo.get_availability("EMP-001")
+    assert avail is not None
+    persona = repo.get_persona("EMP-001")
+    assert persona is not None
+    expected = round(sum(d.summary.free_capacity_hours for d in persona.schedule.days), 2)
+    assert avail.weekly_free_capacity_hours == expected
+    assert avail.employee_id == "EMP-001"
+    assert repo.get_availability("EMP-999") is None
+
+
+# ── Team delivery context (Bundle F) ─────────────────────────────────────────
+
+
+def test_team_delivery_context(repo: WorkIQRepository) -> None:
+    assert repo.get_sprint("TEAM-A") is not None
+    assert repo.get_sprint("TEAM-A").number == 24  # type: ignore[union-attr]
+    okrs = repo.get_okrs("TEAM-A")
+    assert okrs is not None and len(okrs) == 3
+    targets = repo.get_cert_targets("TEAM-A")
+    assert targets is not None and len(targets) == 5
+
+
+def test_team_delivery_context_missing_team(repo: WorkIQRepository) -> None:
+    assert repo.get_sprint("TEAM-NOPE") is None
+    assert repo.get_okrs("TEAM-NOPE") is None
+    assert repo.get_cert_targets("TEAM-NOPE") is None
+
+
 # ── Aggregate (manager) surface ──────────────────────────────────────────────
 
 
