@@ -26,8 +26,13 @@ source "$ENV_FILE"; set +a
 echo "==> 1/5 Registering Microsoft.Search provider"
 az provider register --namespace Microsoft.Search --wait
 
-echo "==> 2/5 Resource group $SEARCH_RESOURCE_GROUP ($AZURE_LOCATION)"
-az group create --name "$SEARCH_RESOURCE_GROUP" --location "$AZURE_LOCATION" --output none
+echo "==> 2/5 Resource group $SEARCH_RESOURCE_GROUP"
+# RG location is independent of the resources inside it; only create if absent.
+if az group show --name "$SEARCH_RESOURCE_GROUP" >/dev/null 2>&1; then
+  echo "    already exists ($(az group show --name "$SEARCH_RESOURCE_GROUP" --query location -o tsv)) — skipping"
+else
+  az group create --name "$SEARCH_RESOURCE_GROUP" --location "$AZURE_LOCATION" --output none
+fi
 
 echo "==> 3/5 Azure AI Search service $SEARCH_SERVICE_NAME (sku=$SEARCH_SKU)"
 if az search service show --name "$SEARCH_SERVICE_NAME" --resource-group "$SEARCH_RESOURCE_GROUP" >/dev/null 2>&1; then
