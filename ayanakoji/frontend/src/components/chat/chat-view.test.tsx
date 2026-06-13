@@ -2,13 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ChatView } from "@/components/chat/chat-view";
-import {
-  createCourse,
-  getCourse,
-  patchCourse,
-  streamMessage,
-  type Course,
-} from "@/lib/api";
+import { createCourse, getCourse, streamMessage, type Course } from "@/lib/api";
 
 vi.mock("@/components/workspace/workspace-context", () => ({
   useWorkspace: () => ({
@@ -25,14 +19,12 @@ vi.mock("@/lib/api", async (importOriginal) => {
     ...actual,
     createCourse: vi.fn(),
     getCourse: vi.fn(),
-    patchCourse: vi.fn(),
     streamMessage: vi.fn(),
   };
 });
 
 const mockCreate = vi.mocked(createCourse);
 const mockGet = vi.mocked(getCourse);
-const mockPatch = vi.mocked(patchCourse);
 const mockStream = vi.mocked(streamMessage);
 
 function course(overrides: Partial<Course> = {}): Course {
@@ -69,17 +61,14 @@ describe("ChatView", () => {
     await waitFor(() =>
       expect(mockCreate).toHaveBeenCalledWith("EMP-001", "Explain RAG"),
     );
-    expect(mockStream).toHaveBeenCalledWith(
-      "c1",
-      "Explain RAG",
-      expect.any(Function),
-    );
-    // User turn and streamed assistant reply both render.
+    expect(mockStream).toHaveBeenCalledWith("c1", "Explain RAG", expect.any(Function));
+    // User turn and streamed assistant reply both render. The title is not shown
+    // on the chat page (it lives in the shell's chat switcher).
     expect(screen.getByText("Explain RAG")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText("Hello world")).toBeInTheDocument());
   });
 
-  it("loads and renders an existing conversation", async () => {
+  it("loads and renders an existing conversation without a title heading", async () => {
     mockGet.mockResolvedValue(
       course({
         messages: [
@@ -93,29 +82,7 @@ describe("ChatView", () => {
 
     await waitFor(() => expect(screen.getByText("hello there")).toBeInTheDocument());
     expect(screen.getByText("hi")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Functions" })).toBeInTheDocument();
-  });
-
-  it("renames the chat from the title", async () => {
-    mockGet.mockResolvedValue(course());
-    mockPatch.mockResolvedValue(course({ chat_name: "Functions deep dive" }));
-
-    render(<ChatView courseId="c1" />);
-    fireEvent.click(await screen.findByRole("button", { name: "Functions" }));
-
-    const input = screen.getByRole("textbox", { name: "Chat name" });
-    fireEvent.change(input, { target: { value: "Functions deep dive" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-
-    await waitFor(() =>
-      expect(mockPatch).toHaveBeenCalledWith("c1", {
-        chat_name: "Functions deep dive",
-      }),
-    );
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Functions deep dive" }),
-      ).toBeInTheDocument(),
-    );
+    // No in-page title button — the shell owns the title now.
+    expect(screen.queryByRole("button", { name: "Functions" })).toBeNull();
   });
 });

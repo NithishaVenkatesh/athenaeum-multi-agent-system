@@ -5,10 +5,11 @@
  * "New chat" entry. The trigger shows the active chat's name (or "New chat").
  */
 
-import { ChevronsUpDown, MessageSquarePlus, MessagesSquare } from "lucide-react";
+import { ChevronsUpDown, MessageSquarePlus, MessagesSquare, Pencil } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { RenameCourseDialog } from "@/components/workspace/rename-course-dialog";
 import { useWorkspace } from "@/components/workspace/workspace-context";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,12 +23,14 @@ import {
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { parseChatRoute } from "@/lib/chat-route";
+import type { CourseSummary } from "@/lib/api";
 
 export function CourseSwitcher() {
   const router = useRouter();
   const pathname = usePathname();
-  const { courses } = useWorkspace();
+  const { courses, reloadCourses } = useWorkspace();
   const [open, setOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<CourseSummary | null>(null);
 
   const { courseId } = parseChatRoute(pathname);
   const active = courses.find((course) => course.id === courseId);
@@ -38,8 +41,14 @@ export function CourseSwitcher() {
     router.push(href);
   }
 
+  function openRename(course: CourseSummary) {
+    setOpen(false);
+    setRenameTarget(course);
+  }
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         render={<Button variant="outline" size="sm" aria-label="Choose a chat" />}
       >
@@ -58,9 +67,23 @@ export function CourseSwitcher() {
                   key={course.id}
                   value={`${course.chat_name} ${course.id}`}
                   onSelect={() => go(`/chat/${course.id}`)}
+                  className="group/item"
                 >
                   <MessagesSquare className="text-muted-foreground" />
-                  <span className="truncate">{course.chat_name}</span>
+                  <span className="flex-1 truncate">{course.chat_name}</span>
+                  <button
+                    type="button"
+                    aria-label={`Rename ${course.chat_name}`}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      event.preventDefault();
+                      openRename(course);
+                    }}
+                    className="text-muted-foreground hover:text-foreground hover:bg-background rounded-md p-1 opacity-0 transition group-hover/item:opacity-100 focus-visible:opacity-100"
+                  >
+                    <Pencil className="size-3.5" />
+                  </button>
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -74,6 +97,17 @@ export function CourseSwitcher() {
           </CommandList>
         </Command>
       </PopoverContent>
-    </Popover>
+      </Popover>
+
+      <RenameCourseDialog
+        course={renameTarget}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setRenameTarget(null);
+        }}
+        onRenamed={() => {
+          void reloadCourses();
+        }}
+      />
+    </>
   );
 }

@@ -11,9 +11,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { ChatComposer } from "@/components/chat/chat-composer";
 import { MessageBubble } from "@/components/chat/message-bubble";
-import { RenameTitle } from "@/components/chat/rename-title";
 import { useWorkspace } from "@/components/workspace/workspace-context";
-import { Badge } from "@/components/ui/badge";
 import {
   createCourse,
   getCourse,
@@ -94,24 +92,6 @@ export function ChatView({ courseId }: { courseId?: string }) {
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4">
-      {course && (
-        <div className="flex flex-wrap items-center gap-3 py-4">
-          <RenameTitle
-            key={course.chat_name}
-            course={course}
-            onRenamed={(updated) => {
-              setCourse(updated);
-              void reloadCourses();
-            }}
-          />
-          {course.catalog_title && (
-            <Badge variant="secondary" className="font-mono text-[0.65rem]">
-              {course.catalog_title}
-            </Badge>
-          )}
-        </div>
-      )}
-
       <div className="flex-1 space-y-4 py-4">
         {loadError ? (
           <p role="alert" className="text-destructive text-sm">
