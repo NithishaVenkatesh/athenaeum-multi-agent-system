@@ -1,41 +1,53 @@
-"""Deterministic study-plan algorithm — workload-aware schedule for one course.
+"""Calendar-grounded, module-level study-plan algorithm.
 
-Pure functions over the course's modules and the learner's Work IQ signals
-(master-plan §13). An LLM only narrates the result; every number here is computed,
-so the plan is auditable and reproducible (A-104).
+Pure functions over the course's modules and the learner's *real* weekly
+calendar (master-plan §13). Nothing is hardcoded or guessed:
 
-Pipeline:
-1. estimate each module's minutes from its objectives, then **over-estimate ×2**.
-2. capacity: weekly study hours from the learner's stated capacity, reduced when
-   meeting load is heavy (>20 h/week ⇒ ×0.6), capped at 15 h/week.
-3. allocate modules into weeks, packed to the weekly capacity, in prereq order.
-4. place recurring study sessions in the learner's focus windows on their
-   preferred study days, inside their preferred Morning/Afternoon slot.
+- **Capacity is read from the calendar**, not a multiplier. Study time = the
+  learner's dedicated study blocks (``category=learning``) plus genuine free gaps
+  within working hours, on their preferred study days. The one committed week is
+  treated as the repeating weekly template.
+- **Per-module time is computed from that module's content** (objectives +
+  skills) and scaled by the learner's chosen pace. A modest safety headroom is
+  applied internally and is **not** surfaced to the learner.
+- **Modules are scheduled sequentially** into the repeating weekly slots; each
+  gets the concrete sessions that cover it and a "complete before" date.
+
+An LLM only narrates the result — every number here is computed and auditable.
 """
 
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import date, timedelta
 from functools import lru_cache
 from pathlib import Path
 
-from app.agent.contracts import ModulePlan, StudyPlan, StudySession, WeekPlan
+from app.agent.contracts import (
+    ModulePlan,
+    Pace,
+    ScheduledBlock,
+    StudyPlan,
+    StudySession,
+)
 from app.catalog.loader import default_catalog_path
 from app.config import Settings, get_settings
-from app.workiq.models import Persona
+from app.workiq.models import DaySchedule, Persona
 
-# --- Tunable constants (the plan's safety posture) ---
-OVERESTIMATE_FACTOR = 2.0  # over-estimate every module by 2× (user requirement)
-MODULE_BASE_MINUTES = 45  # reading/setup floor per module
-MINUTES_PER_OBJECTIVE = 20  # hands-on time per learning objective
-HEAVY_MEETING_THRESHOLD = 20.0  # meeting h/week above which capacity is reduced
-HEAVY_CAPACITY_FACTOR = 0.6  # ×0.6 weekly study hours when meeting-heavy (§13)
-WEEKLY_HOURS_CAP = 15.0  # never plan more than this per week
-WEEKLY_HOURS_FLOOR = 1.0  # always plan at least this per week
-SESSION_MIN_MINUTES = 30
-SESSION_MAX_MINUTES = 150
-_DEFAULT_STUDY_DAYS = ("tue", "wed", "thu")
+# --- Module time estimate (computed from content; headroom is internal) ---
+MODULE_BASE_MINUTES = 40
+MINUTES_PER_OBJECTIVE = 18
+MINUTES_PER_SKILL = 8
+SAFETY_HEADROOM = 1.5  # internal buffer so estimates run generous — never surfaced
+SESSION_GRANULARITY = 15  # round estimates to a tidy quarter-hour
+PACE_FACTOR: dict[Pace, float] = {Pace.SLOWER: 1.35, Pace.NORMAL: 1.0, Pace.FASTER: 0.75}
+
+# --- Calendar interpretation ---
+_STUDY_CATEGORIES = {"learning"}  # dedicated study blocks already in the calendar
+_WEEKDAY_ORDER = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+_WEEKDAY_INDEX = {d: i for i, d in enumerate(_WEEKDAY_ORDER)}
+_MIN_SLOT_MINUTES = 20  # ignore slivers too short to study in
 
 
 @dataclass(frozen=True)
@@ -73,101 +85,26 @@ def course_modules(catalog_path: str, catalog_id: str) -> tuple[ModuleInfo, ...]
     return ()
 
 
-# ── 1. Module time estimate (over-estimated ×2) ────────────────────────────────
+# ── 1. Per-module time (content + pace; headroom internal) ─────────────────────
 
 
-def estimate_module_minutes(module: ModuleInfo) -> int:
-    """Base time from objectives, then over-estimated by ``OVERESTIMATE_FACTOR``."""
-    base = MODULE_BASE_MINUTES + MINUTES_PER_OBJECTIVE * len(module.objectives)
-    return int(round(base * OVERESTIMATE_FACTOR))
+def estimate_module_minutes(module: ModuleInfo, pace: Pace) -> int:
+    """Minutes for a module from its own content, scaled by pace.
 
-
-# ── 2. Capacity from work load ─────────────────────────────────────────────────
-
-
-@dataclass(frozen=True)
-class Capacity:
-    weekly_hours: float
-    timeline_multiplier: float
-    meeting_heavy: bool
-    reason: str
-
-
-def calculate_capacity(*, meeting_hours: float, base_weekly_hours: float) -> Capacity:
-    """Weekly study hours after adjusting for meeting load (§13)."""
-    base = max(base_weekly_hours, WEEKLY_HOURS_FLOOR)
-    heavy = meeting_hours > HEAVY_MEETING_THRESHOLD
-    weekly = base * (HEAVY_CAPACITY_FACTOR if heavy else 1.0)
-    weekly = max(min(weekly, WEEKLY_HOURS_CAP), WEEKLY_HOURS_FLOOR)
-    weekly = round(weekly, 1)
-    timeline_multiplier = round(base / weekly, 2) if weekly else 1.0
-    if heavy:
-        reason = (
-            f"Meeting load is heavy ({meeting_hours:.0f} h/week), so the weekly study "
-            f"target is reduced from {base:.0f} h to {weekly:.0f} h — the plan runs "
-            f"~{timeline_multiplier:.1f}× longer to stay realistic."
-        )
-    else:
-        reason = (
-            f"Meeting load is manageable ({meeting_hours:.0f} h/week), so the full "
-            f"{weekly:.0f} h/week study target is used."
-        )
-    return Capacity(weekly, timeline_multiplier, heavy, reason)
-
-
-# ── 3. Allocate modules into weeks ─────────────────────────────────────────────
-
-
-def allocate_modules_to_weeks(
-    estimates: list[tuple[ModuleInfo, int]], weekly_minutes: float
-) -> tuple[list[ModulePlan], list[WeekPlan]]:
-    """Pack modules into weeks up to the weekly capacity, in order.
-
-    A module that alone exceeds a week's capacity still occupies its own week
-    (we never split a module across weeks). Returns the per-module plan and the
-    week roll-up.
+    Varies per module (more objectives/skills ⇒ more time). The internal safety
+    headroom keeps estimates generous; it is deliberately not exposed.
     """
-    module_plans: list[ModulePlan] = []
-    weeks: list[WeekPlan] = []
-    week_no = 1
-    cur_ids: list[str] = []
-    cur_titles: list[str] = []
-    cur_total = 0
-
-    def flush() -> None:
-        nonlocal cur_ids, cur_titles, cur_total, week_no
-        if cur_ids:
-            weeks.append(
-                WeekPlan(
-                    week=week_no,
-                    module_ids=cur_ids,
-                    module_titles=cur_titles,
-                    total_minutes=cur_total,
-                )
-            )
-            week_no += 1
-            cur_ids, cur_titles, cur_total = [], [], 0
-
-    for module, minutes in estimates:
-        if cur_total and cur_total + minutes > weekly_minutes:
-            flush()
-        module_plans.append(
-            ModulePlan(
-                module_id=module.module_id,
-                title=module.title,
-                week=week_no,
-                estimated_minutes=minutes,
-                objectives=list(module.objectives),
-            )
-        )
-        cur_ids.append(module.module_id)
-        cur_titles.append(module.title)
-        cur_total += minutes
-    flush()
-    return module_plans, weeks
+    content = (
+        MODULE_BASE_MINUTES
+        + MINUTES_PER_OBJECTIVE * len(module.objectives)
+        + MINUTES_PER_SKILL * module.skills
+    )
+    raw = content * SAFETY_HEADROOM * PACE_FACTOR[pace]
+    rounded = round(raw / SESSION_GRANULARITY) * SESSION_GRANULARITY
+    return max(SESSION_GRANULARITY, int(rounded))
 
 
-# ── 4. Session slot selection ──────────────────────────────────────────────────
+# ── 2. Weekly study slots from the real calendar ───────────────────────────────
 
 
 def _to_min(hhmm: str) -> int:
@@ -187,55 +124,128 @@ def _slot_of(start_minute: int) -> str:
     return "Evening"
 
 
-def _select_window(
-    focus_windows: list[tuple[int, int]],
-    study_window: tuple[int, int],
-    preferred_slot: str,
-) -> tuple[int, int]:
-    """Best (start, end) for sessions: a focus window in the preferred slot,
-    intersected with the learner's study window when they overlap."""
-    candidates = focus_windows or [study_window]
-    # Prefer a focus window whose slot matches; else the first one.
-    chosen = next((w for w in candidates if _slot_of(w[0]) == preferred_slot), candidates[0])
-    start = max(chosen[0], study_window[0])
-    end = min(chosen[1], study_window[1])
-    if start >= end:  # no overlap → fall back to the whole focus window
-        start, end = chosen
-    return start, end
+@dataclass(frozen=True)
+class WeeklySlot:
+    """A recurring weekly study opportunity drawn from the calendar."""
+
+    day: str
+    start: int  # minutes since midnight
+    end: int
+    source: str
+
+    @property
+    def minutes(self) -> int:
+        return self.end - self.start
 
 
-def select_sessions(
-    *,
-    weekly_minutes: float,
-    session_minutes: int,
-    study_days: list[str],
-    focus_windows: list[tuple[int, int]],
-    study_window: tuple[int, int],
-    preferred_slot: str,
-) -> list[StudySession]:
-    """Recurring weekly sessions placed in the focus window on preferred days."""
-    days = study_days or list(_DEFAULT_STUDY_DAYS)
-    target = max(weekly_minutes, 1)
-    n = min(len(days), max(1, round(target / max(session_minutes, 1))))
-    per_session = int(round(target / n))
-    per_session = max(SESSION_MIN_MINUTES, min(per_session, SESSION_MAX_MINUTES))
+def _day_study_slots(day: DaySchedule, work_start: int, work_end: int) -> list[WeeklySlot]:
+    """Study openings in one day: dedicated study blocks + genuine free gaps."""
+    slots: list[WeeklySlot] = []
+    cursor = work_start
+    for block in sorted(day.blocks, key=lambda b: _to_min(b.start)):
+        bs, be = _to_min(block.start), _to_min(block.end)
+        if bs > cursor:  # an unscheduled gap is free to study in
+            slots.append(WeeklySlot(day.day, cursor, bs, "free time"))
+        if block.category in _STUDY_CATEGORIES:  # an existing study block
+            slots.append(WeeklySlot(day.day, bs, be, block.title))
+        cursor = max(cursor, be)
+    if cursor < work_end:
+        slots.append(WeeklySlot(day.day, cursor, work_end, "free time"))
+    return [s for s in slots if s.minutes >= _MIN_SLOT_MINUTES]
 
-    # The window anchors the START; the session runs its full needed length so the
-    # weekly sessions actually sum to the planned capacity (not the window length).
-    win_start, _win_end = _select_window(focus_windows, study_window, preferred_slot)
-    duration = per_session
-    slot = _slot_of(win_start)
 
-    return [
-        StudySession(
-            day=day,
-            slot=slot,
-            start=_to_hhmm(win_start),
-            end=_to_hhmm(win_start + duration),
-            duration_minutes=duration,
+def weekly_study_slots(persona: Persona) -> list[WeeklySlot]:
+    """The learner's recurring weekly study slots, grounded in their calendar.
+
+    Restricted to their preferred study days when those have any opening; the one
+    committed week is the repeating template for every week of the plan.
+    """
+    work_start = _to_min(persona.work_context.working_hours.start)
+    work_end = _to_min(persona.work_context.working_hours.end)
+    preferred = {str(d) for d in persona.learning_preferences.preferred_study_days}
+
+    by_day: dict[str, list[WeeklySlot]] = {}
+    for day in persona.schedule.days:
+        opened = _day_study_slots(day, work_start, work_end)
+        if opened:
+            by_day[day.day] = opened
+
+    # Prefer the learner's chosen study days if any of them have openings.
+    chosen_days = [d for d in by_day if d in preferred] or list(by_day)
+    slots = [s for d in chosen_days for s in by_day[d]]
+    return sorted(slots, key=lambda s: (_WEEKDAY_INDEX.get(s.day, 9), s.start))
+
+
+# ── 3. Schedule modules sequentially into the repeating weekly slots ───────────
+
+
+def _capacity_reason(slots: list[WeeklySlot], weekly_hours: float) -> str:
+    if not slots:
+        return "No free study time was found in your calendar."
+    shown = ", ".join(
+        f"{s.day.capitalize()} {_to_hhmm(s.start)}–{_to_hhmm(s.end)}" for s in slots[:4]
+    )
+    return (
+        f"I found {weekly_hours:g} h of study time already in your week — {shown}"
+        + ("…" if len(slots) > 4 else "")
+        + ". I'll reuse this every week."
+    )
+
+
+def schedule_modules(
+    estimates: list[tuple[ModuleInfo, int]],
+    slots: list[WeeklySlot],
+    start_date: date,
+) -> list[ModulePlan]:
+    """Fill the repeating weekly slots with modules in order; deadline per module."""
+    if not slots:
+        return []
+    plans: list[ModulePlan] = []
+    week = 1
+    slot_idx = 0
+    cursor = slots[0].start  # position within the current slot
+
+    for seq, (module, minutes) in enumerate(estimates, start=1):
+        remaining = minutes
+        blocks: list[ScheduledBlock] = []
+        last_week = week
+        while remaining > 0:
+            slot = slots[slot_idx]
+            avail = slot.end - cursor
+            if avail < _MIN_SLOT_MINUTES:  # slot exhausted → advance
+                slot_idx += 1
+                if slot_idx >= len(slots):  # next repeating week
+                    slot_idx = 0
+                    week += 1
+                cursor = slots[slot_idx].start
+                continue
+            take = min(remaining, avail)
+            blocks.append(
+                ScheduledBlock(
+                    week=week,
+                    day=slot.day,
+                    start=_to_hhmm(cursor),
+                    end=_to_hhmm(cursor + take),
+                    minutes=take,
+                )
+            )
+            last_week = week
+            cursor += take
+            remaining -= take
+        # Complete-before = end of the last week the module occupies.
+        complete_before = start_date + timedelta(days=last_week * 7)
+        plans.append(
+            ModulePlan(
+                module_id=module.module_id,
+                title=module.title,
+                sequence=seq,
+                estimated_minutes=minutes,
+                scheduled=blocks,
+                complete_before=complete_before.isoformat(),
+                objectives=list(module.objectives),
+            )
         )
-        for day in days[:n]
-    ]
+    return plans
 
 
 # ── Build the full plan ────────────────────────────────────────────────────────
@@ -247,50 +257,49 @@ def build_study_plan(
     title: str,
     cert: str,
     persona: Persona,
+    pace: Pace = Pace.NORMAL,
+    start_date: date,
     settings: Settings | None = None,
 ) -> StudyPlan | None:
-    """Assemble the workload-aware study plan for a course + learner, or None."""
+    """Assemble the calendar-grounded, module-level plan, or None if no modules."""
     settings = settings or get_settings()
     path = str(settings.athenaeum_catalog_path or default_catalog_path())
     modules = course_modules(path, catalog_id)
     if not modules:
         return None
 
-    estimates = [(m, estimate_module_minutes(m)) for m in modules]
+    estimates = [(m, estimate_module_minutes(m, pace)) for m in modules]
     total_minutes = sum(mins for _, mins in estimates)
-    total_hours = round(total_minutes / 60, 1)
 
-    prefs = persona.learning_preferences
-    capacity = calculate_capacity(
-        meeting_hours=persona.work_signals.meeting_hours_per_week,
-        base_weekly_hours=float(prefs.preferred_study_hours_per_week),
-    )
-    weekly_minutes = capacity.weekly_hours * 60
+    slots = weekly_study_slots(persona)
+    weekly_minutes = sum(s.minutes for s in slots)
+    weekly_hours = round(weekly_minutes / 60, 1) if weekly_minutes else 0.0
 
-    module_plans, weeks = allocate_modules_to_weeks(estimates, weekly_minutes)
+    module_plans = schedule_modules(estimates, slots, start_date)
+    weeks = max((b.week for m in module_plans for b in m.scheduled), default=0)
 
-    focus_windows = [(_to_min(w.start), _to_min(w.end)) for w in persona.work_context.focus_windows]
-    study_window = (_to_min(prefs.study_window.start), _to_min(prefs.study_window.end))
-    sessions = select_sessions(
-        weekly_minutes=weekly_minutes,
-        session_minutes=prefs.preferred_session_minutes,
-        study_days=list(prefs.preferred_study_days),
-        focus_windows=focus_windows,
-        study_window=study_window,
-        preferred_slot=persona.work_signals.preferred_learning_slot,
-    )
+    sessions = [
+        StudySession(
+            day=s.day,
+            slot=_slot_of(s.start),
+            start=_to_hhmm(s.start),
+            end=_to_hhmm(s.end),
+            duration_minutes=s.minutes,
+            source=s.source,
+        )
+        for s in slots
+    ]
 
     return StudyPlan(
         catalog_id=catalog_id,
         title=title,
         cert=cert,
-        weekly_study_hours=capacity.weekly_hours,
-        timeline_multiplier=capacity.timeline_multiplier,
-        total_hours=total_hours,
-        weeks=len(weeks),
-        overestimate_factor=OVERESTIMATE_FACTOR,
+        pace=pace,
+        weekly_study_hours=weekly_hours,
+        total_hours=round(total_minutes / 60, 1),
+        weeks=weeks,
+        start_date=start_date.isoformat(),
         modules=module_plans,
-        schedule=weeks,
         sessions=sessions,
-        capacity_reason=capacity.reason,
+        capacity_reason=_capacity_reason(slots, weekly_hours),
     )

@@ -1,154 +1,148 @@
-"""Deterministic study-plan algorithm tests (offline; over the committed catalog/personas)."""
+"""Calendar-grounded study-plan algorithm tests (offline; over committed data)."""
 
 from __future__ import annotations
 
+from datetime import date
+
+from app.agent.contracts import Pace
 from app.agent.study_plan import (
-    HEAVY_CAPACITY_FACTOR,
-    MINUTES_PER_OBJECTIVE,
-    MODULE_BASE_MINUTES,
-    OVERESTIMATE_FACTOR,
-    WEEKLY_HOURS_CAP,
     ModuleInfo,
-    allocate_modules_to_weeks,
     build_study_plan,
-    calculate_capacity,
     course_modules,
     estimate_module_minutes,
-    select_sessions,
+    schedule_modules,
+    weekly_study_slots,
 )
 from app.catalog.loader import default_catalog_path
 from app.workiq.repository import get_repository
 
+START = date(2026, 6, 15)
 
-def _module(n_objectives: int, order: int = 1) -> ModuleInfo:
+
+def _module(objectives: int, skills: int = 2, order: int = 1) -> ModuleInfo:
     return ModuleInfo(
         module_id=f"m{order}",
         title=f"Module {order}",
         order=order,
-        objectives=tuple(f"obj{i}" for i in range(n_objectives)),
-        skills=0,
+        objectives=tuple(f"obj{i}" for i in range(objectives)),
+        skills=skills,
         prereq_module_ids=(),
     )
 
 
-# ── Module estimate (×2 over-estimate) ─────────────────────────────────────────
+# ── Per-module estimate (computed from content + pace; no exposed factor) ───────
 
 
-def test_module_estimate_is_doubled() -> None:
-    module = _module(3)
-    base = MODULE_BASE_MINUTES + MINUTES_PER_OBJECTIVE * 3
-    assert estimate_module_minutes(module) == int(round(base * OVERESTIMATE_FACTOR))
-    # 2× factor is explicit and applied.
-    assert OVERESTIMATE_FACTOR == 2.0
-    assert estimate_module_minutes(module) == base * 2
-
-
-def test_more_objectives_means_more_time() -> None:
-    assert estimate_module_minutes(_module(5)) > estimate_module_minutes(_module(1))
-
-
-# ── Capacity ───────────────────────────────────────────────────────────────────
-
-
-def test_heavy_meeting_load_reduces_capacity_and_extends_timeline() -> None:
-    cap = calculate_capacity(meeting_hours=24, base_weekly_hours=5)
-    assert cap.meeting_heavy is True
-    assert cap.weekly_hours == round(5 * HEAVY_CAPACITY_FACTOR, 1)  # 3.0
-    assert cap.timeline_multiplier > 1.0
-    assert "reduced" in cap.reason
-
-
-def test_manageable_meeting_load_uses_full_capacity() -> None:
-    cap = calculate_capacity(meeting_hours=8, base_weekly_hours=8)
-    assert cap.meeting_heavy is False
-    assert cap.weekly_hours == 8.0
-    assert cap.timeline_multiplier == 1.0
-
-
-def test_capacity_is_capped() -> None:
-    cap = calculate_capacity(meeting_hours=2, base_weekly_hours=40)
-    assert cap.weekly_hours == WEEKLY_HOURS_CAP
-
-
-# ── Allocation ─────────────────────────────────────────────────────────────────
-
-
-def test_allocation_packs_into_weeks_without_splitting_modules() -> None:
-    estimates = [(_module(2, i), 120) for i in range(1, 5)]  # 4 modules × 120 min
-    module_plans, weeks = allocate_modules_to_weeks(estimates, weekly_minutes=240)
-    # 240/week → 2 modules per week → 2 weeks.
-    assert len(weeks) == 2
-    assert all(w.total_minutes == 240 for w in weeks)
-    assert [m.week for m in module_plans] == [1, 1, 2, 2]
-
-
-def test_oversized_module_gets_its_own_week() -> None:
-    estimates = [(_module(2, 1), 300)]  # 300 min > 240 weekly
-    _, weeks = allocate_modules_to_weeks(estimates, weekly_minutes=240)
-    assert len(weeks) == 1
-    assert weeks[0].total_minutes == 300
-
-
-# ── Sessions ───────────────────────────────────────────────────────────────────
-
-
-def test_sessions_land_in_focus_window_on_preferred_days() -> None:
-    sessions = select_sessions(
-        weekly_minutes=180,
-        session_minutes=60,
-        study_days=["tue", "wed", "thu"],
-        focus_windows=[(9 * 60 + 45, 12 * 60)],  # 09:45–12:00
-        study_window=(11 * 60, 12 * 60),  # 11:00–12:00
-        preferred_slot="Morning",
+def test_estimate_varies_with_content() -> None:
+    assert estimate_module_minutes(_module(5), Pace.NORMAL) > estimate_module_minutes(
+        _module(1), Pace.NORMAL
     )
-    assert [s.day for s in sessions] == ["tue", "wed", "thu"]
-    assert all(s.slot == "Morning" for s in sessions)
-    assert sessions[0].start == "11:00"  # focus ∩ study window
-    assert sum(s.duration_minutes for s in sessions) == 180  # sessions cover the weekly load
 
 
-def test_sessions_fall_back_to_default_days() -> None:
-    sessions = select_sessions(
-        weekly_minutes=120,
-        session_minutes=60,
-        study_days=[],
-        focus_windows=[],
-        study_window=(13 * 60, 14 * 60),
-        preferred_slot="Afternoon",
-    )
-    assert sessions  # never empty
-    assert sessions[0].slot == "Afternoon"
+def test_pace_scales_estimate() -> None:
+    m = _module(3)
+    slower = estimate_module_minutes(m, Pace.SLOWER)
+    normal = estimate_module_minutes(m, Pace.NORMAL)
+    faster = estimate_module_minutes(m, Pace.FASTER)
+    assert slower > normal > faster
 
 
-# ── Course modules + full plan ─────────────────────────────────────────────────
+def test_estimate_rounded_to_quarter_hour() -> None:
+    assert estimate_module_minutes(_module(3), Pace.NORMAL) % 15 == 0
 
 
-def test_course_modules_in_order() -> None:
-    mods = course_modules(str(default_catalog_path()), "cb-c01")
-    assert [m.module_id for m in mods] == ["cb-c01-m01", "cb-c01-m02", "cb-c01-m03", "cb-c01-m04"]
-
-
-def test_build_plan_for_heavy_meeting_learner() -> None:
+def test_study_plan_does_not_expose_overestimate_factor() -> None:
     vega = get_repository().get_persona("EMP-001")
-    assert vega is not None and vega.work_signals.meeting_hours_per_week > 20
+    assert vega is not None
     plan = build_study_plan(
-        catalog_id="cb-c01", title="Compute Foundations", cert="AZ-204", persona=vega
+        catalog_id="cb-c01", title="x", cert="AZ-204", persona=vega, start_date=START
     )
     assert plan is not None
-    assert plan.weekly_study_hours < vega.learning_preferences.preferred_study_hours_per_week
-    assert plan.timeline_multiplier > 1.0
-    assert plan.overestimate_factor == 2.0
-    assert len(plan.modules) == 4
-    assert plan.weeks == len(plan.schedule)
-    # every module is scheduled in some week
-    assert {m.module_id for m in plan.modules} == {
-        mid for w in plan.schedule for mid in w.module_ids
-    }
-    # sessions are in her preferred morning slot
-    assert all(s.slot == "Morning" for s in plan.sessions)
+    assert not hasattr(plan, "overestimate_factor")
+    assert not hasattr(plan, "timeline_multiplier")
+
+
+# ── Capacity from the real calendar (not a multiplier) ─────────────────────────
+
+
+def test_weekly_slots_grounded_in_calendar() -> None:
+    vega = get_repository().get_persona("EMP-001")
+    assert vega is not None
+    slots = weekly_study_slots(vega)
+    # Vega's calendar has dedicated "Cert study" (category=learning) blocks
+    # tue/wed/thu 11:00–12:00 → exactly those three slots.
+    assert {s.day for s in slots} == {"tue", "wed", "thu"}
+    assert all(s.start == 11 * 60 and s.end == 12 * 60 for s in slots)
+
+
+def test_capacity_reason_names_real_slots() -> None:
+    vega = get_repository().get_persona("EMP-001")
+    assert vega is not None
+    plan = build_study_plan(
+        catalog_id="cb-c01", title="x", cert="AZ-204", persona=vega, start_date=START
+    )
+    assert plan is not None
+    assert plan.weekly_study_hours == 3.0  # grounded: 3×1h, not 0.6×5
+    assert "Tue" in plan.capacity_reason and "11:00" in plan.capacity_reason
+
+
+# ── Sequential module schedule + deadlines ─────────────────────────────────────
+
+
+def test_schedule_is_sequential_with_deadlines() -> None:
+    vega = get_repository().get_persona("EMP-001")
+    assert vega is not None
+    slots = weekly_study_slots(vega)
+    estimates = [(_module(3, order=i), 120) for i in range(1, 4)]
+    plans = schedule_modules(estimates, slots, START)
+    assert [m.sequence for m in plans] == [1, 2, 3]
+    # Deadlines are non-decreasing along the sequence.
+    deadlines = [m.complete_before for m in plans]
+    assert deadlines == sorted(deadlines)
+    # Every module has at least one concrete session.
+    assert all(m.scheduled for m in plans)
+
+
+def test_pace_changes_weeks() -> None:
+    vega = get_repository().get_persona("EMP-001")
+    assert vega is not None
+    faster = build_study_plan(
+        catalog_id="cb-c01",
+        title="x",
+        cert="AZ-204",
+        persona=vega,
+        pace=Pace.FASTER,
+        start_date=START,
+    )
+    slower = build_study_plan(
+        catalog_id="cb-c01",
+        title="x",
+        cert="AZ-204",
+        persona=vega,
+        pace=Pace.SLOWER,
+        start_date=START,
+    )
+    assert faster is not None and slower is not None
+    assert slower.total_hours > faster.total_hours
+    assert slower.weeks >= faster.weeks
+
+
+def test_build_plan_modules_match_course() -> None:
+    vega = get_repository().get_persona("EMP-001")
+    assert vega is not None
+    plan = build_study_plan(
+        catalog_id="cb-c01", title="x", cert="AZ-204", persona=vega, start_date=START
+    )
+    assert plan is not None
+    mods = course_modules(str(default_catalog_path()), "cb-c01")
+    assert [m.module_id for m in plan.modules] == [m.module_id for m in mods]
+    assert plan.pace is Pace.NORMAL
 
 
 def test_build_plan_unknown_course_is_none() -> None:
     vega = get_repository().get_persona("EMP-001")
     assert vega is not None
-    assert build_study_plan(catalog_id="nope", title="x", cert="y", persona=vega) is None
+    assert (
+        build_study_plan(catalog_id="nope", title="x", cert="y", persona=vega, start_date=START)
+        is None
+    )

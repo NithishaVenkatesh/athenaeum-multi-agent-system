@@ -107,53 +107,66 @@ class TakenCourse(BaseModel):
     status: int = Field(description="Course.status encoding: 0 new, +N attempt N, -N passed on N")
 
 
-# ── Study plan (workload-aware schedule for the chosen course) ──────────────────
+# ── Study plan (calendar-grounded, module-level completion plan) ────────────────
+
+
+class Pace(StrEnum):
+    """How fast the learner wants to move (scales per-module time budgets)."""
+
+    SLOWER = "slower"
+    NORMAL = "normal"
+    FASTER = "faster"
 
 
 class StudySession(BaseModel):
-    """A recurring weekly study session placed in the learner's focus window."""
+    """One recurring weekly study slot taken from the learner's real calendar."""
 
     day: str = Field(description="Weekday, e.g. 'tue'")
-    slot: str = Field(description="Morning | Afternoon")
+    slot: str = Field(description="Morning | Afternoon | Evening")
     start: str = Field(description="HH:MM")
     end: str = Field(description="HH:MM")
     duration_minutes: int
+    source: str = Field(default="", description="Calendar block this slot came from")
+
+
+class ScheduledBlock(BaseModel):
+    """A concrete session (in a specific week) that covers part of a module."""
+
+    week: int = Field(ge=1)
+    day: str
+    start: str
+    end: str
+    minutes: int
 
 
 class ModulePlan(BaseModel):
-    """One module with its (2×-over-estimated) time budget and assigned week."""
+    """One module in the sequence, with its computed budget, slots, and deadline."""
 
     module_id: str
     title: str
-    week: int = Field(ge=1, description="1-based week the module is scheduled in")
-    estimated_minutes: int = Field(description="Over-estimated by the plan's safety factor")
+    sequence: int = Field(ge=1, description="1-based order; modules are done sequentially")
+    estimated_minutes: int = Field(description="Computed from content + pace (no exposed factor)")
+    scheduled: list[ScheduledBlock] = Field(
+        default_factory=list, description="The calendar sessions that cover this module"
+    )
+    complete_before: str = Field(description="ISO date the module should be finished by")
     objectives: list[str] = Field(default_factory=list)
 
 
-class WeekPlan(BaseModel):
-    """The modules and load assigned to one week."""
-
-    week: int = Field(ge=1)
-    module_ids: list[str]
-    module_titles: list[str]
-    total_minutes: int
-
-
 class StudyPlan(BaseModel):
-    """A workload-aware study schedule for one course (deterministic; §13)."""
+    """A calendar-grounded, module-level completion plan (deterministic; §13)."""
 
     catalog_id: str
     title: str
     cert: str
-    weekly_study_hours: float = Field(description="Capacity after work-load adjustment")
-    timeline_multiplier: float = Field(description="How much slower than base pace (≥1)")
+    pace: Pace
+    weekly_study_hours: float = Field(description="Grounded in the learner's real free calendar")
     total_hours: float
     weeks: int
-    overestimate_factor: float = Field(description="Per-module time safety multiplier")
+    start_date: str = Field(description="ISO date the plan starts")
     modules: list[ModulePlan]
-    schedule: list[WeekPlan]
-    sessions: list[StudySession]
-    capacity_reason: str = Field(description="Why this weekly load — work-context grounded")
+    sessions: list[StudySession] = Field(description="The recurring weekly study slots")
+    capacity_reason: str = Field(description="Which real calendar slots back the weekly load")
 
 
 class PhaseTelemetry(BaseModel):
@@ -213,6 +226,16 @@ class PlanEvent(BaseModel):
     plan: StudyPlan
 
 
+class PaceRequestEvent(BaseModel):
+    """Ask the learner their pace before building a plan (a HITL gate)."""
+
+    type: Literal["pace_request"] = "pace_request"
+    catalog_id: str
+    title: str
+    prompt: str = Field(description="The question shown above the pace choices")
+    options: list[Pace] = Field(default_factory=lambda: [Pace.SLOWER, Pace.NORMAL, Pace.FASTER])
+
+
 class DoneEvent(BaseModel):
     type: Literal["done"] = "done"
     route: Route | None = None
@@ -220,5 +243,12 @@ class DoneEvent(BaseModel):
 
 
 PipelineEvent = (
-    PhaseEvent | TokenEvent | SuggestionEvent | PlanEvent | BlockedEvent | ErrorEvent | DoneEvent
+    PhaseEvent
+    | TokenEvent
+    | SuggestionEvent
+    | PlanEvent
+    | PaceRequestEvent
+    | BlockedEvent
+    | ErrorEvent
+    | DoneEvent
 )
