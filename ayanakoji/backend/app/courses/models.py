@@ -34,9 +34,17 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
-def make_message(role: str, content: str) -> dict[str, Any]:
-    """Build one inline chat message. Roles: ``user`` | ``assistant``."""
-    return {"role": role, "content": content, "created_at": _now().isoformat()}
+def make_message(role: str, content: str, meta: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Build one inline chat message. Roles: ``user`` | ``assistant``.
+
+    ``meta`` holds the assistant turn's rendered artifacts (pipeline trace,
+    course choices, study plan, pace request) so they survive a reload instead
+    of living only in component state.
+    """
+    msg: dict[str, Any] = {"role": role, "content": content, "created_at": _now().isoformat()}
+    if meta:
+        msg["meta"] = meta
+    return msg
 
 
 class Course(SQLModel, table=True):

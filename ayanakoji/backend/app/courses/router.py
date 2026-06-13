@@ -245,6 +245,11 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
             answer_parts: list[str] = []
             final_text = ""  # what gets persisted as the assistant turn
             plan_modules: list[dict[str, object]] | None = None
+            # Collect the turn's rendered artifacts so they survive a reload.
+            phases: list[dict[str, object]] = []
+            meta_suggestion: dict[str, object] | None = None
+            meta_plan: dict[str, object] | None = None
+            meta_pace: dict[str, object] | None = None
             for event in run_pipeline(
                 body.content,
                 persona_id=current.persona_id,
@@ -255,12 +260,19 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
                 exclude_days=exclude_days,
                 course_state=course_state,
             ):
+                payload = event.model_dump(mode="json")
                 if isinstance(event, TokenEvent):
                     answer_parts.append(event.token)
                 elif isinstance(event, PlanEvent):
-                    # Persist the generated module schedule (progress system of record).
                     plan_modules = [m.model_dump(mode="json") for m in event.plan.modules]
-                yield _sse(event.model_dump(mode="json"))
+                    meta_plan = payload["plan"]
+                elif event.type == "phase":
+                    phases.append(payload["phase"])
+                elif event.type == "suggestion":
+                    meta_suggestion = {"prompt": payload["prompt"], "options": payload["options"]}
+                elif event.type == "pace_request":
+                    meta_pace = payload
+                yield _sse(payload)
                 # Terminal, non-token messages become the persisted transcript text.
                 if event.type == "blocked":
                     final_text = event.reason
@@ -271,7 +283,13 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
                 stream_repo.replace_modules(current.id, plan_modules)
             answer = "".join(answer_parts).strip() or final_text
             if answer:
-                stream_repo.append_message(current, role="assistant", content=answer)
+                meta: dict[str, object] = {
+                    "phases": phases,
+                    "suggestion": meta_suggestion,
+                    "plan": meta_plan,
+                    "pace_request": meta_pace,
+                }
+                stream_repo.append_message(current, role="assistant", content=answer, meta=meta)
 
     return StreamingResponse(
         event_stream(),

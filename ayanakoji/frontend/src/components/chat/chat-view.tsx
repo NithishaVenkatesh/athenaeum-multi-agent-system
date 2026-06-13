@@ -118,19 +118,21 @@ export function ChatView({ courseId }: { courseId?: string }) {
       .then((loaded) => {
         if (!active) return;
         setActiveCourseId(loaded.id);
+        const enrolled = loaded.catalog_id;
         setTurns(
-          loaded.messages.map((m) =>
+          loaded.messages.map((m): Turn =>
             m.role === "user"
               ? { kind: "user", text: m.content }
               : {
                   kind: "assistant",
-                  phases: [],
+                  phases: m.meta?.phases ?? [],
                   text: m.content,
-                  suggestion: null,
-                  suggestionState: "idle",
-                  chosenId: null,
-                  plan: null,
-                  paceRequest: null,
+                  suggestion: m.meta?.suggestion ?? null,
+                  // If the course is already linked, a restored suggestion reads as accepted.
+                  suggestionState: enrolled && m.meta?.suggestion ? "accepted" : "idle",
+                  chosenId: enrolled ?? null,
+                  plan: m.meta?.plan ?? null,
+                  paceRequest: m.meta?.pace_request ?? null,
                   paceChosen: null,
                   error: null,
                   streaming: false,

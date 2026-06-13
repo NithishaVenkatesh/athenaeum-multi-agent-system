@@ -62,10 +62,19 @@ export interface CatalogCourse {
   primary_cert: string;
 }
 
+/** Persisted assistant-turn artifacts, so the trace/choices/plan survive reload. */
+export interface MessageMeta {
+  phases?: PhaseTelemetry[];
+  suggestion?: Suggestion | null;
+  plan?: StudyPlan | null;
+  pace_request?: PaceRequest | null;
+}
+
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   created_at?: string;
+  meta?: MessageMeta;
 }
 
 export interface CourseSummary {

@@ -192,6 +192,21 @@ def test_schedule_edit_shifts_plan_and_persists(client: TestClient) -> None:
     assert again["start_date"] == edited["start_date"]
 
 
+def test_assistant_artifacts_persist_across_reload(client: TestClient) -> None:
+    course_id = _create(client, content="azure functions")["id"]
+    # A foundry turn produces a trace + a course suggestion.
+    client.post(
+        f"/api/courses/{course_id}/messages",
+        json={"content": "how do azure functions triggers work"},
+    )
+    full = client.get(f"/api/courses/{course_id}").json()
+    assistant = [m for m in full["messages"] if m["role"] == "assistant"][-1]
+    # The artifacts are stored on the message (not lost to component state).
+    assert assistant["meta"]["phases"], "expected the pipeline trace to be persisted"
+    assert assistant["meta"]["suggestion"]["options"], "expected the course choices to persist"
+    assert any(p["phase"] == "router" for p in assistant["meta"]["phases"])
+
+
 def test_module_content_renders_markdown(client: TestClient) -> None:
     course_id = _create(client)["id"]
     resp = client.get(f"/api/courses/{course_id}/modules/cb-c01-m01/content")

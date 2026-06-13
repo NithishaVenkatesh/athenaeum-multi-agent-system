@@ -42,9 +42,16 @@ class CourseRepository:
         )
         return list(self._session.exec(statement).all())
 
-    def append_message(self, course: Course, *, role: str, content: str) -> Course:
+    def append_message(
+        self,
+        course: Course,
+        *,
+        role: str,
+        content: str,
+        meta: dict[str, Any] | None = None,
+    ) -> Course:
         """Append one message immutably (reassign, never mutate) and bump updated_at."""
-        course.messages = [*course.messages, make_message(role, content)]
+        course.messages = [*course.messages, make_message(role, content, meta)]
         course.updated_at = datetime.now(UTC)
         self._session.add(course)
         self._session.commit()
