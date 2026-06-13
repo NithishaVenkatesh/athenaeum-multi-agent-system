@@ -161,9 +161,7 @@ class _OpenAICompatibleProvider:
             completion_tokens=getattr(usage, "completion_tokens", 0) or 0,
         )
 
-    def stream(
-        self, model: str, messages: Sequence[Message], *, max_tokens: int
-    ) -> Iterator[str]:
+    def stream(self, model: str, messages: Sequence[Message], *, max_tokens: int) -> Iterator[str]:
         kwargs = self._kwargs(model, max_tokens)
         stream = self._client.chat.completions.create(
             model=model,

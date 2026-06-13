@@ -57,9 +57,7 @@ _BLOCKED_MESSAGE = (
 _SERVICES_DOWN_MESSAGE = (
     "Sorry — the AI services are unavailable right now. Please try again in a moment."
 )
-_STREAM_BROKE_MESSAGE = (
-    "The reply was interrupted before it finished. Please resend your message."
-)
+_STREAM_BROKE_MESSAGE = "The reply was interrupted before it finished. Please resend your message."
 
 
 def _dispatch(

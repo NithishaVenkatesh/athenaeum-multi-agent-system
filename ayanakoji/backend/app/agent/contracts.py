@@ -33,6 +33,7 @@ class Route(StrEnum):
     GREETING = "greeting"  # hi / hey / who are you → warm welcome + invite to pick a course
     RECOMMEND = "recommend"  # "suggest a course" / "what next" → profile-based options to choose
     FOUNDRY_IQ = "foundry_iq"  # a named course/topic → grounded answer + offer to start it
+    STUDY_PLAN = "study_plan"  # "make me a study plan" → workload-aware schedule for the course
     WORK_IQ = "work_iq"  # the learner's own schedule / workload / capacity
     GENERAL = "general"  # off-topic → helpful answer + steer back to learning
 
@@ -106,6 +107,55 @@ class TakenCourse(BaseModel):
     status: int = Field(description="Course.status encoding: 0 new, +N attempt N, -N passed on N")
 
 
+# ── Study plan (workload-aware schedule for the chosen course) ──────────────────
+
+
+class StudySession(BaseModel):
+    """A recurring weekly study session placed in the learner's focus window."""
+
+    day: str = Field(description="Weekday, e.g. 'tue'")
+    slot: str = Field(description="Morning | Afternoon")
+    start: str = Field(description="HH:MM")
+    end: str = Field(description="HH:MM")
+    duration_minutes: int
+
+
+class ModulePlan(BaseModel):
+    """One module with its (2×-over-estimated) time budget and assigned week."""
+
+    module_id: str
+    title: str
+    week: int = Field(ge=1, description="1-based week the module is scheduled in")
+    estimated_minutes: int = Field(description="Over-estimated by the plan's safety factor")
+    objectives: list[str] = Field(default_factory=list)
+
+
+class WeekPlan(BaseModel):
+    """The modules and load assigned to one week."""
+
+    week: int = Field(ge=1)
+    module_ids: list[str]
+    module_titles: list[str]
+    total_minutes: int
+
+
+class StudyPlan(BaseModel):
+    """A workload-aware study schedule for one course (deterministic; §13)."""
+
+    catalog_id: str
+    title: str
+    cert: str
+    weekly_study_hours: float = Field(description="Capacity after work-load adjustment")
+    timeline_multiplier: float = Field(description="How much slower than base pace (≥1)")
+    total_hours: float
+    weeks: int
+    overestimate_factor: float = Field(description="Per-module time safety multiplier")
+    modules: list[ModulePlan]
+    schedule: list[WeekPlan]
+    sessions: list[StudySession]
+    capacity_reason: str = Field(description="Why this weekly load — work-context grounded")
+
+
 class PhaseTelemetry(BaseModel):
     """PII-safe, per-phase reasoning + grounding the user sees beneath each step."""
 
@@ -156,6 +206,13 @@ class ErrorEvent(BaseModel):
     message: str
 
 
+class PlanEvent(BaseModel):
+    """A generated study plan rendered as a structured schedule card."""
+
+    type: Literal["plan"] = "plan"
+    plan: StudyPlan
+
+
 class DoneEvent(BaseModel):
     type: Literal["done"] = "done"
     route: Route | None = None
@@ -163,5 +220,5 @@ class DoneEvent(BaseModel):
 
 
 PipelineEvent = (
-    PhaseEvent | TokenEvent | SuggestionEvent | BlockedEvent | ErrorEvent | DoneEvent
+    PhaseEvent | TokenEvent | SuggestionEvent | PlanEvent | BlockedEvent | ErrorEvent | DoneEvent
 )

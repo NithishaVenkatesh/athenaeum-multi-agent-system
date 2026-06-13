@@ -125,9 +125,7 @@ class CourseGrounding:
         if catalog_id:
             scoped = tuple(d for d in pool if d.course_id == catalog_id)
             pool = scoped or pool
-        scored = sorted(
-            ((d, _score(terms, d)) for d in pool), key=lambda ds: ds[1], reverse=True
-        )
+        scored = sorted(((d, _score(terms, d)) for d in pool), key=lambda ds: ds[1], reverse=True)
         kept = [(d, s) for d, s in scored if s >= _MIN_SCORE]
         if not kept:
             return ()

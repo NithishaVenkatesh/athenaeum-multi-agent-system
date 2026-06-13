@@ -105,9 +105,7 @@ def test_gate_prompt_guard_blocks_high_score() -> None:
 
 
 def test_gate_prompt_guard_passes_low_score() -> None:
-    verdict, _ = screen(
-        "how do azure functions work", settings=_online(), guard_fn=lambda _t: 0.02
-    )
+    verdict, _ = screen("how do azure functions work", settings=_online(), guard_fn=lambda _t: 0.02)
     assert verdict.blocked is False
 
 

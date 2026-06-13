@@ -158,9 +158,7 @@ def route(
         return decision, _telemetry(decision, model="heuristic (providers down)", tier=None)
 
 
-def _parse_decision(
-    raw: str, text: str, grounding: CourseGrounding | None
-) -> RouteDecision:
+def _parse_decision(raw: str, text: str, grounding: CourseGrounding | None) -> RouteDecision:
     """Parse the model's JSON; fall back to the heuristic on any malformed reply."""
     try:
         data = json.loads(raw)
