@@ -83,6 +83,10 @@ class Settings(BaseSettings):
     groq_model_workhorse: str = "llama-3.3-70b-versatile"
     groq_model_fast: str = "llama-3.1-8b-instant"
     groq_model_reasoning: str = "deepseek-r1-distill-llama-70b"
+    # Purpose-built prompt-injection/jailbreak classifier (returns a 0..1 score).
+    groq_model_guard: str = "meta-llama/llama-prompt-guard-2-86m"
+    # Block when the guard's jailbreak probability is at/above this.
+    guard_block_threshold: float = 0.8
 
     @property
     def cors_origin_list(self) -> list[str]:

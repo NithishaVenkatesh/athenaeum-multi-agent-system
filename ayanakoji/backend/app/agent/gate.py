@@ -1,21 +1,37 @@
 """Injection / jailbreak gate — the first node every turn passes through.
 
 Tool scope: **none.** The gate only classifies the user's text; it never
-retrieves, plans, or calls a downstream tool. A fast regex pre-filter runs in
-*both* the offline and online paths (defense in depth, master-plan §15); online
-adds a cheap model classifier on top. If either flags the turn, the orchestrator
-stops the pipeline and the frontend shows a toast — the request never reaches a
-planning agent.
+retrieves, plans, or calls a downstream tool. Defense in depth (master-plan §15),
+layered fastest→strongest:
+
+1. **Regex pre-filter** — $0, offline, deterministic. Catches blatant overrides
+   *and* social-engineering paraphrases a probability classifier underweights
+   (e.g. "pretend the rules don't apply").
+2. **Prompt Guard 2** (Groq ``llama-prompt-guard-2``) — a model *trained* for
+   injection/jailbreak detection; returns a 0..1 score. Primary online gate.
+3. **General-LLM classifier** — only if the purpose-built guard is unavailable.
+4. **Fail open** — if every model is unreachable but the regex pre-filter passed,
+   a clean learner is not blocked just because the network is down.
+
+Any block stops the pipeline; the frontend shows a toast. A regex/guard hit
+short-circuits before reaching any planning agent.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import re
+from collections.abc import Callable
 
 from app.agent.contracts import InjectionVerdict, PhaseName, PhaseStatus, PhaseTelemetry
 from app.agent.llm import AllProvidersDown, Capability, ModelRouter
 from app.config import Settings, get_settings
+
+logger = logging.getLogger(__name__)
+
+# A guard returns the jailbreak probability for a message, or None if unavailable.
+GuardFn = Callable[[str], float | None]
 
 # HouYi-style indicators: context-break / instruction-override / exfiltration.
 _PATTERNS: tuple[re.Pattern[str], ...] = tuple(
@@ -53,6 +69,28 @@ def _regex_hit(text: str) -> str | None:
     return None
 
 
+def _groq_guard_score(text: str, settings: Settings) -> float | None:
+    """Jailbreak probability from Groq's Prompt Guard 2, or None if unavailable.
+
+    Prompt Guard returns the probability as its message content (e.g. "0.9996").
+    """
+    if not settings.groq_configured:
+        return None
+    try:
+        from openai import OpenAI
+
+        client = OpenAI(api_key=settings.groq_api_key, base_url=settings.groq_base_url)
+        response = client.chat.completions.create(
+            model=settings.groq_model_guard,
+            messages=[{"role": "user", "content": text}],
+            max_tokens=10,
+        )
+        return float((response.choices[0].message.content or "").strip())
+    except Exception as exc:  # noqa: BLE001 — degrade to the next gate layer
+        logger.warning("Prompt Guard unavailable: %s", exc)
+        return None
+
+
 def _telemetry(verdict: InjectionVerdict, *, model: str | None, tier: int | None) -> PhaseTelemetry:
     summary = "Blocked a prompt-injection attempt" if verdict.blocked else "No injection detected"
     return PhaseTelemetry(
@@ -70,11 +108,12 @@ def screen(
     *,
     router: ModelRouter | None = None,
     settings: Settings | None = None,
+    guard_fn: GuardFn | None = None,
 ) -> tuple[InjectionVerdict, PhaseTelemetry]:
     """Screen one turn. Returns the verdict and PII-safe telemetry for the trace."""
     settings = settings or get_settings()
 
-    # 1) Fast regex pre-filter (always runs; cheap, deterministic).
+    # 1) Fast regex pre-filter (always runs; cheap, deterministic, offline-safe).
     hit = _regex_hit(text)
     if hit is not None:
         verdict = InjectionVerdict(
@@ -84,12 +123,27 @@ def screen(
         )
         return verdict, _telemetry(verdict, model="regex-prefilter", tier=None)
 
-    # 2) Offline: pre-filter is the whole gate (no model available).
+    # 2) Offline: the pre-filter is the whole gate (no model available).
     if settings.llm_offline:
         verdict = InjectionVerdict(blocked=False, reason="Passed regex pre-filter (offline).")
         return verdict, _telemetry(verdict, model="regex-prefilter", tier=None)
 
-    # 3) Online: a cheap model classifier confirms anything the regex missed.
+    # 3) Prompt Guard 2 — a model trained for injection/jailbreak detection.
+    guard_fn = guard_fn or (lambda t: _groq_guard_score(t, settings))
+    score = guard_fn(text)
+    if score is not None:
+        blocked = score >= settings.guard_block_threshold
+        verdict = InjectionVerdict(
+            blocked=blocked,
+            reason=(
+                f"Prompt Guard jailbreak probability {score:.2f} "
+                f"(threshold {settings.guard_block_threshold:.2f})."
+            ),
+            confidence=score if blocked else 1.0 - score,
+        )
+        return verdict, _telemetry(verdict, model=settings.groq_model_guard, tier=None)
+
+    # 4) Guard unavailable → general-LLM classifier confirms anything regex missed.
     router = router or ModelRouter(settings)
     try:
         result = router.complete(
@@ -101,10 +155,10 @@ def screen(
         verdict = _parse_verdict(result.text)
         return verdict, _telemetry(verdict, model=result.model, tier=result.tier)
     except AllProvidersDown:
-        # Fail-safe: providers down, but the regex pre-filter already cleared it.
-        # Do NOT block a clean message just because the model is unreachable.
+        # 5) Fail open: every model is unreachable, but the regex pre-filter cleared it.
+        # Do NOT block a clean message just because the network is down.
         verdict = InjectionVerdict(
-            blocked=False, reason="Regex pre-filter passed; classifier unavailable."
+            blocked=False, reason="Regex pre-filter passed; classifiers unavailable."
         )
         return verdict, _telemetry(verdict, model="regex-prefilter", tier=None)
 
