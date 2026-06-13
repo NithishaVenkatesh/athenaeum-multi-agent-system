@@ -167,6 +167,31 @@ def test_pace_then_plan_persists_modules_and_completion(client: TestClient) -> N
     assert after[1]["locked"] is False
 
 
+def test_schedule_edit_shifts_plan_and_persists(client: TestClient) -> None:
+    course_id = _create(client, content="azure functions")["id"]
+    client.post(f"/api/courses/{course_id}/accept", json={"catalog_id": "cb-c01"})
+    client.post(f"/api/courses/{course_id}/pace", json={"pace": "normal"})
+
+    # Baseline plan starts today.
+    resp = client.post(f"/api/courses/{course_id}/messages", json={"content": "build a study plan"})
+    base = next(e for e in _parse_sse(resp.text) if e["type"] == "plan")["plan"]
+
+    # "start after June 30 and skip Mondays" → later start, no Monday sessions.
+    resp = client.post(
+        f"/api/courses/{course_id}/messages",
+        json={"content": "actually move things so I start after June 30 and skip Mondays"},
+    )
+    edited = next(e for e in _parse_sse(resp.text) if e["type"] == "plan")["plan"]
+    assert edited["start_date"] >= "2026-07-01"
+    assert edited["start_date"] > base["start_date"]
+    assert not any(s["day"] == "mon" for s in edited["sessions"])
+
+    # The edit persisted: a fresh "rebuild" keeps the later start.
+    resp = client.post(f"/api/courses/{course_id}/messages", json={"content": "rebuild my plan"})
+    again = next(e for e in _parse_sse(resp.text) if e["type"] == "plan")["plan"]
+    assert again["start_date"] == edited["start_date"]
+
+
 def test_module_content_renders_markdown(client: TestClient) -> None:
     course_id = _create(client)["id"]
     resp = client.get(f"/api/courses/{course_id}/modules/cb-c01-m01/content")

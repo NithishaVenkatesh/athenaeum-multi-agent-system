@@ -656,6 +656,7 @@ def answer_study_plan(
     taken: list[TakenCourse],
     pace: Pace | None = None,
     start_date: date | None = None,
+    exclude_days: frozenset[str] = frozenset(),
     router: ModelRouter | None = None,
     repo: WorkIQRepository | None = None,
     settings: Settings | None = None,
@@ -699,8 +700,25 @@ def answer_study_plan(
         persona=persona,
         pace=pace,
         start_date=start_date or date.today(),
+        exclude_days=exclude_days,
         settings=settings,
     )
+    # A schedule edit can remove every study slot; say so instead of an empty plan.
+    if plan is not None and not plan.sessions:
+        return AgentReply(
+            telemetry=_answer_telemetry(
+                summary="No study time left after the schedule edit",
+                reasoning=f"exclude_days={sorted(exclude_days)} removed all slots.",
+                route=Route.STUDY_PLAN,
+                sources=[],
+                model="offline" if settings.llm_offline else None,
+                tier=None,
+            ),
+            tokens=_offline_stream(
+                "Those constraints leave no study time in your week. Free up a day or loosen "
+                "the limits and I'll rebuild the plan."
+            ),
+        )
     if plan is None:  # course has no modules, should not happen for catalog courses
         return AgentReply(
             telemetry=_answer_telemetry(

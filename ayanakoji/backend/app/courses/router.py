@@ -19,6 +19,7 @@ from sqlmodel import Session
 
 from app.agent.contracts import Pace, PlanEvent, TakenCourse, TokenEvent
 from app.agent.orchestrator import run_pipeline
+from app.agent.schedule_edit import parse_adjustment
 from app.agent.state import derive_course_state
 from app.catalog.content import get_module_content
 from app.catalog.loader import get_course as get_catalog_course
@@ -166,6 +167,20 @@ def accept_course(course_id: str, body: AcceptCourse, session: SessionDep) -> Co
     return _to_read(course, repo)
 
 
+def _apply_schedule_edit(repo: CourseRepository, course: Course, text: str) -> Course:
+    """Persist a natural-language schedule edit on the course (merges with prior).
+
+    The edit sticks: future plan builds reuse the start date and skipped days.
+    """
+    adj = parse_adjustment(text, today=date.today())
+    if adj is None:
+        return course
+    course.plan_start = adj.start_date.isoformat() if adj.start_date else course.plan_start
+    course.plan_excludes = sorted(set(course.plan_excludes) | adj.exclude_days)
+    repo.save(course)
+    return course
+
+
 def _sse(payload: dict[str, object]) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
@@ -213,6 +228,13 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
 
             taken = _taken_courses(stream_repo, current.persona_id, exclude_id=current.id)
             pace = Pace(current.pace) if current.pace else None
+            # Apply any natural-language schedule edit ("start after June 30",
+            # "skip Mondays") and persist it so it sticks across re-plans.
+            current = _apply_schedule_edit(stream_repo, current, body.content)
+            start_date = (
+                date.fromisoformat(current.plan_start) if current.plan_start else date.today()
+            )
+            exclude_days = frozenset(current.plan_excludes)
             existing_modules = stream_repo.list_modules(current.id)
             course_state = derive_course_state(
                 catalog_id=current.catalog_id,
@@ -229,7 +251,8 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
                 catalog_id=current.catalog_id,
                 taken=taken,
                 pace=pace,
-                start_date=date.today(),
+                start_date=start_date,
+                exclude_days=exclude_days,
                 course_state=course_state,
             ):
                 if isinstance(event, TokenEvent):

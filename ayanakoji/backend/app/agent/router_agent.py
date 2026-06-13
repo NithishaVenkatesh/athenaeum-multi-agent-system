@@ -32,12 +32,18 @@ _RECOMMEND_RE = re.compile(
     r"|recommend\s+(me\s+)?(a|some|something)",
     re.IGNORECASE,
 )
-# "Build my study plan / schedule" → Study Plan.
+# "Build / adjust my study plan / schedule" → Study Plan.
 _PLAN_RE = re.compile(
     r"\b(study\s+plan|study\s+schedule|learning\s+plan|prep\s+plan|prepare\s+plan)"
-    r"|\b(build|make|create|give|generate|draft)\b.{0,20}\b(plan|schedule)"
+    r"|\b(build|make|create|give|generate|draft|rebuild|redo|adjust|change|update)\b.{0,20}\b(plan|schedule)"
     r"|\b(plan|schedule)\b.{0,20}\b(my|the)\s+(study|learning|prep|week)"
-    r"|how\s+should\s+i\s+(study|prepare|schedule)|when\s+do\s+i\s+study",
+    r"|how\s+should\s+i\s+(study|prepare|schedule)|when\s+do\s+i\s+study"
+    # Schedule edits (start later, skip a day, move things) imply a re-plan.
+    r"|\b(start|begin)\b.{0,20}\b(after|post|from|on|in|next|later)\b"
+    r"|\b(move|push|shift|bump)\b.{0,20}\b(plan|schedule|study|start|later|back|forward)\b"
+    r"|\b(skip|avoid|don'?t\s+use|free\s+up|can'?t\s+(do|study))\b.{0,20}"
+    r"\b(mon|tue|wed|thu|fri|sat|sun|monday|tuesday|wednesday|thursday|friday|"
+    r"saturday|sunday|this\s+week|that\s+hour|the\s+\d)",
     re.IGNORECASE,
 )
 # Warm onboarding / small talk → Greeting.
@@ -196,6 +202,17 @@ def _parse_decision(raw: str, text: str, grounding: CourseGrounding | None) -> R
         )
     except (json.JSONDecodeError, KeyError, ValueError, TypeError):
         return classify(text, grounding=grounding)
+
+    # Explicit plan / schedule-edit phrases ("build a plan", "start after June 30",
+    # "skip Mondays") are high-signal and deterministic; the LLM often misroutes
+    # them to work_iq or general, so the regex intent wins.
+    if _PLAN_RE.search(text):
+        return RouteDecision(
+            route=Route.STUDY_PLAN,
+            reasoning="Explicit study-plan or schedule-edit request.",
+            off_topic=0.0,
+            confidence=0.85,
+        )
 
     # The LLM sometimes flags an on-platform learning topic (data science, AI, a
     # vertical) as off-topic and dumps it to GENERAL. Trust the grounded heuristic

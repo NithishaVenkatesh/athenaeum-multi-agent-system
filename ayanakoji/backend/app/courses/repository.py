@@ -75,6 +75,14 @@ class CourseRepository:
         self._session.refresh(course)
         return course
 
+    def save(self, course: Course) -> Course:
+        """Persist in-place edits to a course (e.g. pace / schedule fields)."""
+        course.updated_at = datetime.now(UTC)
+        self._session.add(course)
+        self._session.commit()
+        self._session.refresh(course)
+        return course
+
     def list_assessments(self, course_id: str) -> list[Assessment]:
         statement = select(Assessment).where(Assessment.course_id == course_id)
         return list(self._session.exec(statement).all())

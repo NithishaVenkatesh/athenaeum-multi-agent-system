@@ -51,6 +51,10 @@ class Course(SQLModel, table=True):
     status: int = Field(default=STATUS_NEW)
     # Chosen study pace (slower|normal|faster); set before a plan is built.
     pace: str | None = Field(default=None)
+    # Natural-language schedule edits that persist across re-plans (§schedule_edit):
+    # an ISO start date and weekdays to skip.
+    plan_start: str | None = Field(default=None)
+    plan_excludes: list[str] = Field(default_factory=list, sa_type=JSON)
     messages: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON)
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)

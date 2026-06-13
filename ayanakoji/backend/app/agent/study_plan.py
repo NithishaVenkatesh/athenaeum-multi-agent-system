@@ -154,11 +154,14 @@ def _day_study_slots(day: DaySchedule, work_start: int, work_end: int) -> list[W
     return [s for s in slots if s.minutes >= _MIN_SLOT_MINUTES]
 
 
-def weekly_study_slots(persona: Persona) -> list[WeeklySlot]:
+def weekly_study_slots(
+    persona: Persona, exclude_days: frozenset[str] = frozenset()
+) -> list[WeeklySlot]:
     """The learner's recurring weekly study slots, grounded in their calendar.
 
     Restricted to their preferred study days when those have any opening; the one
     committed week is the repeating template for every week of the plan.
+    ``exclude_days`` (a natural-language edit) drops those weekdays entirely.
     """
     work_start = _to_min(persona.work_context.working_hours.start)
     work_end = _to_min(persona.work_context.working_hours.end)
@@ -166,6 +169,8 @@ def weekly_study_slots(persona: Persona) -> list[WeeklySlot]:
 
     by_day: dict[str, list[WeeklySlot]] = {}
     for day in persona.schedule.days:
+        if day.day in exclude_days:
+            continue
         opened = _day_study_slots(day, work_start, work_end)
         if opened:
             by_day[day.day] = opened
@@ -259,6 +264,7 @@ def build_study_plan(
     persona: Persona,
     pace: Pace = Pace.NORMAL,
     start_date: date,
+    exclude_days: frozenset[str] = frozenset(),
     settings: Settings | None = None,
 ) -> StudyPlan | None:
     """Assemble the calendar-grounded, module-level plan, or None if no modules."""
@@ -271,7 +277,7 @@ def build_study_plan(
     estimates = [(m, estimate_module_minutes(m, pace)) for m in modules]
     total_minutes = sum(mins for _, mins in estimates)
 
-    slots = weekly_study_slots(persona)
+    slots = weekly_study_slots(persona, exclude_days)
     weekly_minutes = sum(s.minutes for s in slots)
     weekly_hours = round(weekly_minutes / 60, 1) if weekly_minutes else 0.0
 
