@@ -89,6 +89,18 @@ def test_disclaimer_declares_synthetic(document: WorkIQDocument) -> None:
     assert "demo" in disclaimer
 
 
+def test_scope_labels_work_iq_pattern_vs_adjacent_context(document: WorkIQDocument) -> None:
+    """Honest provenance: core surfaces are Work-IQ-pattern; profile/team are adjacent."""
+    scope = document.service.scope
+    assert "work_signals" in scope.work_iq_pattern
+    assert "availability" in scope.work_iq_pattern
+    assert "profile" in scope.adjacent_context
+    assert any("team." in s for s in scope.adjacent_context)
+    # The two sets must not overlap.
+    assert not set(scope.work_iq_pattern) & set(scope.adjacent_context)
+    assert "not claimed" in scope.note.lower()
+
+
 def test_learner_values_are_in_sane_ranges(document: WorkIQDocument) -> None:
     for persona in document.personas:
         learning = persona.learning

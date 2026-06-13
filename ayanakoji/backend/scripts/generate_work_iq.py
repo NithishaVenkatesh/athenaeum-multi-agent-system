@@ -1047,8 +1047,28 @@ def build_document() -> dict:
                 "Response Fidelity — aggregates derived from the calendar, never hand-typed",
                 "Multi-Protocol Runtime — REST head exposed here; A2A/MCP heads documented",
             ],
-            "security_note": "Demo backend is open read-only; production parity is "
-            "security-trimmed, delegated, user-scoped access honouring tenant boundaries.",
+            "scope": {
+                "work_iq_pattern": [
+                    "work_signals",
+                    "schedule",
+                    "work_context",
+                    "availability",
+                ],
+                "adjacent_context": ["profile", "team.sprint", "team.okrs", "team.cert_targets"],
+                "note": (
+                    "Real Microsoft Work IQ derives from M365 activity (calendar, meetings, "
+                    "mail, files); the work-signal/schedule/context/availability surfaces follow "
+                    "that pattern. Profile (HRIS-style) and team sprint/OKRs/cert-targets (Azure "
+                    "Boards / Viva Goals-style) are adjacent systems included for demo realism — "
+                    "not claimed to originate from Work IQ."
+                ),
+            },
+            "security_note": (
+                "No auth by design: a persona switcher with no tenancy or passwords. "
+                "Compartmentalization is by API shape, not login — the manager surface "
+                "(team capacity) is aggregate-only and never exposes per-learner detail; "
+                "per-persona endpoints represent that persona reading their own data."
+            ),
             "disclaimer": (
                 "SYNTHETIC, DEMO-ONLY. Fabricated identifiers; no real people, PII, emails, "
                 "or customer data. Star codenames are fictional personas, not individuals."

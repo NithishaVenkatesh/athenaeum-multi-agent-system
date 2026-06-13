@@ -247,11 +247,25 @@ class ServiceWeek(_Model):
     timezone: str
 
 
+class ServiceScope(_Model):
+    """Honest provenance: which surfaces are Work-IQ-pattern vs adjacent context.
+
+    Real Microsoft Work IQ derives from M365 activity (calendar, meetings, mail,
+    files). Profile (HRIS) and team sprint/OKRs (Azure Boards / Viva Goals) are
+    adjacent systems — included for demo realism, not claimed to come from Work IQ.
+    """
+
+    work_iq_pattern: list[str]
+    adjacent_context: list[str]
+    note: str
+
+
 class ServiceInfo(_Model):
     name: str
     pattern: str
     description: str
     principles: list[str]
+    scope: ServiceScope
     security_note: str
     disclaimer: str
     schema_version: str

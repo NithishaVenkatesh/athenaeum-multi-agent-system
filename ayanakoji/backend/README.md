@@ -36,6 +36,19 @@ delivery context (sprint, OKRs, cert targets, capacity policy).
 > or customer data. Work-signal aggregates are *derived* from the calendar
 > (Response Fidelity), so the schedule and signals can never disagree.
 
+**Scope & fidelity.** Real Microsoft Work IQ derives from M365 activity (calendar,
+meetings, mail, files). The **Work-IQ-pattern** surfaces here are `work_signals`,
+`schedule`, `work_context`, and `availability`. `profile` (HRIS-style) and team
+`sprint`/`okrs`/`cert-targets` (Azure Boards / Viva Goals-style) are **adjacent
+workforce context** included for demo realism — not claimed to come from Work IQ.
+This is stated in the service descriptor's `scope` field.
+
+**Trust model (no auth by design).** A persona switcher with no tenancy or
+passwords, so there is no auth layer. Compartmentalization is by API shape, not
+login: the manager surface (`teams/{id}/capacity`) is **aggregate-only** and
+never exposes per-learner detail; per-persona endpoints represent that persona
+reading their own data.
+
 Data source: [`app/data/work_iq.json`](app/data/work_iq.json), produced
 deterministically by the offline synthesizer and committed as the source of
 truth. CI regenerates it and fails on any drift.

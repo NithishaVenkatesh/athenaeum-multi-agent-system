@@ -306,6 +306,11 @@ def _minimal_document() -> WorkIQDocument:
                 "pattern": "Microsoft Work IQ",
                 "description": "x",
                 "principles": ["Unified Surface"],
+                "scope": {
+                    "work_iq_pattern": ["work_signals"],
+                    "adjacent_context": ["profile"],
+                    "note": "adjacent context not claimed to come from Work IQ",
+                },
                 "security_note": "x",
                 "disclaimer": "synthetic demo",
                 "schema_version": "1.0.0",
