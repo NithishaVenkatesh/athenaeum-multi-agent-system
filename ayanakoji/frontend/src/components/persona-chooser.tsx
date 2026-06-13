@@ -47,7 +47,7 @@ function PersonaCard({
         alt=""
         width={56}
         height={56}
-        className="size-14 shrink-0 rounded-xl ring-1 ring-border"
+        className="size-14 shrink-0 rounded-lg ring-1 ring-border"
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">

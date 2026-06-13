@@ -36,7 +36,7 @@ export function AssessmentsView({ courseId }: { courseId: string }) {
 
       {isEmpty ? (
         <div className="border-border mt-8 flex flex-col items-center justify-center rounded-2xl border border-dashed px-6 py-20 text-center">
-          <span className="bg-accent text-brand flex size-12 items-center justify-center rounded-full">
+          <span className="bg-accent text-brand flex size-12 items-center justify-center rounded-xl">
             <GraduationCap className="size-6" />
           </span>
           <h2 className="font-display mt-4 text-xl">No assessments yet</h2>

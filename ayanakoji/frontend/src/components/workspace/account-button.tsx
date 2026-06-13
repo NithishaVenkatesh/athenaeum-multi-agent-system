@@ -22,14 +22,14 @@ export function AccountButton() {
 
   return (
     <div className="flex items-center gap-2">
-      <span className="border-border bg-card flex items-center gap-2 rounded-full border py-1 pr-3 pl-1">
+      <span className="border-border bg-card flex items-center gap-2 rounded-xl border py-1 pr-3 pl-1">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={avatarDataUri(persona.codename)}
           alt=""
           width={28}
           height={28}
-          className="ring-border size-7 rounded-full ring-1"
+          className="ring-border size-7 rounded-md ring-1"
         />
         <span className="text-sm font-medium">{persona.codename}</span>
         <span className="text-muted-foreground hidden font-mono text-[0.7rem] sm:inline">

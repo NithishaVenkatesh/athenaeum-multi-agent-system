@@ -33,7 +33,7 @@ export function MessageBubble({
       >
         {content}
         {streaming && (
-          <span className="bg-brand ml-1 inline-block h-3.5 w-1.5 translate-y-0.5 animate-pulse rounded-full" />
+          <span className="bg-brand ml-1 inline-block h-3.5 w-1.5 translate-y-0.5 animate-pulse rounded-sm" />
         )}
       </div>
     </motion.div>
