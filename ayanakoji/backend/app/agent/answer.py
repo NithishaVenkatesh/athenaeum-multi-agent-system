@@ -689,7 +689,11 @@ def answer_work(
         "You are Athenaeum's study coach. Use ONLY the learner's work signals below to tailor "
         "timing and load. Quote only these numbers; do not invent figures. Do not use em "
         "dashes; use commas or periods. If meeting load is above 20 h/week, recommend a "
-        "lighter plan." + _NO_LEAK + "\n\nWORK SIGNALS: " + _work_facts(persona)
+        "lighter plan. These signals belong to the CURRENT learner only. You have no access to "
+        "any other employee's schedule, hours, workload, or data, if asked about a colleague, a "
+        "named person, a team member, or 'everyone', briefly say you can only help with their "
+        "own information and never infer or invent someone else's." + _NO_LEAK
+        + "\n\nWORK SIGNALS: " + _work_facts(persona)
     )
     handle = router.stream(
         Capability.WORKHORSE,
