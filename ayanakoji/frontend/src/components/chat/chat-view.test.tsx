@@ -280,6 +280,46 @@ describe("ChatView", () => {
     expect(screen.queryByRole("button", { name: "Functions" })).toBeNull();
   });
 
+  it("congratulates the learner and offers a new chat when the course is complete", async () => {
+    mockGet.mockResolvedValue(
+      course({
+        catalog_id: "cb-c01",
+        catalog_title: "Azure Compute & Serverless Foundations",
+        messages: [
+          { role: "user", content: "hi" },
+          { role: "assistant", content: "hello there" },
+        ],
+      }),
+    );
+
+    render(<ChatView courseId="c1" completed />);
+
+    await waitFor(() => expect(screen.getByText("hello there")).toBeInTheDocument());
+    // The completion banner names the finished course and celebrates it.
+    expect(
+      screen.getByText(/Course complete — Azure Compute & Serverless Foundations/i),
+    ).toBeInTheDocument();
+    // The primary CTA is a fresh chat (one course per chat).
+    const newChat = screen.getByRole("link", { name: /new chat/i });
+    expect(newChat).toHaveAttribute("href", "/chat");
+  });
+
+  it("does not show the completion banner on a normal chat load", async () => {
+    mockGet.mockResolvedValue(
+      course({
+        messages: [
+          { role: "user", content: "hi" },
+          { role: "assistant", content: "hello there" },
+        ],
+      }),
+    );
+
+    render(<ChatView courseId="c1" />);
+
+    await waitFor(() => expect(screen.getByText("hello there")).toBeInTheDocument());
+    expect(screen.queryByText(/Course complete/i)).toBeNull();
+  });
+
   it("restores an in-progress skill check from skill_check_active on reload", async () => {
     // A learner who opened the quiz, then switched chats, must get the same card
     // back (not the gate) — the open quiz is persisted at the DB level.

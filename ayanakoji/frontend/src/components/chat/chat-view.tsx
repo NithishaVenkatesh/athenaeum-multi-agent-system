@@ -10,7 +10,7 @@
  * transcript; the live trace and suggestion live in this component's state.
  */
 
-import { ArrowDown, ArrowRight, MessageSquarePlus } from "lucide-react";
+import { ArrowDown, ArrowRight, MessageSquarePlus, Trophy } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -164,16 +164,48 @@ function NewChatNotice({ newChat }: { newChat: NewChat }) {
   );
 }
 
+/**
+ * Shown when the learner passes the last module's oral exam (?completed=1).
+ * Celebrates the finish and steers them into a fresh chat for the next course —
+ * one course per chat, so a new course means a new chat.
+ */
+function CourseCompleteNotice({ title }: { title: string | null }) {
+  return (
+    <div className="border-brand/30 bg-brand/5 rounded-2xl border p-5 text-center">
+      <div className="bg-brand/10 text-brand mx-auto flex size-11 items-center justify-center rounded-full">
+        <Trophy className="size-5" />
+      </div>
+      <h3 className="font-display text-foreground mt-3 text-lg tracking-tight text-pretty">
+        Course complete{title ? ` — ${title}` : ""}! 🎉
+      </h3>
+      <p className="text-muted-foreground mx-auto mt-1 max-w-sm text-sm text-pretty">
+        Congratulations on finishing every module. Ready for the next certification?
+        Start a new chat to explore another course.
+      </p>
+      <Link
+        href="/chat"
+        className="bg-brand mt-4 inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+      >
+        <MessageSquarePlus className="size-4" /> New Chat
+      </Link>
+    </div>
+  );
+}
+
 export function ChatView({
   courseId,
   feedback,
+  completed = false,
 }: {
   courseId?: string;
   /** Set when arriving from the "Get Feedback" button — streams grounded feedback. */
   feedback?: { kind: AssessmentType; moduleId: string };
+  /** Set when arriving from the last module's "Complete Course" button. */
+  completed?: boolean;
 }) {
   const { personaId, reloadCourses } = useWorkspace();
   const [activeCourseId, setActiveCourseId] = useState<string | undefined>(courseId);
+  const [courseTitle, setCourseTitle] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -205,6 +237,7 @@ export function ChatView({
       .then((loaded) => {
         if (!active) return;
         setActiveCourseId(loaded.id);
+        setCourseTitle(loaded.catalog_title ?? loaded.chat_name);
         const enrolled = loaded.catalog_id;
         // Once the skill step is resolved (a skill_result message exists) the gate
         // is not re-offered on reload — it lives on an earlier turn than the result.
@@ -611,6 +644,7 @@ export function ChatView({
             ),
           )
         )}
+        {completed && !isEmpty && !loadError && <CourseCompleteNotice title={courseTitle} />}
         <div ref={bottomRef} />
       </div>
 

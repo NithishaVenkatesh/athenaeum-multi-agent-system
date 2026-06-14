@@ -11,7 +11,7 @@
  *  5. Auto-submit once the question is graded. Show results + pass/fail.
  */
 
-import { ArrowLeft, CheckCircle2, Loader2, Send, XCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, Send, Trophy, XCircle } from "lucide-react";
 import Link from "next/link";
 import { use, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -21,11 +21,13 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   getAssessmentSession,
   listModuleAssessments,
+  listModules,
   sendLlmTurn,
   startAssessment,
   startLlmQuestion,
   submitLlm,
   type AssessmentSession,
+  type CourseModuleProgress,
   type LlmSubmitResult,
 } from "@/lib/api";
 
@@ -53,6 +55,9 @@ export default function LlmAssessmentPage({
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<LlmSubmitResult | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
+  // The course's ordered modules — used on a pass to point at the *next* module
+  // (or "Complete Course" when this is the last one) instead of looping back here.
+  const [modules, setModules] = useState<CourseModuleProgress[] | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const moduleHref = `/chat/${courseId}/modules/${moduleId}`;
@@ -61,6 +66,18 @@ export default function LlmAssessmentPage({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingReply]);
+
+  // Load the module list once so the results screen can resolve "what's next".
+  // Failure leaves `modules` null → the results screen falls back to "Back to Module".
+  useEffect(() => {
+    let cancelled = false;
+    listModules(courseId)
+      .then((m) => !cancelled && setModules(m))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [courseId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -232,6 +249,12 @@ export default function LlmAssessmentPage({
   if (phase === "results" && result) {
     const passed = result.passed;
     const q = result.questions[0];
+    // Resolve this module's position so a pass advances the learner: the next
+    // module if there is one, otherwise the whole course is done.
+    const moduleIndex = modules?.findIndex((m) => m.module_id === moduleId) ?? -1;
+    const nextModule =
+      modules && moduleIndex >= 0 ? (modules[moduleIndex + 1] ?? null) : null;
+    const isLastModule = modules !== null && moduleIndex >= 0 && nextModule === null;
     return (
       <div className="mx-auto max-w-xl px-4 py-8">
         <h1 className="font-display text-xl font-semibold">Oral Assessment</h1>
@@ -258,9 +281,30 @@ export default function LlmAssessmentPage({
 
         <div className="mt-8 flex gap-3">
           {passed ? (
-            <Button onClick={() => router.push(moduleHref)}>
-              Back to Module
-            </Button>
+            modules === null ? (
+              <Button disabled className="gap-1.5">
+                <Loader2 className="size-4 animate-spin" /> Loading…
+              </Button>
+            ) : nextModule ? (
+              <Button
+                className="gap-1.5"
+                onClick={() =>
+                  router.push(`/chat/${courseId}/modules/${nextModule.module_id}`)
+                }
+              >
+                Next Module <ArrowRight className="size-4" />
+              </Button>
+            ) : isLastModule ? (
+              <Button
+                className="gap-1.5"
+                onClick={() => router.push(`/chat/${courseId}?completed=1`)}
+              >
+                <Trophy className="size-4" /> Complete Course
+              </Button>
+            ) : (
+              // Module position couldn't be resolved — neutral fallback.
+              <Button onClick={() => router.push(moduleHref)}>Back to Module</Button>
+            )
           ) : (
             <>
               <Button variant="outline" onClick={() => router.push(moduleHref)}>

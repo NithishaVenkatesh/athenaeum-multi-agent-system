@@ -4,7 +4,7 @@ export default async function CoursePage({
   params,
   searchParams,
 }: PageProps<"/chat/[courseId]"> & {
-  searchParams?: Promise<{ feedback?: string; module?: string }>;
+  searchParams?: Promise<{ feedback?: string; module?: string; completed?: string }>;
 }) {
   const { courseId } = await params;
   const sp = searchParams ? await searchParams : {};
@@ -18,5 +18,9 @@ export default async function CoursePage({
   const moduleId = sp.module;
   const feedback = kind && moduleId ? { kind, moduleId } : undefined;
 
-  return <ChatView courseId={courseId} feedback={feedback} />;
+  // The last module's "Complete Course" button lands here with ?completed=1 so the
+  // chat congratulates the learner and offers a fresh chat for their next course.
+  const completed = sp.completed === "1";
+
+  return <ChatView courseId={courseId} feedback={feedback} completed={completed} />;
 }
