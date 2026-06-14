@@ -1,0 +1,104 @@
+{
+  "course_id": "ai-c01",
+  "module_id": "ai-c01-m03",
+  "module_title": "Retrieval-augmented generation (RAG)",
+  "choices": [
+    {
+      "id": "ai-c01-m03-c01",
+      "module_id": "ai-c01-m03",
+      "prompt": "According to the module, why does adding retrieval solve the problem of a question whose answer lives only in a private PDF, when better prompting alone cannot?",
+      "kind": "mcq",
+      "choices": [
+        "The fact was never in the model's training data, so there is nothing for a prompt to extract; retrieval injects the authoritative text into the prompt at request time.",
+        "Better prompts cannot lower the model's temperature, but retrieval forces deterministic output that surfaces the hidden fact.",
+        "Retrieval fine-tunes the base model's weights on the private PDF so the fact becomes part of its memory.",
+        "Prompting fails because the PDF is too long for any context window, and retrieval compresses it into a single embedding the model can read."
+      ],
+      "correct_answers": [
+        "The fact was never in the model's training data, so there is nothing for a prompt to extract; retrieval injects the authoritative text into the prompt at request time."
+      ]
+    },
+    {
+      "id": "ai-c01-m03-c02",
+      "module_id": "ai-c01-m03",
+      "prompt": "In the module's retrieval step, how are the chunks most relevant to a query identified?",
+      "kind": "mcq",
+      "choices": [
+        "By embedding both the chunks and the question into vectors and finding the chunks whose vectors are closest, typically by cosine similarity.",
+        "By counting how many keywords the chunk shares with the question and ranking by exact word overlap.",
+        "By asking the chat model to read every chunk and rank them before any answer is generated.",
+        "By sorting chunks by how recently their source document was added to the shared drive."
+      ],
+      "correct_answers": [
+        "By embedding both the chunks and the question into vectors and finding the chunks whose vectors are closest, typically by cosine similarity."
+      ]
+    },
+    {
+      "id": "ai-c01-m03-c03",
+      "module_id": "ai-c01-m03",
+      "prompt": "A RAG system retrieves the correct passage, but the model still occasionally adds invented details. Per the module, which part of the pipeline is at fault and what is the fix?",
+      "kind": "mcq",
+      "choices": [
+        "The grounding instruction is missing or weak; add a strict 'answer only from the provided context, otherwise say you don't know' instruction (and keep temperature low).",
+        "The embedding model is wrong; switch the chat deployment to also handle embeddings so the vectors match the answer.",
+        "The chunk size is too small; merge chunks into one giant chunk so the full context is always present.",
+        "The value of k is too low; raise k sharply so many more passages are pulled into the prompt."
+      ],
+      "correct_answers": [
+        "The grounding instruction is missing or weak; add a strict 'answer only from the provided context, otherwise say you don't know' instruction (and keep temperature low)."
+      ]
+    },
+    {
+      "id": "ai-c01-m03-c04",
+      "module_id": "ai-c01-m03",
+      "prompt": "Which of the following statements about chunk size and the value of k are accurate according to the module? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Chunks that are too large dilute relevance and waste prompt tokens on noise.",
+        "Chunks that are too small fragment ideas, so the retrieved piece lacks the surrounding context needed to answer.",
+        "Retrieving too many chunks can bury the relevant passage in noise and overflow the context.",
+        "A larger chunk size always improves retrieval precision because more text gives the embedding more to match on."
+      ],
+      "correct_answers": [
+        "Chunks that are too large dilute relevance and waste prompt tokens on noise.",
+        "Chunks that are too small fragment ideas, so the retrieved piece lacks the surrounding context needed to answer.",
+        "Retrieving too many chunks can bury the relevant passage in noise and overflow the context."
+      ]
+    },
+    {
+      "id": "ai-c01-m03-c05",
+      "module_id": "ai-c01-m03",
+      "prompt": "In the Northwind walkthrough, why is each chunk stored with a 'source' field (e.g. returns-policy.md, warranty.md)?",
+      "kind": "mcq",
+      "choices": [
+        "So the model can cite where an answer came from, making answers auditable; without source metadata the model cannot cite and you cannot audit.",
+        "So the embedding model can use the filename as an additional keyword to boost cosine similarity scores.",
+        "So the in-memory store can be swapped for Azure AI Search without re-embedding any chunks.",
+        "So the chat deployment knows which embedding deployment produced each vector."
+      ],
+      "correct_answers": [
+        "So the model can cite where an answer came from, making answers auditable; without source metadata the model cannot cite and you cannot audit."
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "ai-c01-m03-l01",
+      "module_id": "ai-c01-m03",
+      "prompt": "Explain why retrieval-augmented generation reduces hallucination compared with prompting the base model alone. Reference how RAG changes the model's task and why that makes answers verifiable.",
+      "reference_answer": "A language model's knowledge is frozen at training time and is general rather than specific to your private or current facts, so when asked about something it never learned it tends to generate fluent guesses. RAG changes where the facts come from: at request time you retrieve authoritative private text relevant to this question and insert it into the prompt instead of hoping the answer is latent in the weights. This narrows the model's task from 'recall the answer' to 'read this passage and summarize the relevant part,' which it does well. Crucially, because you know which source the model was given, you can verify the answer, and paired with a strict instruction to answer only from the supplied context the model stays inside the evidence rather than blending it with its own guesses."
+    },
+    {
+      "id": "ai-c01-m03-l02",
+      "module_id": "ai-c01-m03",
+      "prompt": "Walk through how you would build the minimal end-to-end RAG flow for the Northwind assistant, naming the key steps from documents to a grounded, cited answer.",
+      "reference_answer": "First split the source documents into chunks of a few hundred tokens with a small overlap, attaching source metadata (document and section) to each chunk. Embed every chunk once using a deployed embedding model (a separate deployment, e.g. support-embed) and store the vectors; in the walkthrough this is an in-memory store, but in production you would swap it for a vector index such as Azure AI Search or Azure Cosmos DB without changing the rest. At query time, embed the user's question and retrieve the top-k chunks whose vectors are closest by cosine similarity. Assemble a grounded prompt containing those delimited chunks each tagged with its source, the user's question, and a system instruction to answer only from the provided context, say you don't know if it is absent, and cite the source in brackets. Finally call the chat deployment (e.g. support-chat) at low temperature to produce an answer like one citing [warranty.md]."
+    },
+    {
+      "id": "ai-c01-m03-l03",
+      "module_id": "ai-c01-m03",
+      "prompt": "Compare the two failure modes of chunk size described in the module, and explain why the module calls chunking a quality decision rather than a formatting detail.",
+      "reference_answer": "Chunk size is a quality decision because it directly controls both retrieval relevance and answer completeness, not just how text is laid out. Chunks that are too large dilute relevance: the matching vector represents a relevant paragraph buried in unrelated text, so retrieval is imprecise and you waste prompt tokens on noise. Chunks that are too small fragment ideas, so the retrieved piece lacks the surrounding context needed to answer the question. The module's sensible starting point is a few hundred tokens per chunk with a small overlap between consecutive chunks so a sentence split across a boundary is not lost, and it advises tuning chunk size and overlap to your documents while testing retrieval quality directly."
+    }
+  ]
+}
