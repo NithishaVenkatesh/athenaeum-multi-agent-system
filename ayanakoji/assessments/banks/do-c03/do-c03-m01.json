@@ -1,0 +1,105 @@
+{
+  "course_id": "do-c03",
+  "module_id": "do-c03-m01",
+  "module_title": "Infrastructure as code with Bicep",
+  "choices": [
+    {
+      "id": "do-c03-m01-c01",
+      "module_id": "do-c03-m01",
+      "prompt": "According to the module, what does it mean that a Bicep deployment is idempotent?",
+      "kind": "mcq",
+      "choices": [
+        "Applying the same template against the same target repeatedly converges on the same state without harm, as the engine reconciles declared state against actual state.",
+        "Each run creates a new copy of every resource so previous deployments are preserved as backups.",
+        "The template can only be deployed successfully one time per resource group before it must be reset.",
+        "Running the deployment a second time errors out because the resources already exist, just like an imperative script."
+      ],
+      "correct_answers": [
+        "Applying the same template against the same target repeatedly converges on the same state without harm, as the engine reconciles declared state against actual state."
+      ]
+    },
+    {
+      "id": "do-c03-m01-c02",
+      "module_id": "do-c03-m01",
+      "prompt": "A teammate worries that re-running the staging deployment on every merge will recreate the storage account and wipe its data. Based on the module, what is the correct response?",
+      "kind": "mcq",
+      "choices": [
+        "They are wrong; because deployments are idempotent, ARM leaves the unchanged storage account as-is and data is preserved unless the template itself removes the resource.",
+        "They are right; every deployment tears down and rebuilds all declared resources, so data is always lost on re-run.",
+        "They are right; storage accounts in particular are always recreated because their names use uniqueString().",
+        "They are wrong, but only because what-if blocks the deployment from running a second time."
+      ],
+      "correct_answers": [
+        "They are wrong; because deployments are idempotent, ARM leaves the unchanged storage account as-is and data is preserved unless the template itself removes the resource."
+      ]
+    },
+    {
+      "id": "do-c03-m01-c03",
+      "module_id": "do-c03-m01",
+      "prompt": "In the Meridian main.bicep walkthrough, how does the template express that the web app depends on the App Service plan, and what does the module recommend about explicit dependencies?",
+      "kind": "mcq",
+      "choices": [
+        "By referencing plan.id from the site's serverFarmId property, which lets ARM infer the ordering implicitly; explicit dependsOn should be used only when no reference exists.",
+        "By adding a dependsOn array to the site resource that lists the plan, which the module recommends adding to every resource for clarity.",
+        "By deploying the plan in a separate template first, since Bicep cannot order two resources in one file.",
+        "By setting an explicit deploymentOrder integer on each resource so ARM applies them in sequence."
+      ],
+      "correct_answers": [
+        "By referencing plan.id from the site's serverFarmId property, which lets ARM infer the ordering implicitly; explicit dependsOn should be used only when no reference exists."
+      ]
+    },
+    {
+      "id": "do-c03-m01-c04",
+      "module_id": "do-c03-m01",
+      "prompt": "Select all statements about the what-if operation that the module explicitly supports.",
+      "kind": "msq",
+      "choices": [
+        "It previews the create, modify, and delete actions a deployment would perform without performing them.",
+        "Wiring a what-if step into a pull-request pipeline turns infrastructure changes into reviewable diffs.",
+        "It automatically applies the change set after a successful preview, so a separate deploy command is unnecessary.",
+        "It permanently disables drift by locking the portal against any manual changes."
+      ],
+      "correct_answers": [
+        "It previews the create, modify, and delete actions a deployment would perform without performing them.",
+        "Wiring a what-if step into a pull-request pipeline turns infrastructure changes into reviewable diffs."
+      ]
+    },
+    {
+      "id": "do-c03-m01-c05",
+      "module_id": "do-c03-m01",
+      "prompt": "Which of the following are described in the module as common pitfalls to avoid when authoring Bicep? Select all that apply.",
+      "kind": "msq",
+      "choices": [
+        "Hardcoding resource names and regions instead of deriving names from a prefix plus uniqueString() and passing region as a parameter.",
+        "Treating the portal as a second source of truth, so changes made outside the template become drift.",
+        "Writing one giant template instead of factoring cohesive resources into modules with clear parameters and outputs.",
+        "Compiling Bicep to ARM JSON before deployment, which the module warns introduces ordering bugs."
+      ],
+      "correct_answers": [
+        "Hardcoding resource names and regions instead of deriving names from a prefix plus uniqueString() and passing region as a parameter.",
+        "Treating the portal as a second source of truth, so changes made outside the template become drift.",
+        "Writing one giant template instead of factoring cohesive resources into modules with clear parameters and outputs."
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "do-c03-m01-l01",
+      "module_id": "do-c03-m01",
+      "prompt": "Explain how parameterization lets one Bicep template serve dev, staging, and production, and why the module argues this makes staging a faithful rehearsal for production. Reference the mechanism shown in the Meridian walkthrough.",
+      "reference_answer": "The same Bicep file deploys every environment; what differs is the parameter values supplied, such as SKU sizes, instance counts, and naming prefixes, kept in per-environment parameter files (.bicepparam) under source control. In the Meridian main.bicep, the environmentName parameter drives expressions like choosing Standard_GRS storage and a P1v3 plan for prod versus Standard_LRS and B1 otherwise, so promotion means deploying the identical template with a different parameter file. Because the structure is identical and only the data changes, staging is structurally identical to production and therefore a faithful rehearsal. Maintaining a separate template per environment instead lets the templates drift apart, allowing environment-specific bugs to hide."
+    },
+    {
+      "id": "do-c03-m01-l02",
+      "module_id": "do-c03-m01",
+      "prompt": "Describe what desired-state configuration and drift mean in this module, and how a mature IaC strategy keeps the live environment matching its declaration.",
+      "reference_answer": "Declaring state is only half the value; the other half is keeping the live environment matching the declaration. When someone changes a setting in the portal, the environment has drifted from its source-of-truth template. A mature IaC strategy treats the template as authoritative and re-deploys regularly, often from the pipeline on every merge to the main branch, so drift is corrected automatically rather than accumulating into something like the Meridian staging mystery where nobody knew which settings the environment carried. The module frames the portal as a second source of truth being a pitfall: any change made outside the template is drift waiting to be silently reverted on the next deploy or never reconciled, so all changes should be routed through the template."
+    },
+    {
+      "id": "do-c03-m01-l03",
+      "module_id": "do-c03-m01",
+      "prompt": "Contrast declarative Bicep with an imperative script, and explain how Bicep relates to ARM and deployment scopes according to the module.",
+      "reference_answer": "Bicep is declarative: you describe the end state you want, such as a resource group containing a storage account with given properties, and the deployment engine works out the operations needed to reach it. This differs from an imperative script like az storage account create, which run twice may error because the resource already exists. Under the hood Bicep compiles to an Azure Resource Manager (ARM) JSON template and is submitted as a deployment to a scope, which can be a resource group, subscription, management group, or tenant. ARM then orders the operations, respecting dependencies expressed implicitly when one resource references another's properties, so explicit dependsOn clauses are rarely needed. The declarative model is also what makes deployments idempotent, since ARM compares declared state against actual state and reconciles the difference."
+    }
+  ]
+}
