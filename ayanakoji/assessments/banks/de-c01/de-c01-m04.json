@@ -1,0 +1,104 @@
+{
+  "course_id": "de-c01",
+  "module_id": "de-c01-m04",
+  "module_title": "Cataloging and lineage with Microsoft Purview",
+  "choices": [
+    {
+      "id": "de-c01-m04-c01",
+      "module_id": "de-c01-m04",
+      "prompt": "According to the module, when Purview scans a registered Data Lake Storage Gen2 account, what does it actually store in the catalog?",
+      "kind": "mcq",
+      "choices": [
+        "Metadata about the assets — names, schemas, owners, classifications, and where each fits in the data flow — but not the underlying sensor readings",
+        "A full copy of the sensor readings so the data can be queried directly from Purview",
+        "Only the file and folder paths, with no column or type information",
+        "An encrypted backup of every table to protect sensitive fields"
+      ],
+      "correct_answers": [
+        "Metadata about the assets — names, schemas, owners, classifications, and where each fits in the data flow — but not the underlying sensor readings"
+      ]
+    },
+    {
+      "id": "de-c01-m04-c02",
+      "module_id": "de-c01-m04",
+      "prompt": "A finance analyst knows a table exists and the catalog shows its correct name and schema, but keyword search never surfaces it for the terms they use. Per the module, what is the most likely cause and fix?",
+      "kind": "mcq",
+      "choices": [
+        "The asset lacks human-curated descriptions, owners, and glossary terms, so search can't match the analyst's terms; curate it with those annotations",
+        "The scan never ran, so the asset was never registered; trigger a one-off scan to add it",
+        "The lineage process was never pushed, so the table is invisible to search; register the process via the Atlas API",
+        "Classification flagged the table as sensitive and hid it; remove the sensitive label to expose it"
+      ],
+      "correct_answers": [
+        "The asset lacks human-curated descriptions, owners, and glossary terms, so search can't match the analyst's terms; curate it with those annotations"
+      ]
+    },
+    {
+      "id": "de-c01-m04-c03",
+      "module_id": "de-c01-m04",
+      "prompt": "The module says an automated Data Factory pipeline shows full lineage, but a gold table built by a custom Spark script shows no upstream connection. Why, and what is the remedy?",
+      "kind": "mcq",
+      "choices": [
+        "The custom script doesn't run through a Purview-integrated service, so lineage isn't captured automatically; push it explicitly via the Purview Data Map (Atlas) API as a step in the job",
+        "The custom script wrote to gold instead of silver, so lineage skipped it; rewrite it to land in silver first",
+        "The scan schedule was too infrequent to catch the Spark run; increase scan frequency so lineage is recorded",
+        "Classification has not yet labeled the gold columns; run classification to generate the missing lineage edge"
+      ],
+      "correct_answers": [
+        "The custom script doesn't run through a Purview-integrated service, so lineage isn't captured automatically; push it explicitly via the Purview Data Map (Atlas) API as a step in the job"
+      ]
+    },
+    {
+      "id": "de-c01-m04-c04",
+      "module_id": "de-c01-m04",
+      "prompt": "Select every statement the module makes about lineage in Purview.",
+      "kind": "msq",
+      "choices": [
+        "Before changing or dropping a table, lineage (impact analysis) shows everything downstream that would break",
+        "Lineage is only complete if every transformation reports it; one un-instrumented script creates a blind spot in the chain",
+        "When a gold number looks wrong, you trace upstream through lineage (root-cause analysis) to find the offending source or transform",
+        "Lineage by itself encrypts and restricts access to the sensitive data it traces"
+      ],
+      "correct_answers": [
+        "Before changing or dropping a table, lineage (impact analysis) shows everything downstream that would break",
+        "Lineage is only complete if every transformation reports it; one un-instrumented script creates a blind spot in the chain",
+        "When a gold number looks wrong, you trace upstream through lineage (root-cause analysis) to find the offending source or transform"
+      ]
+    },
+    {
+      "id": "de-c01-m04-c05",
+      "module_id": "de-c01-m04",
+      "prompt": "In the walkthrough, the Python code posts a 'Process' entity to the Atlas REST API. What is the role of that Process entity, and how is it authenticated?",
+      "kind": "mcq",
+      "choices": [
+        "It links the silver input to the gold output so Purview draws the lineage edge from inputs to outputs; authentication uses DefaultAzureCredential with no secrets in code",
+        "It copies the silver Delta data into a gold table; authentication uses a hardcoded API key in the headers",
+        "It schedules a recurring scan of the gold zone; authentication uses a SQL connection string",
+        "It applies a sensitivity classification to the gold columns; authentication uses an anonymous public endpoint"
+      ],
+      "correct_answers": [
+        "It links the silver input to the gold output so Purview draws the lineage edge from inputs to outputs; authentication uses DefaultAzureCredential with no secrets in code"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "de-c01-m04-l01",
+      "module_id": "de-c01-m04",
+      "prompt": "Explain why the module insists that 'metadata, not data, is the product' of a data catalog, and how this shapes what Purview does when it scans a registered source.",
+      "reference_answer": "In a large data estate the expensive problem is not storing data but finding the right dataset and knowing whether to trust it, so the valuable asset Purview produces is metadata — names, schemas, owners, descriptions, classifications, and where each asset fits in the data flow. When Purview scans a registered source (such as a Data Lake Storage Gen2 account, SQL database, or Power BI tenant) it reads the structure — files, folders, tables, columns — and writes that metadata into the catalog without ever copying the underlying sensor readings. Scans run on a schedule so the catalog stays current as the lake grows, and scanning can also run automatic classification that tags columns matching sensitive patterns like email addresses or government IDs. This metadata-centric approach is what makes the estate searchable and is the foundation for governance and compliance reporting."
+    },
+    {
+      "id": "de-c01-m04-l02",
+      "module_id": "de-c01-m04",
+      "prompt": "Walk through how you would make a custom Spark job's transformation traceable in Purview when an integrated Data Factory pipeline already reports lineage automatically. Name the mechanism and why every transformation must participate.",
+      "reference_answer": "Pipelines that run through Purview-integrated services such as Data Factory or Synapse capture lineage automatically, but a custom Spark script will not, so you must push lineage explicitly via the Purview Data Map (Atlas) REST API. In the same job that builds the gold table, you authenticate with DefaultAzureCredential (which resolves a managed identity in Azure or your az-login locally, keeping secrets out of code), acquire a token for the Purview scope, and POST a 'Process' entity to the Atlas entity/bulk endpoint. That Process names the silver input asset and the gold output asset so Purview draws the lineage edge from inputs to outputs, and opening the gold table in the portal then shows an edge back to silver. Running this push as a step every time the table is built matters because lineage is complete only if every transformation reports it — one un-instrumented script creates a blind spot exactly where auditors look."
+    },
+    {
+      "id": "de-c01-m04-l03",
+      "module_id": "de-c01-m04",
+      "prompt": "Compare classification and lineage in Purview, and explain how cataloging, classification, and lineage together form the governance backbone described in the module.",
+      "reference_answer": "Classification tells you where sensitive data lives by tagging columns that match patterns like email addresses or government IDs, while lineage records how data moves — which sources feed which transformations and which outputs they produce — supporting impact analysis, root-cause analysis, and compliance proof. The module stresses that classification finds and labels sensitive data but does not by itself encrypt or restrict it, so classification informs controls you must still apply at the storage and access layers. Together with cataloging, these capabilities form the governance backbone: classification shows where sensitive data is, ownership and glossary terms show who is accountable and what things mean, and lineage shows how data moves and what depends on it. Governance is not a separate product bolted on at the end — it is exactly what these metadata capabilities enable, so any analyst can find a trustworthy dataset, any engineer can assess the blast radius of a change, and any auditor can trace a number to its source."
+    }
+  ]
+}
