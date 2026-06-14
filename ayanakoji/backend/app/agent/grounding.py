@@ -37,13 +37,26 @@ _TOP_K = 4
 _MIN_SCORE = 1
 # A source must score at least this fraction of the top match to count as grounding.
 _RELATIVE_CUTOFF = 0.5
-# Relevance floor (A1): a module only grounds an answer if the query terms it matches
-# carry enough of the query's *specificity*. Specificity is IDF-weighted, so matching a
-# rare topical term (functions, pipelines) is strong, while matching only a generic term
-# ("key") while the query's defining terms (quantum, cryptography, lattice) are absent
-# from the whole catalog is weak — that single spurious hit is rejected, not asserted as
-# coverage. A cert-code match (e.g. "DP-203") is exempt: it is strong grounding.
-_MIN_IDF_COVERAGE = 0.28
+# Relevance floor (A1): a course only grounds an answer if the query terms its modules
+# match carry enough of the query's *specificity*. Specificity is IDF-weighted, so
+# matching a rare topical term (functions, pipelines) is strong, while matching only a
+# generic term ("key") while the query's defining terms (quantum, cryptography, lattice)
+# are absent from the whole catalog is weak — that single spurious hit is rejected, not
+# asserted as coverage. A cert-code match (e.g. "DP-203") is exempt: it is strong
+# grounding. The gate is a property of the *chosen candidate set* (the best course's
+# matching modules), not an independent per-term filter — so it can neither invert the
+# ranking (drop a top-scored course while admitting a near-zero one) nor be cleared by a
+# single low-IDF word that brushes one off-topic module.
+_MIN_IDF_COVERAGE = 0.33
+# Absolute IDF mass a single matched term must carry — a generic high-frequency word
+# (low IDF) cannot reach this on its own, so it can't ground a multi-term query alone.
+_MIN_MATCHED_IDF = 3.0
+# A query with ≥2 content terms whose chosen course matches only ONE of them grounds
+# only when that term is genuinely topical: either it clears the coverage floor with a
+# real overlap signal (term recurs / title hit ≥ this), or the overlap score is strong
+# enough on its own (the course is unambiguously about that term, e.g. CI/CD pipelines).
+_SINGLE_TERM_MIN_SCORE = 3
+_SINGLE_TERM_STRONG_SCORE = 10
 # Two-letter topics carry real signal in this domain; keep them despite the length floor.
 _KEEP_SHORT = frozenset({"ai", "ml", "bi", "db", "iam", "vm", "k8s", "ci", "cd"})
 # Synonyms so a learner's phrasing reaches the indexed wording (serverless ↔ functions).
@@ -140,8 +153,14 @@ def _term_re(term: str) -> re.Pattern[str]:
     but NOT 'cat'→'catalog' or 'cat'→'application'; so a short off-topic token can't
     spuriously ground on an unrelated longer word (A1). Longer relations are handled
     deliberately by the synonym map, not by accidental prefixing.
+
+    ``_KEEP_SHORT`` 2-letter topics ("ci", "cd", "ai", "ml", "db") match EXACTLY — the
+    ``[a-z]{0,2}`` suffix would let "ci" hit "cite"/"city" and so ground "ci/cd" on an
+    unrelated RAG module while the real CI/CD course is dropped. Real plurals for these
+    are reached via the synonym map, not by accidental prefixing.
     """
-    return re.compile(r"\b" + re.escape(term) + r"[a-z]{0,2}\b")
+    suffix = "" if term in _KEEP_SHORT else r"[a-z]{0,2}"
+    return re.compile(r"\b" + re.escape(term) + suffix + r"\b")
 
 
 def _term_hits(term: str, text: str) -> int:
@@ -173,17 +192,61 @@ def _idf_weights(q_terms: tuple[str, ...], corpus: tuple[GroundingDoc, ...]) -> 
     return weights
 
 
-def _relevance_ok(
-    q_terms: tuple[str, ...], doc: GroundingDoc, idf: dict[str, float], cert_blob: str
+def _course_relevance_ok(
+    q_terms: tuple[str, ...],
+    course_docs: tuple[GroundingDoc, ...],
+    idf: dict[str, float],
+    cert_blob: str,
 ) -> bool:
-    """True if the doc clears the IDF-weighted relevance floor (or matches the cert)."""
-    if (cert_key := _cert_key(doc)) and cert_key in cert_blob:
+    """True if the *chosen course* clears the IDF-weighted relevance floor.
+
+    The gate is a property of the candidate set (one course's matching modules), not an
+    independent per-module filter — so it cannot drop a top-scored course while admitting
+    a near-zero one (A1 wrong_course). It rejects three false-grounding shapes:
+
+      * a single low-IDF generic word ("best", "table") brushing one off-topic module —
+        below the absolute matched-IDF floor;
+      * a multi-term query whose defining terms are catalog-absent and that matches only
+        one term ("quantum…key") — below the coverage floor;
+      * a single matched term that is not the course's actual subject (incidental "alert"
+        in a security module) — passes only if it recurs / hits a title (real overlap
+        score) or the score is strong on its own.
+
+    A cert-code match (e.g. "DP-203") is authoritative and exempt.
+    """
+    if any((ck := _cert_key(d)) and ck in cert_blob for d in course_docs):
         return True
     total = sum(idf.values())
     if total <= 0:
         return False
-    matched = sum(weight for term, weight in idf.items() if _term_in(term, doc))
-    return matched / total >= _MIN_IDF_COVERAGE
+
+    # Distinct query terms this course matches anywhere (topical breadth), and the
+    # single best module's matched-IDF mass (topical depth on one module).
+    matched_terms = {t for t in q_terms for d in course_docs if _term_in(t, d)}
+    coverage = sum(idf[t] for t in matched_terms) / total
+    best_doc_idf = max(
+        (sum(idf[t] for t in q_terms if _term_in(t, d)) for d in course_docs),
+        default=0.0,
+    )
+    if best_doc_idf < _MIN_MATCHED_IDF:
+        return False
+
+    n_content = len(q_terms)
+    # Single content term ("data", "identity"): coverage is 1.0 by construction; the
+    # absolute-IDF floor above already rejects a too-generic lone term.
+    if n_content <= 1:
+        return coverage >= _MIN_IDF_COVERAGE
+    # ≥2 content terms, course matches ≥2 of them: ordinary coverage floor.
+    if len(matched_terms) >= 2:
+        return coverage >= _MIN_IDF_COVERAGE
+    # ≥2 content terms but only ONE matched: require genuine topical signal so a lone
+    # brush can't pose as coverage. Couple to the overlap score — measured on the RAW
+    # query terms (no synonym expansion) so it reflects how strongly the course is about
+    # *that* term (recurrence + course-title hits), not synonym recall.
+    top_score = max((_score(q_terms, d, cert_blob) for d in course_docs), default=0)
+    if top_score >= _SINGLE_TERM_STRONG_SCORE:
+        return True
+    return coverage >= _MIN_IDF_COVERAGE and top_score >= _SINGLE_TERM_MIN_SCORE
 
 
 def _score(query_terms: tuple[str, ...], doc: GroundingDoc, cert_blob: str) -> int:
@@ -231,27 +294,53 @@ class CourseGrounding:
             # Scoped to one course: stay scoped (never silently widen to the whole
             # catalog and cite another course's modules in this one's answer).
             pool = tuple(d for d in pool if d.course_id == catalog_id)
-        scored = sorted(
-            ((d, _score(terms, d, cert_blob)) for d in pool), key=lambda ds: ds[1], reverse=True
-        )
-        # Score floor + IDF relevance floor: a single spurious keyword hit on a multi-term
-        # query (only "key" in "quantum cryptography lattice key exchange") is rejected
-        # rather than asserted as coverage (A1).
-        kept = [
-            (d, s)
-            for d, s in scored
-            if s >= _MIN_SCORE and _relevance_ok(q_terms, d, idf, cert_blob)
-        ]
-        if not kept:
+        scored = [(d, s) for d in pool if (s := _score(terms, d, cert_blob)) >= _MIN_SCORE]
+        if not scored:
             return ()
-        # Keep only matches near the top score so weak, generic hits don't pose as
-        # grounding — credibility of the "sources" panel depends on this.
-        cutoff = max(_MIN_SCORE, kept[0][1] * _RELATIVE_CUTOFF)
-        near_top = [d for d, s in kept if s >= cutoff]
-        # Course cap: ground in the single most-relevant course, not a sprawl across
-        # unrelated courses presented as if they jointly answer the question (A5).
-        top_course = near_top[0].course_id
-        return tuple(d for d in near_top if d.course_id == top_course)
+
+        # Choose the grounding course by topical FIT, not raw keyword frequency: prefer a
+        # cert match, then the course matching the most distinct *query terms* (breadth),
+        # then the highest overlap score (depth). This couples course selection to the
+        # relevance signal so a keyword-spam single-term course (e.g. "db" repeated) can't
+        # outrank a course that actually matches partition+throughput, and a spurious
+        # "ci"→"cite" hit can't displace the real CI/CD course (A1 wrong_course).
+        def _course_terms(course_id: str) -> int:
+            cds = [d for d, _ in scored if d.course_id == course_id]
+            return len({t for t in q_terms for d in cds if _term_in(t, d)})
+
+        def _course_top_score(course_id: str) -> int:
+            return max(s for d, s in scored if d.course_id == course_id)
+
+        def _course_has_cert(course_id: str) -> bool:
+            return bool(cert_blob) and any(
+                (ck := _cert_key(d)) and ck in cert_blob
+                for d, _ in scored
+                if d.course_id == course_id
+            )
+
+        course_ids = {d.course_id for d, _ in scored}
+        top_course = max(
+            course_ids,
+            key=lambda c: (_course_has_cert(c), _course_terms(c), _course_top_score(c)),
+        )
+        course_docs = tuple(d for d, _ in scored if d.course_id == top_course)
+
+        # Candidate-set relevance gate (A1): the chosen course's matching modules must
+        # collectively clear the IDF coverage / matched-IDF / topical-score floors. A
+        # single low-IDF generic word, or a multi-term query whose defining terms are
+        # catalog-absent, is rejected rather than asserted as coverage.
+        if not _course_relevance_ok(q_terms, course_docs, idf, cert_blob):
+            return ()
+
+        # Within the grounding course, keep only modules near its top score so weak,
+        # generic hits don't pad the "sources" panel.
+        ranked = sorted(
+            ((d, _score(terms, d, cert_blob)) for d in course_docs),
+            key=lambda ds: ds[1],
+            reverse=True,
+        )
+        cutoff = max(_MIN_SCORE, ranked[0][1] * _RELATIVE_CUTOFF)
+        return tuple(d for d, s in ranked if s >= cutoff)
 
     def search(
         self, query: str, *, catalog_id: str | None = None, k: int = _TOP_K
