@@ -1,0 +1,106 @@
+{
+  "course_id": "as-c02",
+  "module_id": "as-c02-m03",
+  "module_title": "Designing logging and monitoring",
+  "choices": [
+    {
+      "id": "as-c02-m03-c01",
+      "module_id": "as-c02-m03",
+      "prompt": "According to the module, what is the fundamental difference between metrics and logs as the two shapes of telemetry under Azure Monitor?",
+      "kind": "mcq",
+      "choices": [
+        "Metrics are numeric, time-stamped values sampled at regular intervals, while logs are structured event records that are richer but cost more to ingest and store.",
+        "Metrics are structured event records queried with KQL, while logs are numeric values sampled at regular intervals.",
+        "Metrics and logs are interchangeable formats, and the choice between them is purely a cost preference.",
+        "Metrics can only be stored in Azure Storage, while logs can only be stored in Event Hubs."
+      ],
+      "correct_answers": [
+        "Metrics are numeric, time-stamped values sampled at regular intervals, while logs are structured event records that are richer but cost more to ingest and store."
+      ]
+    },
+    {
+      "id": "as-c02-m03-c02",
+      "module_id": "as-c02-m03",
+      "prompt": "Lumen Mart must retain audit logs for seven years for compliance but only queries the last 30 days interactively. Which diagnostic-setting routing design satisfies both cost and compliance per the module?",
+      "kind": "mcq",
+      "choices": [
+        "Send logs to a Log Analytics workspace with ~30-day retention for interactive querying, plus an Azure Storage account for cheap seven-year archival.",
+        "Send all logs to a single Log Analytics workspace and set its retention to seven years.",
+        "Stream all logs to Event Hubs and rely on the SIEM to store them for seven years.",
+        "Keep all logs in Azure Storage and run interactive KQL queries directly against the storage account."
+      ],
+      "correct_answers": [
+        "Send logs to a Log Analytics workspace with ~30-day retention for interactive querying, plus an Azure Storage account for cheap seven-year archival."
+      ]
+    },
+    {
+      "id": "as-c02-m03-c03",
+      "module_id": "as-c02-m03",
+      "prompt": "A new microservice is deployed weekly and the team keeps forgetting to enable its logs. What is the durable architectural fix the module recommends, and which earlier governance tool does it depend on?",
+      "kind": "mcq",
+      "choices": [
+        "Enforce a diagnostic setting with a deployIfNotExists Azure Policy so every new resource automatically gets logging configured.",
+        "Add a manual checklist item to the deployment runbook reminding engineers to enable diagnostic settings.",
+        "Create one Log Analytics workspace per microservice so each team owns its own logging.",
+        "Route the microservice logs to Event Hubs so the SIEM enables collection automatically."
+      ],
+      "correct_answers": [
+        "Enforce a diagnostic setting with a deployIfNotExists Azure Policy so every new resource automatically gets logging configured."
+      ]
+    },
+    {
+      "id": "as-c02-m03-c04",
+      "module_id": "as-c02-m03",
+      "prompt": "Per the module, which statements about the three diagnostic-setting destination types are correct? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "A Log Analytics workspace is the destination for interactive querying, alerting, and dashboards.",
+        "Azure Storage is the destination for cheap, long-term archival rather than interactive querying.",
+        "Event Hubs is the destination for streaming telemetry to an external SIEM or third-party analytics platform in near-real-time.",
+        "A Log Analytics workspace is the destination intended for cheap seven-year archival of audit logs."
+      ],
+      "correct_answers": [
+        "A Log Analytics workspace is the destination for interactive querying, alerting, and dashboards.",
+        "Azure Storage is the destination for cheap, long-term archival rather than interactive querying.",
+        "Event Hubs is the destination for streaming telemetry to an external SIEM or third-party analytics platform in near-real-time."
+      ]
+    },
+    {
+      "id": "as-c02-m03-c05",
+      "module_id": "as-c02-m03",
+      "prompt": "Which of the following are pitfalls the module explicitly warns against when designing logging and monitoring? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Having no diagnostic settings, so resources emit nothing by default.",
+        "Workspace sprawl, such as one workspace per team, which makes cross-service correlation hard during an incident.",
+        "Forgetting to route control-plane (Activity Log) and identity (Entra sign-in/audit) logs alongside resource logs.",
+        "Always using metrics instead of logs because logs can never be queried with KQL."
+      ],
+      "correct_answers": [
+        "Having no diagnostic settings, so resources emit nothing by default.",
+        "Workspace sprawl, such as one workspace per team, which makes cross-service correlation hard during an incident.",
+        "Forgetting to route control-plane (Activity Log) and identity (Entra sign-in/audit) logs alongside resource logs."
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "as-c02-m03-l01",
+      "module_id": "as-c02-m03",
+      "prompt": "Explain the central design question of Log Analytics workspace topology. Describe the tradeoffs between a single organization-wide workspace and multiple workspaces, and state the pattern the module recommends.",
+      "reference_answer": "The central design question is whether to use one Log Analytics workspace for the whole organization or many. A single workspace makes cross-resource correlation trivial because one KQL query can span everything, and it simplifies access when everyone may see everything. Multiple workspaces provide data-residency boundaries (for example a workspace per region for sovereignty), access isolation (a security team's workspace kept separate from app teams), and independent retention and cost ownership. The module recommends a defensible middle pattern: a small number of workspaces aligned to data-sovereignty regions and perhaps split by sensitivity, rather than one-workspace-per-team sprawl, since sprawl makes cross-service correlation a nightmare during an incident."
+    },
+    {
+      "id": "as-c02-m03-l02",
+      "module_id": "as-c02-m03",
+      "prompt": "Describe how alert rules, action groups, and workbooks work together in Azure Monitor to turn collected telemetry into operational action, and explain why designing action groups as reusable units matters.",
+      "reference_answer": "Alert rules evaluate a metric threshold or a log query on a schedule and fire when a condition is met; for example, the module bases a log alert rule on the checkout 5xx KQL query so it fires when failureRatePct exceeds about 5 over two consecutive evaluations. An alert points at an action group, which is a reusable bundle of notifications and automated responses such as email and SMS, a webhook to an incident tool, or an Azure Function or Logic App for automated remediation like a restart. Workbooks are interactive, parameterized reports combining metrics, logs, and text into an audience-specific view, such as the on-call dashboard that uses the same query as the alert so a paged engineer lands on a view already showing the spike. Designing action groups as reusable units keeps notification and response logic out of individual alerts, so a single action group can bundle SMS, a ticketing webhook, and automation, and be reused across many alert rules."
+    },
+    {
+      "id": "as-c02-m03-l03",
+      "module_id": "as-c02-m03",
+      "prompt": "Cost is a recurring theme in this module. Explain the main cost levers available when designing logging, naming the specific destinations and retention mechanisms involved.",
+      "reference_answer": "Because logs cost money to ingest and retain while metrics are cheap to store, the design must balance visibility against cost. A primary lever is retention, which is set per workspace and increasingly per table, so you can keep security or audit logs for a long compliance window while expiring verbose application logs sooner. Another lever is destination choice: route cheap long-term archival to an Azure Storage account (satisfying needs like seven-year audit retention) and reserve interactive Log Analytics workspace ingestion for telemetry you actually query, while Event Hubs streams to an external SIEM. The module also warns against ingesting everything into one expensive tier, recommending you route verbose, low-value telemetry to cheaper storage or a basic table and set retention per data type so cost tracks the value of each log stream."
+    }
+  ]
+}
