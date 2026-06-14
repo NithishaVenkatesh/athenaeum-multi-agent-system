@@ -35,6 +35,11 @@ _SNIPPET_CHARS = 600
 # A doc key is a module id (``cb-c01-m02``) or a course id (``cb-c01``); the course is
 # the key with any trailing ``-mNN`` module segment removed.
 _MODULE_SUFFIX = re.compile(r"-m\d+$", re.IGNORECASE)
+# Catalog/course/module ids are slug-shaped. Anything else must NEVER reach an OData
+# filter literal (defense-in-depth against filter injection): a non-conforming key is
+# dropped from the snippet fetch, and a non-conforming course scope is simply not applied
+# (the answer widens) rather than interpolated raw into the query.
+_SAFE_KEY = re.compile(r"[A-Za-z0-9_-]+")
 
 
 def _course_of(doc_key: str) -> str:
@@ -195,13 +200,19 @@ class AzureKnowledgeRetriever:
         vector_query = VectorizableTextQuery(
             text=query, k_nearest_neighbors=max(k * 3, 20), fields="content_vector"
         )
+        # Only scope when the id is slug-shaped; never interpolate an untrusted literal.
+        course_filter = (
+            f"course_id eq '{catalog_id}'"
+            if catalog_id and _SAFE_KEY.fullmatch(catalog_id)
+            else None
+        )
         try:
             results = client.search(
                 search_text=query,
                 vector_queries=[vector_query],
                 query_type=QueryType.SEMANTIC,
                 semantic_configuration_name=self._cfg.semantic_config,
-                filter=(f"course_id eq '{catalog_id}'" if catalog_id else None),
+                filter=course_filter,
                 top=k,
                 select=["id", "title", "course_id", "content"],
             )
@@ -268,14 +279,19 @@ class AzureKnowledgeRetriever:
             index_name=self._cfg.index_name,
             credential=AzureKeyCredential(self._cfg.admin_key),
         )
-        ids_csv = ",".join(doc_keys)
+        # Drop any non-slug key before it reaches the OData ``search.in`` literal.
+        safe_keys = [k for k in doc_keys if _SAFE_KEY.fullmatch(k)]
         out: dict[str, str] = {}
+        if not safe_keys:
+            client.close()
+            return out
+        ids_csv = ",".join(safe_keys)
         try:
             results = client.search(
                 search_text="*",
                 filter=f"search.in(id, '{ids_csv}', ',')",
                 select=["id", "content"],
-                top=len(doc_keys),
+                top=len(safe_keys),
             )
             for doc in results:
                 out[doc["id"]] = (doc.get("content") or "").strip()[:_SNIPPET_CHARS]
