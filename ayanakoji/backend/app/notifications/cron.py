@@ -321,7 +321,7 @@ def _apply_scoring(
     return applied
 
 
-def _persona_timezone(persona_id: str) -> str | None:
+def persona_timezone(persona_id: str) -> str | None:
     """Resolve a persona's IANA timezone for the date anchor (None → UTC fallback)."""
     try:
         from app.workiq.repository import get_repository
@@ -344,7 +344,7 @@ def run_tick(*, soon_days: int = NOTIFY_DEADLINE_SOON_DAYS) -> TickSummary:
         notif_repo = NotificationRepository(session)
         course_repo = CourseRepository(session)
         for persona_id in _distinct_persona_ids(session):
-            today = today_in_timezone(_persona_timezone(persona_id))
+            today = today_in_timezone(persona_timezone(persona_id))
             result = evaluate_persona(
                 notif_repo, course_repo, persona_id, today, soon_days=soon_days
             )

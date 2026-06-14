@@ -72,6 +72,12 @@ class Settings(BaseSettings):
     # (used by CI/E2E/smoke so the chat works without live Azure calls).
     offline_llm: bool = False
 
+    # --- Notifications / streak cron ---
+    # How often the background tick re-derives notifications + streak for every
+    # learner. The read endpoint also ticks lazily, so this only drives toasts for
+    # learners who are online but idle. Set to 0 to disable the background loop.
+    notify_tick_seconds: int = 60
+
     # Path to the Athenaeum course catalog JSON. None → resolve the in-repo default.
     athenaeum_catalog_path: str | None = None
 

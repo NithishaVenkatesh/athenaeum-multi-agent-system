@@ -6,6 +6,8 @@ Skeleton only — no hackathon/agent logic yet. Provides liveness and a typed
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -22,6 +24,8 @@ from app.config import get_settings
 from app.courses.assessment_router import router as assessment_session_router
 from app.courses.router import router as courses_router
 from app.db import init_db
+from app.notifications.background import run_notification_loop
+from app.notifications.router import router as notifications_router
 from app.workiq.router import router as workiq_router
 
 
@@ -44,10 +48,19 @@ class PingResponse(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Create both database schemas on startup (idempotent ``create_all``)."""
+    """Create both DB schemas on startup, then run the notifications cron loop."""
     init_db()
     assessments_init_db()
-    yield
+
+    interval = get_settings().notify_tick_seconds
+    tick_task = asyncio.create_task(run_notification_loop(interval)) if interval > 0 else None
+    try:
+        yield
+    finally:
+        if tick_task is not None:
+            tick_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await tick_task
 
 
 def create_app() -> FastAPI:
@@ -78,6 +91,8 @@ def create_app() -> FastAPI:
     app.include_router(assessments_router)
     # Learner assessment sessions (start, answer, grade, results).
     app.include_router(assessment_session_router)
+    # Learner notifications + streak score (cron-driven, polled by the frontend).
+    app.include_router(notifications_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     def health() -> HealthResponse:
