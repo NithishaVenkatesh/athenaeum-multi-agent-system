@@ -68,6 +68,17 @@ _DAY_RUN = re.compile(
 )
 _DAY_TOKEN = re.compile(rf"\b({_WEEKDAY_ALT})s?\b", re.IGNORECASE)
 
+# "no weekends" / "skip the weekend" / "free up weekdays" — a negation cue near the
+# group word expands to its member days (weekend → sat,sun; weekday → mon–fri), so a
+# clearly-stated group exclusion is not silently dropped for lack of a day name.
+_WEEKEND = frozenset({"sat", "sun"})
+_WEEKDAY_SET = frozenset({"mon", "tue", "wed", "thu", "fri"})
+_EXCLUDE_GROUP = re.compile(
+    r"\b(skip|avoid|no|not|don'?t|without|remove|free\s+up|busy\s+on|can'?t|cannot|drop)\b"
+    r"[^.]{0,25}?\b(weekends?|weekdays?)\b",
+    re.IGNORECASE,
+)
+
 # "only on tuesday and thursday" / "just on tue/thu" → restrict to those days.
 _ONLY_DAYS = re.compile(
     r"\b(only|just|exclusively|restrict\s+to|limit\s+to|schedule\s+(?:me\s+)?(?:only\s+)?on)\b"
@@ -85,6 +96,13 @@ _EXAM_DATE = re.compile(
 )
 
 _ALL_WEEKDAYS = frozenset(_WEEKDAYS.values())
+
+# Sane horizons so a deterministic parse can never overflow the C-int that ``date``
+# math uses, nor emit a plan the builder would choke on. A relative start beyond ~3
+# years is nonsense for a cert plan; a skip-week beyond ~2 years of weekly modules
+# is a week that doesn't exist. These are clamps, not new per-attack patterns.
+_MAX_START_DAYS_AHEAD = 366 * 3  # ~3 years; mirrors the audit's believable window
+_MAX_PLAN_WEEK = 104  # two years of weekly modules is already generous
 
 # "I'm occupied / busy / away in week 2" → drop that plan week, repacking later.
 _BUSY = (
@@ -124,9 +142,15 @@ def parse_pace(text: str) -> Pace | None:
     has_cue = any(cue in t for cue in _PACE_CUES)
     if any(p in t for p in _PACE_NORMAL):
         return Pace.NORMAL
-    if has_cue and any(p in t for p in _PACE_SLOWER):
+    wants_slower = has_cue and any(p in t for p in _PACE_SLOWER)
+    wants_faster = has_cue and any(p in t for p in _PACE_FASTER)
+    # A self-contradiction ("faster but also slower") is not a confident edit — refuse
+    # to silently guess one direction; let the planner keep its current pace.
+    if wants_slower and wants_faster:
+        return None
+    if wants_slower:
         return Pace.SLOWER
-    if has_cue and any(p in t for p in _PACE_FASTER):
+    if wants_faster:
         return Pace.FASTER
     return None
 
@@ -161,8 +185,18 @@ def _parse_start(text: str, today: date) -> date | None:
     rel = _REL.search(text)
     if rel:
         if rel.group(1):  # "in N days/weeks"
-            n, unit = int(rel.group(1)), rel.group(2).lower()
-            return today + timedelta(days=n * (7 if unit.startswith("week") else 1))
+            # Parse defensively: the digit run is unbounded, so a huge value would
+            # overflow ``timedelta`` (C int) and turn this turn replyless. Convert,
+            # then clamp to a sane horizon — beyond ~3y is nonsense, so drop it.
+            try:
+                n = int(rel.group(1))
+            except ValueError:
+                return None
+            unit = rel.group(2).lower()
+            offset_days = n * (7 if unit.startswith("week") else 1)
+            if offset_days < 0 or offset_days > _MAX_START_DAYS_AHEAD:
+                return None
+            return today + timedelta(days=offset_days)
         # The "next week / next month / a week from now" alternation lands in group 3,
         # not group 2 (group 2 is None here) — reading group 2 crashed the offline parser
         # and produced an empty, replyless turn for "start next week" (red-team crash).
@@ -199,6 +233,9 @@ def _parse_excludes(text: str) -> frozenset[str]:
         run = _DAY_RUN.search(text[cue.end() : cue.end() + 60])
         if run and run.start() <= 10:
             days.update(_WEEKDAYS[d.group(1).lower()] for d in _DAY_TOKEN.finditer(run.group(0)))
+    # "no weekends" / "free up weekdays" expand to their member days.
+    for g in _EXCLUDE_GROUP.finditer(text):
+        days |= _WEEKEND if g.group(2).lower().startswith("weekend") else _WEEKDAY_SET
     return frozenset(days)
 
 
@@ -242,13 +279,18 @@ def _parse_exam_date(text: str, today: date) -> date | None:
 
 
 def _expand_week_list(spec: str) -> set[int]:
-    """Every week number in a list/range spec ('2 and 3' → {2,3}; '2-4' → {2,3,4})."""
+    """Every week number in a list/range spec ('2 and 3' → {2,3}; '2-4' → {2,3,4}).
+
+    Both the range expansion AND the raw-endpoint sweep are clamped to a sane plan
+    horizon, so an absurd 'weeks 1 to 999999' (or a bare 'week 99999999999999999999')
+    can never re-enter past the range guard and brick the builder.
+    """
     weeks: set[int] = set()
     for lo, hi in _WEEK_RANGE.findall(spec):
         a, b = int(lo), int(hi)
         if a <= b <= a + _MAX_WEEK_SPAN:
-            weeks.update(range(a, b + 1))
-    weeks.update(int(n) for n in re.findall(r"\d+", spec))
+            weeks.update(w for w in range(a, b + 1) if 1 <= w <= _MAX_PLAN_WEEK)
+    weeks.update(n for n in (int(x) for x in re.findall(r"\d+", spec)) if 1 <= n <= _MAX_PLAN_WEEK)
     return weeks
 
 
@@ -264,18 +306,38 @@ def _parse_skip_weeks(text: str) -> frozenset[int]:
         window = text[max(0, m.start() - _BUSY_PROXIMITY) : m.end() + _BUSY_PROXIMITY]
         if _BUSY_CUE.search(window):
             weeks |= _expand_week_list(m.group(1))
-    return frozenset(w for w in weeks if w >= 1)
+    return frozenset(w for w in weeks if 1 <= w <= _MAX_PLAN_WEEK)
 
 
-def parse_adjustment(text: str, *, today: date) -> ScheduleAdjustment | None:
-    """Return a structured adjustment, or None if the text has no schedule edit."""
+def _reconcile_excludes(
+    explicit: frozenset[str], only_complement: frozenset[str]
+) -> frozenset[str]:
+    """Merge explicit skips with the 'only X' complement, never emitting all 7.
+
+    An impossible day-restriction (every weekday excluded) leaves the plan with no
+    schedulable day, which bricks the builder. So:
+      * skip wins over a conflicting 'only' (e.g. "only mondays but skip monday" merges
+        to all 7) — fall back to the explicit skip alone;
+      * if even the explicit skip is all 7 ("skip every day"), there is no valid
+        restriction to apply — drop it entirely (treat as no day-restriction).
+    """
+    combined = explicit | only_complement
+    if combined != _ALL_WEEKDAYS:
+        return combined
+    if explicit and explicit != _ALL_WEEKDAYS:
+        return explicit  # skip wins over the self-contradictory 'only'
+    return frozenset()  # genuinely impossible — emit no day-restriction
+
+
+def _build_adjustment(text: str, today: date) -> ScheduleAdjustment | None:
     start = _parse_start(text, today)
     excludes = _parse_excludes(text)
     only_excludes = _parse_only_days(text)
     skip_weeks = _parse_skip_weeks(text)
     exam_date = _parse_exam_date(text, today)
-    # Merge explicit excludes with the complement-of-only-days excludes.
-    combined_excludes = excludes | only_excludes
+    # Merge explicit excludes with the complement-of-only-days excludes, reconciling
+    # any self-contradiction so we never emit an unschedulable all-7 exclude set.
+    combined_excludes = _reconcile_excludes(excludes, only_excludes)
     if start is None and not combined_excludes and not skip_weeks and exam_date is None:
         return None
     parts: list[str] = []
@@ -294,3 +356,17 @@ def parse_adjustment(text: str, *, today: date) -> ScheduleAdjustment | None:
         skip_weeks=skip_weeks,
         exam_date=exam_date,
     )
+
+
+def parse_adjustment(text: str, *, today: date) -> ScheduleAdjustment | None:
+    """Return a structured adjustment, or None if the text has no schedule edit.
+
+    Defense-in-depth: ``is_plan_intent`` calls this on EVERY inbound message, so an
+    uncaught exception here becomes a replyless/500 live turn. A parse failure means
+    "no schedule edit", never a crashed turn — so any unexpected error falls back to
+    None as a last resort. The clamps above mean well-formed inputs never reach here.
+    """
+    try:
+        return _build_adjustment(text, today)
+    except Exception:  # noqa: BLE001 — a parse failure must degrade to "no edit", not crash
+        return None
