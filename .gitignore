@@ -60,3 +60,6 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 .playwright-mcp/
+
+# Transient assessment authoring recovery state (unreviewed candidates)
+ayanakoji/assessments/.pending/

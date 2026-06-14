@@ -62,6 +62,9 @@ describe("ChatView", () => {
         latency_ms: null,
         route: null,
         sources: [],
+        steps: [],
+        confidence: null,
+        off_topic: null,
       });
       handlers.onToken?.("Hello ");
       handlers.onToken?.("world");

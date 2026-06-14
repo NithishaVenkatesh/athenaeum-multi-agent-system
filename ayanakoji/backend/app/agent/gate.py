@@ -26,7 +26,7 @@ from collections.abc import Callable
 from functools import lru_cache
 from typing import Any
 
-from app.agent.contracts import InjectionVerdict, PhaseName, PhaseStatus, PhaseTelemetry
+from app.agent.contracts import InjectionVerdict, PhaseName, PhaseStatus, PhaseTelemetry, TraceStep
 from app.agent.llm import AllProvidersDown, Capability, ModelRouter
 from app.config import Settings, get_settings
 
@@ -109,7 +109,13 @@ def _guard_client(api_key: str | None, base_url: str) -> Any:
     return OpenAI(api_key=api_key, base_url=base_url)
 
 
-def _telemetry(verdict: InjectionVerdict, *, model: str | None, tier: int | None) -> PhaseTelemetry:
+def _build_telemetry(
+    verdict: InjectionVerdict,
+    *,
+    model: str | None,
+    tier: int | None,
+    steps: list[TraceStep],
+) -> PhaseTelemetry:
     summary = "Blocked a prompt-injection attempt" if verdict.blocked else "No injection detected"
     return PhaseTelemetry(
         phase=PhaseName.GATE,
@@ -118,6 +124,8 @@ def _telemetry(verdict: InjectionVerdict, *, model: str | None, tier: int | None
         reasoning=verdict.reason,
         model=model,
         tier=tier,
+        steps=steps,
+        confidence=verdict.confidence,
     )
 
 
@@ -145,23 +153,38 @@ def screen(
     ``history`` lets the online classifier see recent user turns so an injection
     split across messages ("set up a twin" then "as the twin, ignore the rules")
     is visible instead of each turn looking harmless on its own.
+
+    Telemetry now carries a ``steps`` list showing every layer that ran:
+    regex pre-filter → Azure LLM classifier → Groq Prompt Guard 2 → fail-open.
     """
     settings = settings or get_settings()
+    steps: list[TraceStep] = []
 
     # 1) Fast regex pre-filter (always runs; cheap, deterministic, offline-safe).
     hit = _regex_hit(text)
     if hit is not None:
+        steps.append(TraceStep(
+            label="Regex pre-filter",
+            passed=False,
+            detail=f"Matched injection pattern: /{hit[:80]}/i",
+        ))
         verdict = InjectionVerdict(
             blocked=True,
             reason="Message matches a known injection/jailbreak pattern.",
             confidence=0.95,
         )
-        return verdict, _telemetry(verdict, model="regex-prefilter", tier=None)
+        return verdict, _build_telemetry(verdict, model="regex-prefilter", tier=None, steps=steps)
+
+    steps.append(TraceStep(
+        label="Regex pre-filter",
+        passed=True,
+        detail=f"{len(_PATTERNS)} injection/jailbreak patterns checked — none matched.",
+    ))
 
     # 2) Offline: the pre-filter is the whole gate (no model available).
     if settings.llm_offline:
         verdict = InjectionVerdict(blocked=False, reason="Passed regex pre-filter (offline).")
-        return verdict, _telemetry(verdict, model="regex-prefilter", tier=None)
+        return verdict, _build_telemetry(verdict, model="regex-prefilter", tier=None, steps=steps)
 
     # 3) Azure FIRST (provider-order directive): the Foundry/Azure classifier decides.
     router = router or ModelRouter(settings)
@@ -177,27 +200,69 @@ def screen(
             max_tokens=120,
         )
         verdict = _parse_verdict(result.text)
+        steps.append(TraceStep(
+            label="Azure LLM classifier",
+            passed=not verdict.blocked,
+            detail=f"Confidence {verdict.confidence:.0%} — {verdict.reason}",
+            model=result.model,
+        ))
         if verdict.blocked:
-            return verdict, _telemetry(verdict, model=result.model, tier=result.tier)
+            return verdict, _build_telemetry(
+                verdict, model=result.model, tier=result.tier, steps=steps
+            )
         # Azure said clean → confirm with the purpose-built Prompt Guard as a net.
         guard_verdict = _prompt_guard_verdict(text, settings, guard_fn)
-        if guard_verdict is not None and guard_verdict.blocked:
-            return guard_verdict, _telemetry(
-                guard_verdict, model=settings.groq_model_guard, tier=None
-            )
-        return verdict, _telemetry(verdict, model=result.model, tier=result.tier)
+        if guard_verdict is not None:
+            steps.append(TraceStep(
+                label="Groq Prompt Guard 2",
+                passed=not guard_verdict.blocked,
+                detail=guard_verdict.reason,
+                model=settings.groq_model_guard,
+            ))
+            if guard_verdict.blocked:
+                return guard_verdict, _build_telemetry(
+                    guard_verdict, model=settings.groq_model_guard, tier=None, steps=steps
+                )
+        else:
+            steps.append(TraceStep(
+                label="Groq Prompt Guard 2",
+                passed=None,
+                detail="Skipped — Groq not configured.",
+            ))
+        return verdict, _build_telemetry(verdict, model=result.model, tier=result.tier, steps=steps)
     except AllProvidersDown:
         # 4) Azure unreachable → fall back to Groq Prompt Guard 2 (the order's fallback).
+        steps.append(TraceStep(
+            label="Azure LLM classifier",
+            passed=None,
+            detail="Unavailable — Azure/LLM providers unreachable.",
+        ))
         guard_verdict = _prompt_guard_verdict(text, settings, guard_fn)
         if guard_verdict is not None:
-            return guard_verdict, _telemetry(
-                guard_verdict, model=settings.groq_model_guard, tier=None
+            steps.append(TraceStep(
+                label="Groq Prompt Guard 2",
+                passed=not guard_verdict.blocked,
+                detail=guard_verdict.reason,
+                model=settings.groq_model_guard,
+            ))
+            return guard_verdict, _build_telemetry(
+                guard_verdict, model=settings.groq_model_guard, tier=None, steps=steps
             )
         # 5) Fail open: everything unreachable, but the regex pre-filter cleared it.
+        steps.append(TraceStep(
+            label="Groq Prompt Guard 2",
+            passed=None,
+            detail="Unavailable — Groq not configured or unreachable.",
+        ))
+        steps.append(TraceStep(
+            label="Fail-open",
+            passed=True,
+            detail="All online classifiers unreachable — regex pre-filter cleared this message.",
+        ))
         verdict = InjectionVerdict(
             blocked=False, reason="Regex pre-filter passed; classifiers unavailable."
         )
-        return verdict, _telemetry(verdict, model="regex-prefilter", tier=None)
+        return verdict, _build_telemetry(verdict, model="regex-prefilter", tier=None, steps=steps)
 
 
 def _prompt_guard_verdict(

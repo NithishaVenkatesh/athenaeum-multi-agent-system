@@ -66,6 +66,9 @@ export interface CatalogCourse {
 export interface NewChat {
   prompt: string;
   current_title: string | null;
+  /** When set, the course already lives in this chat — open it instead of forking. */
+  target_course_id?: string | null;
+  target_title?: string | null;
 }
 
 /** Persisted assistant-turn artifacts, so the trace/choices/plan survive reload. */
@@ -197,6 +200,7 @@ export type Route =
   | "study_plan"
   | "foundry_iq"
   | "work_iq"
+  | "upcoming"
   | "general";
 
 export interface GroundingSource {
@@ -205,6 +209,15 @@ export interface GroundingSource {
   snippet: string;
   kind: "course" | "work" | "catalog";
   url: string | null;
+}
+
+/** One sub-step within a pipeline phase (gate layers, router decision, …). */
+export interface TraceStep {
+  label: string;
+  /** true=passed, false=blocked, null=informational (unavailable/skipped) */
+  passed: boolean | null;
+  detail: string;
+  model: string | null;
 }
 
 export interface PhaseTelemetry {
@@ -218,6 +231,9 @@ export interface PhaseTelemetry {
   latency_ms: number | null;
   route: Route | null;
   sources: GroundingSource[];
+  steps: TraceStep[];
+  confidence: number | null;
+  off_topic: number | null;
 }
 
 export interface CourseSuggestion {
@@ -294,7 +310,13 @@ export type PipelineEvent =
   | { type: "suggestion"; prompt: string; options: CourseSuggestion[] }
   | { type: "plan"; plan: StudyPlan }
   | { type: "pace_request"; catalog_id: string; title: string; prompt: string; options: Pace[] }
-  | { type: "new_chat"; prompt: string; current_title: string | null }
+  | {
+      type: "new_chat";
+      prompt: string;
+      current_title: string | null;
+      target_course_id?: string | null;
+      target_title?: string | null;
+    }
   | { type: "blocked"; reason: string }
   | { type: "error"; message: string }
   | { type: "done"; route: Route | null; suggested: boolean };
@@ -381,7 +403,12 @@ function dispatchEvent(event: PipelineEvent, handlers: StreamHandlers): void {
       });
       break;
     case "new_chat":
-      handlers.onNewChat?.({ prompt: event.prompt, current_title: event.current_title });
+      handlers.onNewChat?.({
+        prompt: event.prompt,
+        current_title: event.current_title,
+        target_course_id: event.target_course_id,
+        target_title: event.target_title,
+      });
       break;
     case "blocked":
       handlers.onBlocked?.(event.reason);

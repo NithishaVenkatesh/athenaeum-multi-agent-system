@@ -13,15 +13,18 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   BookOpen,
   Briefcase,
+  CheckCircle2,
   ChevronDown,
+  CircleDashed,
   MessageCircle,
   ShieldAlert,
   ShieldCheck,
   Split,
+  XCircle,
 } from "lucide-react";
 import { useState } from "react";
 
-import type { PhaseTelemetry, Route } from "@/lib/api";
+import type { PhaseTelemetry, Route, TraceStep } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const ROUTE_LABEL: Record<Route, string> = {
@@ -30,15 +33,17 @@ const ROUTE_LABEL: Record<Route, string> = {
   study_plan: "Study plan · workload-aware",
   foundry_iq: "Foundry IQ · course content",
   work_iq: "Work IQ · your schedule",
+  upcoming: "Upcoming · next module",
   general: "General",
 };
 
 const ROUTE_DOT: Record<Route, string> = {
-  greeting: "bg-[var(--chart-4)]",
+  greeting: "bg-chart-4",
   recommend: "bg-brand",
-  study_plan: "bg-[var(--chart-5)]",
-  foundry_iq: "bg-[var(--chart-3)]",
-  work_iq: "bg-[var(--chart-2)]",
+  study_plan: "bg-chart-5",
+  foundry_iq: "bg-chart-3",
+  work_iq: "bg-chart-2",
+  upcoming: "bg-chart-1",
   general: "bg-muted-foreground",
 };
 
@@ -48,13 +53,38 @@ function PhaseIcon({ phase }: { phase: PhaseTelemetry }) {
     return phase.status === "blocked" ? (
       <ShieldAlert className={cn(cls, "text-destructive")} />
     ) : (
-      <ShieldCheck className={cn(cls, "text-[var(--chart-2)]")} />
+      <ShieldCheck className={cn(cls, "text-chart-2")} />
     );
   }
   if (phase.phase === "router") return <Split className={cn(cls, "text-brand")} />;
-  if (phase.route === "foundry_iq") return <BookOpen className={cn(cls, "text-[var(--chart-3)]")} />;
-  if (phase.route === "work_iq") return <Briefcase className={cn(cls, "text-[var(--chart-2)]")} />;
+  if (phase.route === "foundry_iq") return <BookOpen className={cn(cls, "text-chart-3")} />;
+  if (phase.route === "work_iq") return <Briefcase className={cn(cls, "text-chart-2")} />;
   return <MessageCircle className={cn(cls, "text-muted-foreground")} />;
+}
+
+function StepIcon({ passed }: { passed: boolean | null }) {
+  if (passed === true) return <CheckCircle2 className="size-3 shrink-0 text-chart-2" />;
+  if (passed === false) return <XCircle className="size-3 shrink-0 text-destructive" />;
+  return <CircleDashed className="size-3 shrink-0 text-muted-foreground/60" />;
+}
+
+function TraceStepRow({ step }: { step: TraceStep }) {
+  return (
+    <li className="flex items-start gap-2 py-0.5">
+      <StepIcon passed={step.passed} />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <span className="text-foreground/80 text-[10px] font-medium">{step.label}</span>
+          {step.model && (
+            <span className="bg-muted/70 text-muted-foreground rounded px-1 font-mono text-[9px] leading-none">
+              {step.model}
+            </span>
+          )}
+        </div>
+        <p className="text-muted-foreground/80 text-[10px] leading-snug">{step.detail}</p>
+      </div>
+    </li>
+  );
 }
 
 function MetaChip({ children }: { children: React.ReactNode }) {
@@ -97,7 +127,20 @@ function PhaseRow({ phase }: { phase: PhaseTelemetry }) {
           </MetaChip>
         )}
         {phase.provider && <MetaChip>{phase.provider}</MetaChip>}
+        {phase.confidence != null && (
+          <MetaChip>confidence {(phase.confidence * 100).toFixed(0)}%</MetaChip>
+        )}
+        {phase.off_topic != null && (
+          <MetaChip>off-topic {(phase.off_topic * 100).toFixed(0)}%</MetaChip>
+        )}
       </div>
+      {phase.steps.length > 0 && (
+        <ul className="border-border/40 mt-2 space-y-0.5 border-l pl-3">
+          {phase.steps.map((step, i) => (
+            <TraceStepRow key={i} step={step} />
+          ))}
+        </ul>
+      )}
       {phase.sources.length > 0 && (
         <ul className="mt-1.5 space-y-1">
           {phase.sources.map((s) => (
