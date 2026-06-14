@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import pytest
-
 from app.agent.grounding import CourseGrounding
 
 GROUNDING = CourseGrounding()

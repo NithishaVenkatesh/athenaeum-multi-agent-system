@@ -45,13 +45,28 @@ _REL = re.compile(
 )
 _AFTER_WORDS = ("after", "post", "not until", "once")
 
+# Longest-first so "monday" matches before its prefix "mon" (alternation is ordered).
+_WEEKDAY_ALT = (
+    r"monday|mon|tuesday|tues|tue|wednesday|weds|wed|thursday|thurs|thur|thu|"
+    r"friday|fri|saturday|sat|sunday|sun"
+)
 # A negation near a weekday means: don't study that day.
 _EXCLUDE = re.compile(
     r"\b(skip|avoid|no|not|don'?t|without|remove|free\s+up|busy\s+on|can'?t|cannot|drop)\b"
-    r"[^.]{0,25}?\b(mon|monday|tue|tues|tuesday|wed|weds|wednesday|thu|thur|thurs|thursday|"
-    r"fri|friday|sat|saturday|sun|sunday)s?\b",
+    rf"[^.]{{0,25}}?\b({_WEEKDAY_ALT})s?\b",
     re.IGNORECASE,
 )
+# A skip/avoid cue, then a *run* of weekdays ("skip mon tue wed thu fri") so a single
+# cue before a list excludes EVERY day, not just the first (red-team: multi-day drop).
+_EXCLUDE_CUE = re.compile(
+    r"\b(skip|avoid|without|remove|free\s+up|busy\s+on|can'?t|cannot|drop|no|not|don'?t)\b",
+    re.IGNORECASE,
+)
+_DAY_RUN = re.compile(
+    rf"\b(?:{_WEEKDAY_ALT})s?(?:[\s,]+(?:and\s+|&\s+|or\s+)?(?:{_WEEKDAY_ALT})s?)*",
+    re.IGNORECASE,
+)
+_DAY_TOKEN = re.compile(rf"\b({_WEEKDAY_ALT})s?\b", re.IGNORECASE)
 
 # "only on tuesday and thursday" / "just on tue/thu" → restrict to those days.
 _ONLY_DAYS = re.compile(
@@ -148,7 +163,10 @@ def _parse_start(text: str, today: date) -> date | None:
         if rel.group(1):  # "in N days/weeks"
             n, unit = int(rel.group(1)), rel.group(2).lower()
             return today + timedelta(days=n * (7 if unit.startswith("week") else 1))
-        phrase = rel.group(2).lower()
+        # The "next week / next month / a week from now" alternation lands in group 3,
+        # not group 2 (group 2 is None here) — reading group 2 crashed the offline parser
+        # and produced an empty, replyless turn for "start next week" (red-team crash).
+        phrase = (rel.group(3) or "").lower()
         if "month" in phrase:
             return today + timedelta(days=30)
         return today + timedelta(days=7)  # next week / a week from now
@@ -173,7 +191,15 @@ def _parse_start(text: str, today: date) -> date | None:
 
 
 def _parse_excludes(text: str) -> frozenset[str]:
-    return frozenset(_WEEKDAYS[m.group(2).lower()] for m in _EXCLUDE.finditer(text))
+    days = {_WEEKDAYS[m.group(2).lower()] for m in _EXCLUDE.finditer(text)}
+    # A single skip cue followed by a run of weekdays excludes them all, not just the
+    # first ("skip mon tue wed thu fri" -> all five), without grabbing a later unrelated
+    # weekday ("skip monday, study tuesday" keeps tuesday).
+    for cue in _EXCLUDE_CUE.finditer(text):
+        run = _DAY_RUN.search(text[cue.end() : cue.end() + 60])
+        if run and run.start() <= 10:
+            days.update(_WEEKDAYS[d.group(1).lower()] for d in _DAY_TOKEN.finditer(run.group(0)))
+    return frozenset(days)
 
 
 def _parse_only_days(text: str) -> frozenset[str]:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from app.agent.schedule_edit import parse_adjustment
 from app.agent.study_plan import build_study_plan, weekly_study_slots
@@ -146,6 +146,25 @@ def test_week_list_and_range_skip() -> None:
     assert _skip("away weeks 2, 3 and 4") == frozenset({2, 3, 4})
     assert _skip("I'm occupied weeks 2-4") == frozenset({2, 3, 4})
     assert _skip("skip week 2 and week 5") == frozenset({2, 5})
+
+
+def test_relative_start_next_week_does_not_crash() -> None:
+    """Red-team: 'start next week' crashed _parse_start (group 2 None) -> empty turn."""
+    for phrase in ["build my plan starting next week", "start next month", "a week from now"]:
+        adj = parse_adjustment(phrase, today=TODAY)
+        assert adj is not None and adj.start_date is not None, f"no start parsed for {phrase!r}"
+    nxt = parse_adjustment("start next week", today=TODAY)
+    assert nxt is not None and nxt.start_date == TODAY + timedelta(days=7)
+
+
+def test_multi_day_exclude_keeps_every_day() -> None:
+    """Red-team: 'skip mon tue wed thu fri' must exclude all five, not just monday."""
+    adj = parse_adjustment("skip monday tuesday wednesday thursday and friday", today=TODAY)
+    assert adj is not None
+    assert adj.exclude_days == frozenset({"mon", "tue", "wed", "thu", "fri"})
+    # A later unrelated weekday after a non-skip verb is not swept in.
+    adj2 = parse_adjustment("skip monday, but study tuesday", today=TODAY)
+    assert adj2 is not None and adj2.exclude_days == frozenset({"mon"})
 
 
 def test_start_in_week_is_not_a_skip() -> None:
