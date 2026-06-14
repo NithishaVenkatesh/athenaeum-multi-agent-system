@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from app.assessments.azure_blob import blob_key, build_client, list_bank_keys, pull_bank, push_banks
+from app.assessments.azure_blob import blob_key, list_bank_keys, pull_bank, push_banks
 
 from tests.test_assessments_loader import _write_banks
 from tests.test_assessments_validation import make_valid_bank
@@ -107,9 +107,16 @@ def test_push_refuses_invalid_bank(tmp_path: Path) -> None:
 
 
 def test_build_client_without_account_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("AZURE_STORAGE_ACCOUNT", raising=False)
+    # Stub settings so the test is independent of any AZURE_STORAGE_ACCOUNT in .env.
+    from app.assessments import azure_blob
+
+    monkeypatch.setattr(
+        azure_blob,
+        "get_settings",
+        lambda: type("S", (), {"azure_storage_account": None})(),
+    )
     with pytest.raises(RuntimeError, match="AZURE_STORAGE_ACCOUNT"):
-        build_client(account=None)
+        azure_blob.build_client(account=None)
 
 
 def test_blob_key_layout() -> None:
