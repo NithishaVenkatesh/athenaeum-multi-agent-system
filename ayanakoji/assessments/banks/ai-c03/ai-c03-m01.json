@@ -1,0 +1,106 @@
+{
+  "course_id": "ai-c03",
+  "module_id": "ai-c03-m01",
+  "module_title": "Analyzing images and extracting text",
+  "choices": [
+    {
+      "id": "ai-c03-m01-c01",
+      "module_id": "ai-c03-m01",
+      "kind": "mcq",
+      "prompt": "A storefront team wants to automatically crop each product photo down to the main item, which requires knowing where the item sits in the frame. Which Azure AI Vision visual feature gives them what they need?",
+      "choices": [
+        "Objects, because only objects return labels with bounding-box coordinates",
+        "Caption, because the single sentence describes the main product",
+        "Tags, because the high-confidence labels identify the product",
+        "Read, because OCR returns the position of every line of text"
+      ],
+      "correct_answers": [
+        "Objects, because only objects return labels with bounding-box coordinates"
+      ]
+    },
+    {
+      "id": "ai-c03-m01-c02",
+      "module_id": "ai-c03-m01",
+      "kind": "mcq",
+      "prompt": "You run image analysis on a phone photo of a paper invoice and get back transcribed lines, but the system still can't identify the invoice total. According to the module, what is the correct next step and why?",
+      "choices": [
+        "Pass the transcribed text and geometry to Azure AI Document Intelligence, because Vision's read feature transcribes characters and positions but does not classify which line is the total",
+        "Re-run the read feature with handwriting mode enabled, because printed-text OCR cannot detect numeric totals",
+        "Add the people feature to the request, because it helps the model understand document structure",
+        "Lower the tag confidence threshold below 0.20, because the total is being filtered out as a low-confidence tag"
+      ],
+      "correct_answers": [
+        "Pass the transcribed text and geometry to Azure AI Document Intelligence, because Vision's read feature transcribes characters and positions but does not classify which line is the total"
+      ]
+    },
+    {
+      "id": "ai-c03-m01-c03",
+      "module_id": "ai-c03-m01",
+      "kind": "mcq",
+      "prompt": "In the walkthrough, the catalog code uses `t.confidence > 0.75` when building search facets from tags. What problem does this threshold solve?",
+      "choices": [
+        "The raw tag list includes low-confidence guesses that would pollute search facets if surfaced",
+        "Tag confidence scores must be normalized above 0.75 before they are valid",
+        "Without the filter, the service rejects the analyze request as malformed",
+        "It converts caption text into tags so both features can share one list"
+      ],
+      "correct_answers": [
+        "The raw tag list includes low-confidence guesses that would pollute search facets if surfaced"
+      ]
+    },
+    {
+      "id": "ai-c03-m01-c04",
+      "module_id": "ai-c03-m01",
+      "kind": "msq",
+      "prompt": "Based on the module, which statements correctly describe how the Image Analysis API and its visual features behave?",
+      "choices": [
+        "You send an image once and request a set of visual features in the same request, getting back a single structured result with only those sections",
+        "Dense captions segment the image into regions and write a sentence for each distinct subject",
+        "Caption generation is available in every Azure region and language by default",
+        "Requesting more visual features adds latency and contributes to billing"
+      ],
+      "correct_answers": [
+        "You send an image once and request a set of visual features in the same request, getting back a single structured result with only those sections",
+        "Dense captions segment the image into regions and write a sentence for each distinct subject",
+        "Requesting more visual features adds latency and contributes to billing"
+      ]
+    },
+    {
+      "id": "ai-c03-m01-c05",
+      "module_id": "ai-c03-m01",
+      "kind": "msq",
+      "prompt": "Which of the following are described in the module as common pitfalls or design cautions when using Azure AI Vision Image Analysis?",
+      "choices": [
+        "Requesting every visual feature on every image to 'be safe,' since each feature adds latency and cost",
+        "Trusting raw tag confidence and surfacing every tag, including very low-confidence guesses",
+        "Assuming captions are always present, instead of designing a tags-based fallback for unsupported regions",
+        "Always downscaling every image to a single fixed resolution because the service only accepts one exact dimension"
+      ],
+      "correct_answers": [
+        "Requesting every visual feature on every image to 'be safe,' since each feature adds latency and cost",
+        "Trusting raw tag confidence and surfacing every tag, including very low-confidence guesses",
+        "Assuming captions are always present, instead of designing a tags-based fallback for unsupported regions"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "ai-c03-m01-l01",
+      "module_id": "ai-c03-m01",
+      "prompt": "Explain why the module insists on requesting the minimum set of visual features rather than asking for all of them, and describe how you would map three different requirements ('what is this image of?', 'where is the backpack?', 'what does the label say?') to specific features.",
+      "reference_answer": "Each visual feature you request adds latency and contributes to billing, so requesting all of them by default is slow and expensive, and a caption you never display is pure waste. The discipline is to request only the features the downstream system actually consumes. Different features answer different questions: 'what is this image of?' is answered by a caption (one natural-language sentence) or tags (short labels with confidence scores); 'where is the backpack?' is an object-detection question, because only the objects feature returns bounding-box coordinates; and 'what does the label say?' is an OCR question answered by the read feature. Picking the wrong feature produces technically valid output that does not solve the problem — for example, tags will report that an invoice contains 'text' and 'paper' without ever reading the total."
+    },
+    {
+      "id": "ai-c03-m01-l02",
+      "module_id": "ai-c03-m01",
+      "prompt": "Describe what the read (OCR) visual feature in Azure AI Vision does and does not do, and explain the boundary at which Azure AI Document Intelligence takes over.",
+      "reference_answer": "The read feature handles both printed and handwritten text in the same call and returns text grouped into lines and words, each with bounding polygons and confidence scores. It is line-oriented and not document-oriented: it gives you geometry and characters in reading order but does not know which line is the invoice total, the date, or the vendor. A useful mental model is a camera that transcribes everything it sees with coordinates, leaving you to decide what the transcription means. Turning lines into meaning is your job, or a job for Azure AI Document Intelligence when the documents are structured forms. So the boundary is that Vision OCR is text and geometry, while Document Intelligence (covered in ai-c02-m03) provides the document understanding, sparing you from hand-writing fragile line-position heuristics."
+    },
+    {
+      "id": "ai-c03-m01-l03",
+      "module_id": "ai-c03-m01",
+      "prompt": "Contrast captions, dense captions, and tags, and explain why the module recommends designing a tags-based fallback when captions may not be available.",
+      "reference_answer": "A caption is the service's best single sentence describing the entire frame, such as 'a person hiking on a mountain trail with a backpack,' which is ideal for accessibility alt text and one-line human summaries. Dense captions go further by segmenting the image into regions and writing a sentence for each, useful when one photo contains several distinct subjects such as a tent, a stove, and a sleeping bag together. Tags are the lightweight workhorse: a flat list of labels with confidence scores between 0 and 1, perfect for faceted search filters and bulk categorization. Because caption generation is available only in a subset of regions and languages, a resource in an unsupported region may fail the call or omit captions. The module therefore recommends designing a tags-based fallback rather than assuming a caption is always present, and treating the supported-region list as something to verify in the docs since it changes."
+    }
+  ]
+}
