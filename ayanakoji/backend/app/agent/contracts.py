@@ -166,6 +166,9 @@ class ModulePlan(BaseModel):
     title: str
     sequence: int = Field(ge=1, description="1-based order; modules are done sequentially")
     estimated_minutes: int = Field(description="Computed from content + pace (no exposed factor)")
+    base_minutes: int = Field(default=0, description="NORMAL-pace estimate before skill correction")
+    pace_minutes: int = Field(default=0, description="Chosen-pace estimate before skill correction")
+    skill_delta: int = Field(default=0, description="Signed minutes skill added (+) or removed (-)")
     scheduled: list[ScheduledBlock] = Field(
         default_factory=list, description="The calendar sessions that cover this module"
     )
@@ -182,6 +185,8 @@ class StudyPlan(BaseModel):
     pace: Pace
     weekly_study_hours: float = Field(description="Grounded in the learner's real free calendar")
     total_hours: float
+    total_base_hours: float = Field(default=0.0, description="Sum of base (NORMAL) module time")
+    total_pace_hours: float = Field(default=0.0, description="Sum of pace-corrected module time")
     weeks: int
     start_date: str = Field(description="ISO date the plan starts")
     modules: list[ModulePlan]
@@ -190,6 +195,10 @@ class StudyPlan(BaseModel):
     balloon_warning: str | None = Field(
         default=None,
         description="Set when the plan stretches unrealistically long or overruns an exam date",
+    )
+    awaiting_approval: bool = Field(
+        default=False,
+        description="True while shown as an unsaved preview (not yet on the schedule)",
     )
 
 

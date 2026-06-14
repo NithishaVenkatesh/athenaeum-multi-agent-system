@@ -6,6 +6,7 @@ from datetime import date
 
 from app.agent.contracts import Pace
 from app.agent.study_plan import (
+    ModuleEstimate,
     ModuleInfo,
     WeeklySlot,
     build_study_plan,
@@ -18,6 +19,13 @@ from app.catalog.loader import default_catalog_path
 from app.workiq.repository import get_repository
 
 START = date(2026, 6, 15)
+
+
+def _est(module: ModuleInfo, minutes: int) -> ModuleEstimate:
+    """A ModuleEstimate where base/pace/skill all equal ``minutes`` (no skill change)."""
+    return ModuleEstimate(
+        module=module, base_minutes=minutes, pace_minutes=minutes, skill_minutes=minutes
+    )
 
 
 def _module(objectives: int, skills: int = 2, order: int = 1) -> ModuleInfo:
@@ -94,7 +102,7 @@ def test_schedule_is_sequential_with_deadlines() -> None:
     vega = get_repository().get_persona("EMP-001")
     assert vega is not None
     slots = weekly_study_slots(vega)
-    estimates = [(_module(3, order=i), 120) for i in range(1, 4)]
+    estimates = [_est(_module(3, order=i), 120) for i in range(1, 4)]
     plans = schedule_modules(estimates, slots, START)
     assert [m.sequence for m in plans] == [1, 2, 3]
     # Deadlines are non-decreasing along the sequence.
@@ -189,7 +197,7 @@ def test_schedule_modules_skips_reserved_interval() -> None:
     # Vega's slots are tue/wed/thu 11:00–12:00 (660–720).
     # Reserve the entire Tuesday 11:00–12:00 in week 1.
     reserved: frozenset = frozenset({("2026-06-16", 660, 720)})  # 2026-06-15 Mon, +1=Tue
-    estimates = [(_module(3), 30)]  # 30 min; fits in half a slot
+    estimates = [_est(_module(3), 30)]  # 30 min; fits in half a slot
     plans = schedule_modules(estimates, slots, START, reserved=reserved)
     assert plans
     blocks = plans[0].scheduled
@@ -218,7 +226,7 @@ def test_schedule_modules_extends_timeline_when_slot_fully_reserved() -> None:
             ("2026-06-18", 660, 720),  # thu week 1
         }
     )
-    estimates = [(_module(3), 60)]
+    estimates = [_est(_module(3), 60)]
     plans_no_res = schedule_modules(estimates, slots, start)
     plans_with_res = schedule_modules(estimates, slots, start, reserved=reserved)
     assert plans_with_res
@@ -308,7 +316,7 @@ def test_time_window_clips_slots_to_part_of_day() -> None:
 
 def test_max_session_minutes_caps_every_block() -> None:
     slots = [WeeklySlot("mon", 9 * 60, 13 * 60, "free time")]  # one 4-hour opening
-    estimates = [(_module(objectives=6, skills=4), 200)]  # a 200-minute module
+    estimates = [_est(_module(objectives=6, skills=4), 200)]  # a 200-minute module
     plans = schedule_modules(estimates, slots, START, max_session_minutes=45)
     blocks = plans[0].scheduled
     assert blocks, "expected scheduled blocks"

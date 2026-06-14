@@ -74,6 +74,16 @@ class ModuleInfo:
     prereq_module_ids: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class ModuleEstimate:
+    """A module's time budget broken into base, pace-corrected, and skill-corrected."""
+
+    module: ModuleInfo
+    base_minutes: int  # NORMAL pace, no skill
+    pace_minutes: int  # chosen pace, no skill
+    skill_minutes: int  # chosen pace + skill (what gets scheduled)
+
+
 @lru_cache(maxsize=16)
 def course_modules(catalog_path: str, catalog_id: str) -> tuple[ModuleInfo, ...]:
     """Modules for a course, in prereq/teaching order (cached)."""
@@ -146,6 +156,13 @@ def apply_skill_correction(
         * SESSION_GRANULARITY
     )
     return max(SESSION_GRANULARITY, int(rounded))
+
+
+def _module_score(scores: dict[str, float] | None, module_id: str) -> float:
+    """The skill score for a module, defaulting to neutral when not assessed."""
+    if not scores:
+        return NEUTRAL_SCORE
+    return scores.get(module_id, NEUTRAL_SCORE)
 
 
 # ── 2. Weekly study slots from the real calendar ───────────────────────────────
@@ -325,7 +342,7 @@ def _free_segment(
 
 
 def schedule_modules(
-    estimates: list[tuple[ModuleInfo, int]],
+    estimates: list[ModuleEstimate],
     slots: list[WeeklySlot],
     start_date: date,
     skip_weeks: frozenset[int] = frozenset(),
@@ -339,6 +356,8 @@ def schedule_modules(
     ``reserved`` are absolute (date, start, end) intervals taken by other courses.
     ``skip_dates`` are ISO date strings for PTO/on-call days — any slot that falls
     on one of these dates is skipped entirely (the work flows to the next slot).
+    Each module is scheduled by its ``skill_minutes``; the base and pace-corrected
+    figures ride along onto the ModulePlan for the breakdown the learner sees.
     """
     if not slots:
         return []
@@ -347,8 +366,9 @@ def schedule_modules(
     slot_idx = 0
     cursor = slots[0].start  # position within the current slot
 
-    for seq, (module, minutes) in enumerate(estimates, start=1):
-        remaining = minutes
+    for seq, est in enumerate(estimates, start=1):
+        module = est.module
+        remaining = est.skill_minutes
         blocks: list[ScheduledBlock] = []
         last_week = week
         while remaining > 0:
@@ -402,7 +422,10 @@ def schedule_modules(
                 module_id=module.module_id,
                 title=module.title,
                 sequence=seq,
-                estimated_minutes=minutes,
+                estimated_minutes=est.skill_minutes,
+                base_minutes=est.base_minutes,
+                pace_minutes=est.pace_minutes,
+                skill_delta=est.skill_minutes - est.pace_minutes,
                 scheduled=blocks,
                 complete_before=complete_before.isoformat(),
                 objectives=list(module.objectives),
@@ -429,6 +452,7 @@ def build_study_plan(
     time_window: tuple[int, int] | None = None,
     max_session_minutes: int | None = None,
     extra_skip_dates: frozenset[str] = frozenset(),
+    skill_scores: dict[str, float] | None = None,
     settings: Settings | None = None,
 ) -> StudyPlan | None:
     """Assemble the calendar-grounded, module-level plan, or None if no modules.
@@ -444,8 +468,20 @@ def build_study_plan(
     if not modules:
         return None
 
-    estimates = [(m, estimate_module_minutes(m, pace)) for m in modules]
-    total_minutes = sum(mins for _, mins in estimates)
+    estimates = [
+        ModuleEstimate(
+            module=m,
+            base_minutes=estimate_module_minutes(m, Pace.NORMAL),
+            pace_minutes=estimate_module_minutes(m, pace),
+            skill_minutes=apply_skill_correction(
+                estimate_module_minutes(m, pace), _module_score(skill_scores, m.module_id), pace
+            ),
+        )
+        for m in modules
+    ]
+    total_minutes = sum(e.skill_minutes for e in estimates)
+    total_base_minutes = sum(e.base_minutes for e in estimates)
+    total_pace_minutes = sum(e.pace_minutes for e in estimates)
 
     slots = weekly_study_slots(persona, exclude_days, time_window=time_window)
     weekly_minutes = sum(s.minutes for s in slots)
@@ -498,6 +534,8 @@ def build_study_plan(
         pace=pace,
         weekly_study_hours=weekly_hours,
         total_hours=round(total_minutes / 60, 1),
+        total_base_hours=round(total_base_minutes / 60, 1),
+        total_pace_hours=round(total_pace_minutes / 60, 1),
         weeks=weeks,
         start_date=start_date.isoformat(),
         modules=module_plans,
