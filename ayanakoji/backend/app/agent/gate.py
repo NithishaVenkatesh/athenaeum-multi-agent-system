@@ -18,9 +18,14 @@ ordered so the *purpose-built* detector leads and the general LLM backs it up:
 3. **Azure LLM classifier** — the **secondary semantic net**, run only when the
    guard clears the message. It catches intent-level attacks the guard's training
    underweights (extract the system prompt, "act outside your purpose"), so a
-   clean turn is confirmed by *both* a specialist and a generalist.
-4. **Fail open** — only if *every* model is unreachable and the regex pre-filter
-   passed: a clean learner is not blocked just because the network is down.
+   clean turn is confirmed by *both* a specialist and a generalist. If Azure's own
+   trained Responsible-AI content filter declines the request (a typed
+   :class:`~app.agent.llm.ContentFiltered`), that is an authoritative "this is an
+   attack" verdict → BLOCK (never confused with an outage).
+4. **Fail open** — only if *every* model is genuinely **unreachable**
+   (:class:`~app.agent.llm.AllProvidersDown`, a real outage) and the regex
+   pre-filter passed: a clean learner is not blocked just because the network is
+   down. A provider *declining as unsafe* is the opposite of an outage and blocks.
 
 Any block stops the pipeline; the frontend shows a toast. A regex/guard hit
 short-circuits before reaching any planning agent.
@@ -37,7 +42,7 @@ from typing import Any
 
 from app.agent.contracts import InjectionVerdict, PhaseName, PhaseStatus, PhaseTelemetry, TraceStep
 from app.agent.gate_heuristic import benign_learning_allowance, heuristic_injection_verdict
-from app.agent.llm import AllProvidersDown, Capability, ModelRouter
+from app.agent.llm import AllProvidersDown, Capability, ContentFiltered, ModelRouter
 from app.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
@@ -357,6 +362,54 @@ def screen(
             )
         )
         return verdict, _build_telemetry(verdict, model=result.model, tier=result.tier, steps=steps)
+    except ContentFiltered as exc:
+        # Azure's OWN trained Responsible-AI classifier declined the request as a
+        # jailbreak/unsafe. That is an authoritative "this is an attack" verdict —
+        # treat it as a BLOCK, never an outage (the whole point of the typed signal).
+        # We still honor the benign-learning allowance so a genuine learner whose
+        # phrasing trips RAI is not over-refused (the deterministic nets already
+        # cleared this turn and the Prompt Guard specialist did not block it).
+        categories = getattr(exc, "categories", ()) or ()
+        cat_detail = f" ({', '.join(categories)})" if categories else ""
+        if benign_learning_allowance(text):
+            steps.append(
+                TraceStep(
+                    label="Azure LLM classifier",
+                    passed=False,
+                    detail=f"Provider safety filter declined the request{cat_detail}.",
+                )
+            )
+            steps.append(
+                TraceStep(
+                    label="Benign-learning allowance",
+                    passed=True,
+                    detail="Recovered a provider safety filter on an on-topic learning ask.",
+                )
+            )
+            verdict = InjectionVerdict(
+                blocked=False,
+                reason="Benign learning request: provider safety filter fired on a course-content "
+                "trigger word, not the assistant's instructions.",
+                confidence=0.7,
+            )
+            return verdict, _build_telemetry(
+                verdict, model="content-filter", tier=None, steps=steps
+            )
+        steps.append(
+            TraceStep(
+                label="Azure LLM classifier",
+                passed=False,
+                detail=f"Provider safety filter detected a jailbreak{cat_detail} — "
+                "Azure's trained Responsible-AI classifier declined the request.",
+            )
+        )
+        verdict = InjectionVerdict(
+            blocked=True,
+            reason="Provider's trained safety classifier flagged this as a jailbreak/unsafe "
+            "request (Azure Responsible-AI content filter).",
+            confidence=0.99,
+        )
+        return verdict, _build_telemetry(verdict, model="content-filter", tier=None, steps=steps)
     except AllProvidersDown:
         steps.append(
             TraceStep(

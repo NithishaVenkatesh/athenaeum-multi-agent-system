@@ -32,6 +32,7 @@ from collections.abc import Iterator, Sequence
 from app.agent.llm import (
     AllProvidersDown,
     Capability,
+    ContentFiltered,
     LLMError,
     LLMResult,
     ModelRouter,
@@ -273,19 +274,40 @@ class _ReplayExcProvider:
 # ── cases ──────────────────────────────────────────────────────────────────────
 
 
-def _case_content_filter_indistinguishable() -> CaseResult:
-    """HEADLINE: a content_filter rejection is indistinguishable from an outage.
+def _build_cf_exc(live_exc: BaseException | None) -> BaseException:
+    """The content_filter exception to replay: the real captured one if available,
+    else a synthetic with the EXACT structured shape Azure emits (so the router's
+    structured detector is exercised identically either way)."""
+    if live_exc is not None:
+        return live_exc
+    cf_exc: BaseException = RuntimeError("Error code: 400 - content management policy")
+    cf_exc.status_code = 400  # type: ignore[attr-defined]
+    cf_exc.code = "content_filter"  # type: ignore[attr-defined]
+    cf_exc.body = {  # type: ignore[attr-defined]
+        "code": "content_filter",
+        "innererror": {
+            "code": "ResponsibleAIPolicyViolation",
+            "content_filter_result": {"jailbreak": {"detected": True, "filtered": True}},
+        },
+    }
+    return cf_exc
 
-    The finding is STRUCTURAL and always reproducible: ``ModelRouter.complete`` can
-    only return an ``LLMResult`` (which carries no 'declined-as-unsafe' field) or
-    raise ``AllProvidersDown`` (the outage type). So even when a provider's *trained*
-    classifier says "this is an attack", a caller (the gate) has no typed channel to
-    learn that — it is forced to interpret the block as either a normal answer from a
-    fallback tier or a generic outage, and fails OPEN.
+
+def _case_content_filter_indistinguishable() -> CaseResult:
+    """HEADLINE (now FIXED): a content_filter rejection is a TYPED, DISTINGUISHABLE
+    signal — not flattened into the generic outage type.
+
+    Contract under test: ``ModelRouter.complete`` still tries remaining rungs for
+    AVAILABILITY (a benign learner prompt that trips RAI on Azure can still be
+    answered by a Groq fallback — proven below: Groq answers and the caller gets an
+    LLMResult). BUT when *every* tier fails and at least one declined as unsafe, the
+    router raises the typed ``ContentFiltered`` — provably NOT ``AllProvidersDown``
+    — so a caller (the gate) can BLOCK on the provider's trained 'this is an attack'
+    verdict instead of failing open.
 
     We drive the router with the REAL captured content_filter exception (replayed
     into a fake Azure provider) so the demonstration is deterministic regardless of
-    whether the probe tripped this round; live evidence is attached when available.
+    whether the live probe tripped this round; live evidence is attached when available.
     """
     cid, cat, sev = "content_filter_fail_open", "content_filter", "crit"
 
@@ -295,42 +317,50 @@ def _case_content_filter_indistinguishable() -> CaseResult:
         if live_exc is not None
         else "live probe did not trip this round; demonstrating with a synthetic RAI 400"
     )
-
-    # Build a content_filter exception to replay: prefer the real one, else synthesize
-    # the exact structured shape Azure emits (so detection logic is tested identically).
-    cf_exc: BaseException
-    if live_exc is not None:
-        cf_exc = live_exc
-    else:
-        cf_exc = RuntimeError("Error code: 400 - content management policy")
-        cf_exc.status_code = 400  # type: ignore[attr-defined]
-        cf_exc.code = "content_filter"  # type: ignore[attr-defined]
-        cf_exc.body = {  # type: ignore[attr-defined]
-            "code": "content_filter",
-            "innererror": {
-                "code": "ResponsibleAIPolicyViolation",
-                "content_filter_result": {"jailbreak": {"detected": True, "filtered": True}},
-            },
-        }
+    cf_exc = _build_cf_exc(live_exc)
     assert _is_content_filter(cf_exc)  # the signal IS structurally detectable...
 
-    # Azure replays the content_filter block; Groq answers (a benign fallback). The
-    # caller gets an LLMResult identical in shape to a routine Azure-outage fallback.
-    groq = _ScriptedProvider(Provider.GROQ, [RawCompletion(text="(refusal or compliance)")])
-    router = _fresh_router_no_breaker(
-        azure=_ReplayExcProvider(Provider.AZURE, cf_exc), groq=groq
+    # (a) AVAILABILITY: Azure content-filters but Groq answers → the router still
+    #     returns a completion (the chain is not blanket-short-circuited on the first
+    #     content_filter), so a benign answer remains reachable via a fallback tier.
+    groq_ok = _ScriptedProvider(Provider.GROQ, [RawCompletion(text="(fallback answer)")])
+    router_avail = _fresh_router_no_breaker(
+        azure=_ReplayExcProvider(Provider.AZURE, cf_exc), groq=groq_ok
     )
     try:
-        res = router.complete(Capability.FAST, [{"role": "user", "content": _JAILBREAK}],
+        res = router_avail.complete(
+            Capability.FAST, [{"role": "user", "content": _JAILBREAK}], max_tokens=32
+        )
+        availability_ok = isinstance(res, LLMResult) and res.provider == Provider.GROQ
+        avail_outcome = f"LLMResult(tier={res.tier}, provider={res.provider})"
+    except Exception as exc:  # noqa: BLE001
+        availability_ok = False
+        avail_outcome = f"raised {type(exc).__name__} instead of falling back to Groq"
+
+    # (b) DISTINGUISHABILITY: when EVERY tier fails and one declined as unsafe, the
+    #     router must raise the TYPED ContentFiltered — not AllProvidersDown. Drive a
+    #     chain where Azure content-filters and Groq is also down (generic error).
+    groq_down = _ScriptedProvider(Provider.GROQ, [RuntimeError("groq 503")])
+    router_block = _fresh_router_no_breaker(
+        azure=_ReplayExcProvider(Provider.AZURE, cf_exc), groq=groq_down
+    )
+    typed_signal = False
+    distinguishable = False
+    try:
+        router_block.complete(Capability.FAST, [{"role": "user", "content": _JAILBREAK}],
                               max_tokens=32)
-        caller_outcome = (
-            f"LLMResult(tier={res.tier}, provider={res.provider}) — byte-for-byte the same "
-            f"type/shape a benign Azure outage would produce; no 'declined-as-unsafe' field "
-            f"exists on LLMResult"
+        block_outcome = "router returned a completion (no tier should have succeeded)"
+    except ContentFiltered as exc:
+        # ContentFiltered must NOT be the outage type, or it'd be indistinguishable.
+        typed_signal = True
+        distinguishable = not isinstance(exc, AllProvidersDown)
+        block_outcome = (
+            f"ContentFiltered (categories={getattr(exc, 'categories', ())}) — "
+            f"distinct from AllProvidersDown: {distinguishable}"
         )
     except AllProvidersDown as exc:
-        caller_outcome = (
-            f"AllProvidersDown('{str(exc)[:60]}') — the OUTAGE exception; caller cannot "
+        block_outcome = (
+            f"AllProvidersDown('{str(exc)[:50]}') — STILL the outage type; caller cannot "
             f"distinguish 'unsafe' from 'unreachable'"
         )
     except Exception as exc:  # noqa: BLE001 — an unhandled escape would be worse
@@ -340,39 +370,43 @@ def _case_content_filter_indistinguishable() -> CaseResult:
             severity=sev, observed=f"{signal}; router raised {type(exc).__name__}",
         )
 
-    # ...yet there is provably NO typed channel for it on the public surface.
-    has_typed_channel = any(
-        f in LLMResult.__dataclass_fields__
-        for f in ("blocked", "content_filtered", "declined", "refused", "safety", "filtered")
+    # Also: ContentFiltered is a real, importable type that is NOT a subclass of the
+    # outage type — the structural guarantee that callers can branch on it.
+    type_is_distinct = issubclass(ContentFiltered, LLMError) and not issubclass(
+        ContentFiltered, AllProvidersDown
     )
+
+    ok = availability_ok and typed_signal and distinguishable and type_is_distinct
     return CaseResult(
-        cid, cat, has_typed_channel,  # passes only if a typed safety channel exists (it doesn't)
-        "content_filter / RAI 'jailbreak detected' is DISCARDED: the router has no typed way to "
-        "surface a provider safety BLOCK — LLMResult has no such field and AllProvidersDown is "
-        "the outage type, so callers (the gate) FAIL OPEN on a trained 'this is an attack' signal",
+        cid, cat, ok,
+        "FIXED: content_filter / RAI 'jailbreak detected' is surfaced as a TYPED, distinguishable "
+        "ContentFiltered (not AllProvidersDown), while a benign fallback tier still answers for "
+        "availability — so the gate can BLOCK on the provider's trained verdict instead of failing "
+        "open" if ok else
+        "content_filter is NOT yet a distinguishable typed signal (availability/typing/distinct "
+        "check failed)",
         severity=sev,
-        observed=f"{signal} | caller sees: {caller_outcome} | "
-        f"LLMResult safety field present? {has_typed_channel}",
+        observed=f"{signal} | availability: {avail_outcome} | block: {block_outcome} | "
+        f"ContentFiltered distinct-from-outage type? {type_is_distinct}",
     )
 
 
 def _case_content_filter_azure_only() -> CaseResult:
-    """With no fallback available, an Azure content_filter block surfaces as
-    ``AllProvidersDown`` — a deliberate SAFETY decision reported with the exact
-    'everything is down' exception, the worst conflation for an allow-vs-refuse
-    caller. Deterministic: we replay the real/synthetic content_filter error into an
-    Azure-only chain."""
+    """With no fallback available, an Azure content_filter block must surface as the
+    typed ``ContentFiltered`` (NOT ``AllProvidersDown``) — a deliberate SAFETY
+    decision reported as such, so an allow-vs-refuse caller can BLOCK. This is the
+    inverse of the outage case: ``ContentFiltered`` must be distinguishable from the
+    'everything is down' exception. Deterministic: we replay the real/synthetic
+    content_filter error into an Azure-only chain."""
     cid, cat, sev = "content_filter_as_outage", "content_filter", "crit"
 
     live_exc = _live_content_filter_exc()
-    if live_exc is not None:
-        cf_exc: BaseException = live_exc
-        signal = "live: azure RAI 'jailbreak: detected'"
-    else:
-        cf_exc = RuntimeError("Error code: 400 - content management policy")
-        cf_exc.code = "content_filter"  # type: ignore[attr-defined]
-        cf_exc.status_code = 400  # type: ignore[attr-defined]
-        signal = "synthetic content_filter 400 (probe did not trip this round)"
+    cf_exc = _build_cf_exc(live_exc)
+    signal = (
+        "live: azure RAI 'jailbreak: detected'"
+        if live_exc is not None
+        else "synthetic content_filter 400 (probe did not trip this round)"
+    )
 
     s_azure_only = _live_settings_only_azure()
     from app.agent.llm import CircuitBreaker
@@ -389,6 +423,19 @@ def _case_content_filter_azure_only() -> CaseResult:
         return CaseResult(
             cid, cat, False, "Azure-only chain returned a completion for a content_filtered prompt",
             severity=sev, observed=f"unexpected LLMResult tier={res.tier}",
+        )
+    except ContentFiltered as exc:
+        # The fix: a safety decline is its own type, NOT the outage type.
+        distinguishable = not isinstance(exc, AllProvidersDown)
+        return CaseResult(
+            cid, cat, distinguishable,
+            "FIXED: an Azure SAFETY block surfaces as the typed ContentFiltered, distinguishable "
+            "from a total outage — the caller can tell 'declined as unsafe' from 'unreachable'"
+            if distinguishable else
+            "ContentFiltered subclasses AllProvidersDown — NOT distinguishable from an outage",
+            severity=sev,
+            observed=f"{signal} -> ContentFiltered(cats={getattr(exc, 'categories', ())}); "
+            f"distinct-from-AllProvidersDown={distinguishable}",
         )
     except AllProvidersDown as exc:
         return CaseResult(

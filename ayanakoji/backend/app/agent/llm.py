@@ -59,8 +59,13 @@ def _is_transient(exc: BaseException) -> bool:
     """True for errors worth retrying the *same* rung (rate limit, timeout, 5xx).
 
     A non-transient error (bad model name, auth, malformed request) falls straight
-    through to the next rung — retrying it would only waste time.
+    through to the next rung — retrying it would only waste time. A content-filter
+    rejection is a deterministic safety verdict, never transient: retrying the same
+    prompt on the same provider will be filtered identically, so we never burn the
+    retry budget on it.
     """
+    if _is_content_filter(exc):
+        return False
     if isinstance(exc, (TimeoutError, ConnectionError)):
         return True
     status = getattr(exc, "status_code", None)
@@ -142,7 +147,87 @@ class LLMError(RuntimeError):
 
 
 class AllProvidersDown(LLMError):
-    """Every configured provider in the chain failed — the final, explicit fallback."""
+    """Every configured provider in the chain failed — the final, explicit fallback.
+
+    This is the *outage* type: the providers were unreachable/erroring for
+    infrastructure reasons (timeout, 5xx, auth, bad deployment). Callers MUST be
+    able to tell this apart from a provider that *declined the request as unsafe*
+    (see :class:`ContentFiltered`).
+    """
+
+
+class ContentFiltered(LLMError):
+    """A provider's *trained safety classifier* rejected the request as unsafe.
+
+    Distinct from :class:`AllProvidersDown` on purpose: Azure's Responsible-AI
+    content filter returns a structured 400 (``code == 'content_filter'`` /
+    ``innererror.code == 'ResponsibleAIPolicyViolation'`` /
+    ``content_filter_result.jailbreak.detected``) that means "this is an attack",
+    not "the service is down". The router surfaces this typed signal so a caller
+    (the injection gate) can BLOCK on the provider's authoritative verdict rather
+    than failing open as it would on a generic outage.
+
+    Raised only when *every* tier failed AND at least one tier declined for content
+    reasons — so the router still tries remaining rungs for availability (a benign
+    learner prompt that trips RAI on one tier can still be answered by a fallback),
+    but a chain that ends in a safety refusal is reported as one.
+    """
+
+    def __init__(self, message: str, *, categories: tuple[str, ...] = ()) -> None:
+        super().__init__(message)
+        # The RAI categories that fired (e.g. "jailbreak", "violence"), if the
+        # structured error exposed them — carried for telemetry, not control flow.
+        self.categories = categories
+
+
+# Structured signatures of a Responsible-AI / content-filter rejection. We read the
+# exception's *structured* fields (the openai BadRequestError carries ``.code`` and a
+# parsed ``.body`` dict), NOT a substring of ``str(exc)`` — the message text is not a
+# stable contract, the structured code is.
+_CONTENT_FILTER_CODES = frozenset({"content_filter", "ResponsibleAIPolicyViolation"})
+
+
+def _content_filter_categories(exc: BaseException) -> tuple[str, ...]:
+    """RAI categories that ``detected``/``filtered`` in a structured content-filter error."""
+    body = getattr(exc, "body", None)
+    if not isinstance(body, dict):
+        return ()
+    inner = body.get("innererror")
+    if not isinstance(inner, dict):
+        return ()
+    cfr = inner.get("content_filter_result")
+    if not isinstance(cfr, dict):
+        return ()
+    fired: list[str] = []
+    for category, result in cfr.items():
+        if isinstance(result, dict) and (result.get("detected") or result.get("filtered")):
+            fired.append(str(category))
+    return tuple(fired)
+
+
+def _is_content_filter(exc: BaseException) -> bool:
+    """True iff ``exc`` is a provider's *structured* content/RAI safety rejection.
+
+    Inspects the structured error shape Azure emits — the top-level ``code``, the
+    parsed ``body['code']`` / ``body['innererror']['code']``, or a
+    ``content_filter_result.*.detected`` flag — never a substring of the message.
+    """
+    if getattr(exc, "code", None) in _CONTENT_FILTER_CODES:
+        return True
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        if body.get("code") in _CONTENT_FILTER_CODES:
+            return True
+        inner = body.get("innererror")
+        if isinstance(inner, dict):
+            if inner.get("code") in _CONTENT_FILTER_CODES:
+                return True
+            cfr = inner.get("content_filter_result")
+            if isinstance(cfr, dict):
+                for result in cfr.values():
+                    if isinstance(result, dict) and result.get("detected"):
+                        return True
+    return False
 
 
 @dataclass(frozen=True)
@@ -480,6 +565,10 @@ class ModelRouter:
             raise AllProvidersDown("no LLM provider configured")
         last: Exception | None = None
         attempted = False
+        # Track a trained-safety rejection so a chain that ends in a content_filter
+        # is reported as ContentFiltered (distinguishable from a real outage), while
+        # still trying remaining rungs for availability.
+        filter_exc: BaseException | None = None
         for provider, attempt in rungs:
             if self._breaker.is_open(attempt.provider):
                 continue  # provider circuit open → skip straight to the next rung
@@ -500,6 +589,8 @@ class ModelRouter:
                     "tier %d %s/%s failed: %s", attempt.tier, attempt.provider, attempt.model, exc
                 )
                 last = exc
+                if _is_content_filter(exc):
+                    filter_exc = exc
                 self._breaker.record_failure(attempt.provider)
                 continue
             self._breaker.record_success(attempt.provider)
@@ -514,6 +605,14 @@ class ModelRouter:
             )
         if not attempted:
             raise AllProvidersDown("all provider circuits are open")
+        # Every tier failed. If a provider's trained safety classifier declined the
+        # request, that is an authoritative "this is unsafe" signal — surface it as a
+        # typed ContentFiltered so the caller can BLOCK, not fail open as on an outage.
+        if filter_exc is not None:
+            raise ContentFiltered(
+                "provider declined the request as unsafe (content filter)",
+                categories=_content_filter_categories(filter_exc),
+            ) from filter_exc
         raise AllProvidersDown(f"all {len(rungs)} provider tiers failed") from last
 
     def stream(
