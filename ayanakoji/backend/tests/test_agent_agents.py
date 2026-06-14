@@ -318,6 +318,32 @@ def test_answer_foundry_open_online_answers_without_fabricating_citations() -> N
     assert "[zz-c9-m9]" not in text  # no fabricated citations in an open answer
 
 
+def test_answer_foundry_flags_citation_on_unsupported_claim() -> None:
+    # A real, in-sources module id attached to a topic-disjoint claim: the id-existence
+    # guard keeps the id, but the claim-support check appends an honesty disclaimer and
+    # surfaces a failed groundedness phase.
+    router = FakeRouter(
+        tokens=["Cosmos DB ", "partition keys ", "shard throughput ", "[cb-c01-m02]"]
+    )
+    reply = answer_foundry("azure functions", router=router, settings=_online())
+    text = "".join(reply.tokens)
+    assert "[cb-c01-m02]" in text  # a real source's id is kept verbatim
+    assert "may not be fully supported" in text  # claim-support disclaimer fired
+    assert reply.grounding_check is not None and reply.grounding_check.phase is not None
+    assert reply.grounding_check.phase.steps[0].passed is False
+
+
+def test_answer_foundry_supported_citation_has_no_disclaimer() -> None:
+    router = FakeRouter(
+        tokens=["Azure Functions ", "use triggers and bindings to run code ", "[cb-c01-m02]"]
+    )
+    reply = answer_foundry("azure functions", router=router, settings=_online())
+    text = "".join(reply.tokens)
+    assert "may not be fully supported" not in text
+    assert reply.grounding_check is not None and reply.grounding_check.phase is not None
+    assert reply.grounding_check.phase.steps[0].passed is True
+
+
 def test_answer_work_offline_uses_persona_signals() -> None:
     # Polaris is a manager; pick a known learner persona id from the roster.
     from app.workiq.repository import get_repository

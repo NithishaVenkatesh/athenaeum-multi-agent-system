@@ -17,6 +17,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections.abc import Iterable, Iterator
+from dataclasses import dataclass
 
 from app.agent.contracts import GroundingSource, StudyPlan
 
@@ -375,3 +376,182 @@ def stream_grounded(tokens: Iterable[str], sources: Iterable[GroundingSource]) -
         yield _scrub(segment)
     if has_sources and not cited and content_len >= _MIN_CONTENT_FOR_DISCLAIMER:
         yield _GROUNDING_DISCLAIMER
+
+
+# ── Claim-support (groundedness) guard — a citation must SUPPORT its claim ───────
+#
+# The citation guard above checks an id EXISTS in the sources; it cannot tell whether
+# the cited module actually backs the sentence's claim. A model can attach a real
+# ``[cb-c01-m02]`` to an off-topic or false statement and pass. This deterministic floor
+# catches the *topic-mismatch* case — a cited sentence sharing no salient term with the
+# module it cites — so a citation lifted onto an unrelated claim is flagged. It cannot
+# judge entailment of an on-topic-but-false claim; the live Azure groundedness/NLI
+# evaluator (``app.agent.grounding_verifier``) is the deeper check, with this as its
+# offline floor. Both feed one ``GroundingVerdict`` and one honesty disclaimer.
+
+_GROUND_STOP = frozenset(
+    [
+        "a",
+        "an",
+        "the",
+        "of",
+        "to",
+        "in",
+        "on",
+        "for",
+        "with",
+        "and",
+        "or",
+        "but",
+        "is",
+        "are",
+        "be",
+        "been",
+        "being",
+        "do",
+        "does",
+        "did",
+        "how",
+        "what",
+        "when",
+        "where",
+        "which",
+        "who",
+        "why",
+        "this",
+        "that",
+        "these",
+        "those",
+        "it",
+        "its",
+        "as",
+        "at",
+        "by",
+        "from",
+        "into",
+        "over",
+        "under",
+        "you",
+        "your",
+        "we",
+        "our",
+        "they",
+        "their",
+        "can",
+        "could",
+        "should",
+        "would",
+        "will",
+        "may",
+        "might",
+        "also",
+        "more",
+        "most",
+        "some",
+        "any",
+        "all",
+        "each",
+        "both",
+        "than",
+        "then",
+        "so",
+        "such",
+        "not",
+        "no",
+        "use",
+        "used",
+        "using",
+        "azure",
+        "microsoft",
+        "cloud",
+        "service",
+        "services",
+        "example",
+        "examples",
+        "like",
+        "via",
+        "per",
+    ]
+)
+_GROUND_TOKEN = re.compile(r"[a-z0-9]+")
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
+# A cited sentence is "supported" if it shares at least this many salient terms with the
+# cited module's material (title + snippet). One meaningful term is a deliberately lenient
+# floor: it flags only a citation whose sentence is topically disjoint from its source.
+_MIN_SUPPORT_TERMS = 1
+_CLAIM_DISCLAIMER = (
+    " (Note: some statements above may not be fully supported by the cited modules, "
+    "double-check them against the linked material.)"
+)
+
+
+@dataclass(frozen=True)
+class GroundingVerdict:
+    """Whether an answer's cited claims are actually supported by their sources."""
+
+    grounded: bool
+    reason: str
+    provider: str  # "deterministic lexical overlap" | "Azure AI evaluation"
+    score: float | None = None  # 0..1 supported fraction, or an eval-normalized score
+    metrics: tuple[tuple[str, float], ...] = ()  # named scores to surface in the trace
+    unsupported: tuple[str, ...] = ()  # cited ids whose sentence isn't supported
+
+
+def _content_terms(text: str) -> set[str]:
+    """Salient (non-stopword) terms in a string — the unit of overlap for grounding."""
+    return {t for t in _GROUND_TOKEN.findall(text.lower()) if len(t) > 2 and t not in _GROUND_STOP}
+
+
+def lexical_groundedness(answer: str, sources: Iterable[GroundingSource]) -> GroundingVerdict:
+    """Deterministic claim-support floor: each cited sentence must share a salient term
+    with the module it cites.
+
+    Flags a citation whose sentence is topically disjoint from its source (a real id on an
+    off-topic claim). It cannot judge an on-topic-but-false claim — that needs the live NLI
+    evaluator. When no approved source is cited, returns ``grounded=True`` (the streaming
+    guard's no-citation disclaimer already covers that case).
+    """
+    by_ref = {s.ref.lower(): s for s in sources}
+    if not by_ref:
+        return GroundingVerdict(True, "no sources to check", "deterministic lexical overlap")
+
+    total = 0
+    unsupported: list[str] = []
+    for sentence in _SENTENCE_SPLIT.split(answer):
+        refs = {r for r in cited_refs(sentence) if r in by_ref}
+        if not refs:
+            continue
+        sent_terms = _content_terms(sentence)
+        for ref in refs:
+            total += 1
+            src = by_ref[ref]
+            src_terms = _content_terms(f"{src.title} {src.snippet}")
+            if len(sent_terms & src_terms) < _MIN_SUPPORT_TERMS:
+                unsupported.append(ref)
+
+    if total == 0:
+        return GroundingVerdict(
+            True, "no approved citations to verify", "deterministic lexical overlap"
+        )
+    distinct_unsupported = tuple(sorted(set(unsupported)))
+    score = (total - len(unsupported)) / total
+    grounded = not unsupported
+    reason = (
+        "every cited claim shares material with its module"
+        if grounded
+        else "citation(s) topically disjoint from the cited module: "
+        + ", ".join(distinct_unsupported)
+    )
+    return GroundingVerdict(
+        grounded=grounded,
+        reason=reason,
+        provider="deterministic lexical overlap",
+        score=round(score, 2),
+        metrics=(("claim_support", round(score, 2)),),
+        unsupported=distinct_unsupported,
+    )
+
+
+def groundedness_disclaimer(verdict: GroundingVerdict) -> str | None:
+    """The honesty disclaimer to append when an answer's citations don't support it."""
+    return None if verdict.grounded else _CLAIM_DISCLAIMER

@@ -47,7 +47,13 @@ from app.agent.grounding import (
     get_grounding,
     get_retriever,
 )
-from app.agent.guards import plan_narration_is_grounded, stream_grounded
+from app.agent.guards import (
+    GroundingVerdict,
+    groundedness_disclaimer,
+    lexical_groundedness,
+    plan_narration_is_grounded,
+    stream_grounded,
+)
 from app.agent.llm import Capability, ModelRouter, StreamHandle
 from app.agent.recommend import (
     classify_vertical_intent,
@@ -85,6 +91,21 @@ class AgentReply:
     # Scheduling constraints the agent inferred this turn (persisted by the courses
     # layer so they stick across re-plans).
     plan_constraints: dict[str, object] | None = None
+    # Filled by the verified foundry stream at end-of-stream; the orchestrator emits it
+    # as a post-answer groundedness phase once the answer text is known.
+    grounding_check: GroundingCheck | None = None
+
+
+@dataclass
+class GroundingCheck:
+    """A mutable slot the verified answer stream fills once the full answer is known.
+
+    The groundedness verdict can only be computed after the answer has streamed, so the
+    stream stashes the resulting phase telemetry here; the orchestrator reads it after
+    consuming the tokens and emits it as a trailing trace phase.
+    """
+
+    phase: PhaseTelemetry | None = None
 
 
 def _offline_stream(text: str) -> Iterator[str]:
@@ -316,6 +337,75 @@ def _foundry_offline(sources: list[GroundingSource], mode: str) -> str:
     )
 
 
+def verify_grounding(
+    answer: str,
+    sources: list[GroundingSource],
+    *,
+    query: str,
+    settings: Settings,
+) -> GroundingVerdict:
+    """Verify the answer's cited claims are actually supported by their sources.
+
+    The deterministic lexical floor catches a citation lifted onto a topic-disjoint claim.
+    The live Azure groundedness / relevance / retrieval NLI evaluators (layered in by
+    ``app.agent.grounding_verifier``) are the deeper check; this selector chooses them when
+    available and degrades to the lexical floor on any failure, so verification never
+    blocks the answer. ``query`` / ``settings`` are consumed by the Azure path.
+    """
+    return lexical_groundedness(answer, sources)
+
+
+def _grounding_telemetry(verdict: GroundingVerdict) -> PhaseTelemetry:
+    """A trailing trace phase reporting the groundedness verdict + its named scores."""
+    metric_str = ", ".join(f"{name}={value}" for name, value in verdict.metrics)
+    steps = [
+        TraceStep(
+            label="Claim-support check",
+            passed=verdict.grounded,
+            detail=verdict.reason,
+            model=verdict.provider,
+        )
+    ]
+    summary = "Groundedness check" + (f" · {metric_str}" if metric_str else "")
+    return PhaseTelemetry(
+        phase=PhaseName.ANSWER,
+        status=PhaseStatus.PASSED,
+        summary=summary,
+        reasoning=verdict.reason,
+        route=Route.FOUNDRY_IQ,
+        provider=verdict.provider,
+        steps=steps,
+    )
+
+
+def _verified_stream(
+    tokens: Iterator[str],
+    sources: list[GroundingSource],
+    *,
+    query: str,
+    settings: Settings,
+    check: GroundingCheck,
+) -> Iterator[str]:
+    """Stream the grounded answer, then verify claim-support and append a disclaimer.
+
+    Wraps ``stream_grounded`` (which scrubs invented ids inline + handles the no-citation
+    case). Once the full answer is known, it runs the groundedness verifier: if a cited
+    claim isn't supported, an honesty disclaimer is appended, and the verdict's scores are
+    stashed for the orchestrator to surface as a trailing trace phase.
+    """
+    buffer: list[str] = []
+    for token in stream_grounded(tokens, sources):
+        buffer.append(token)
+        yield token
+    answer = "".join(buffer)
+    verdict = verify_grounding(answer, sources, query=query, settings=settings)
+    if verdict.metrics:  # citations were actually verified (something to report)
+        check.phase = _grounding_telemetry(verdict)
+    disclaimer = groundedness_disclaimer(verdict)
+    if disclaimer:
+        yield disclaimer
+
+
 def answer_foundry(
     text: str,
     *,
@@ -465,6 +555,7 @@ def answer_foundry(
             detail="Streaming: invented citations dropped inline; uncited claims flagged",
         )
     )
+    check = GroundingCheck()
     return AgentReply(
         telemetry=_answer_telemetry(
             summary="Answered from approved course content",
@@ -476,9 +567,10 @@ def answer_foundry(
             steps=steps,
             provider=activity.provider,
         ),
-        tokens=stream_grounded(handle.tokens, sources),
+        tokens=_verified_stream(handle.tokens, sources, query=text, settings=settings, check=check),
         sources=sources,
         suggestion=suggestion,
+        grounding_check=check,
     )
 
 
