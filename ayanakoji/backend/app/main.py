@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from app import __version__
 from app.assessments.engine import init_db as assessments_init_db
+from app.assessments.router import router as assessments_router
 from app.catalog.router import router as catalog_router
 from app.config import get_settings
 from app.courses.router import router as courses_router
@@ -72,6 +73,8 @@ def create_app() -> FastAPI:
     app.include_router(catalog_router)
     # Learner workspace: courses (chats), messages, assessments.
     app.include_router(courses_router)
+    # Authored per-module assessment question banks (GET-only, separate DB).
+    app.include_router(assessments_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     def health() -> HealthResponse:
