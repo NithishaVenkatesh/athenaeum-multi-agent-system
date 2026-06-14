@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 const TABS: { key: ChatPage; label: string }[] = [
   { key: "chat", label: "Chat" },
   { key: "modules", label: "Modules" },
-  { key: "assessments", label: "Assessments" },
+  { key: "assessments", label: "Evaluations" },
 ];
 
 function tabHref(courseId: string, page: ChatPage): string {

@@ -38,7 +38,9 @@ import {
   setPace,
   skillFresher,
   startSkillCheck,
+  streamFeedback,
   streamMessage,
+  type AssessmentType,
   type NewChat,
   type Pace,
   type PaceRequest,
@@ -164,10 +166,11 @@ function NewChatNotice({ newChat }: { newChat: NewChat }) {
 
 export function ChatView({
   courseId,
-  initialMessage,
+  feedback,
 }: {
   courseId?: string;
-  initialMessage?: string;
+  /** Set when arriving from the "Get Feedback" button — streams grounded feedback. */
+  feedback?: { kind: AssessmentType; moduleId: string };
 }) {
   const { personaId, reloadCourses } = useWorkspace();
   const [activeCourseId, setActiveCourseId] = useState<string | undefined>(courseId);
@@ -269,15 +272,6 @@ export function ChatView({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [turns]);
 
-  // Auto-send an initial message once the course finishes loading (feedback redirect).
-  useEffect(() => {
-    if (!initialMessage || autoSentRef.current || busy) return;
-    if (courseId && turns.length === 0) return; // still loading existing turns
-    autoSentRef.current = true;
-    void handleSend(initialMessage);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialMessage, turns.length, busy]);
-
   // Patch the trailing assistant turn immutably.
   function patchLastAssistant(patch: (turn: AssistantTurn) => AssistantTurn) {
     setTurns((prev) => {
@@ -338,6 +332,42 @@ export function ChatView({
         streaming: false,
         error: "Could not reach the assistant.",
         text: t.text || "Could not reach the assistant. Please try again.",
+      }));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Stream grounded feedback on the learner's latest attempt into the chat. Unlike
+  // handleSend this skips the topic gate (the backend grounds on the module + the
+  // learner's answers), so it answers with real feedback instead of a refusal.
+  async function handleFeedback(kind: AssessmentType, moduleId: string) {
+    if (!activeCourseId) return;
+    const label = kind === "choices" ? "quiz" : "oral exam";
+    setBusy(true);
+    setTurns((prev) => [
+      ...prev,
+      { kind: "user", text: `Can you give me feedback on my ${label}?` },
+      emptyAssistantTurn(),
+    ]);
+    try {
+      await streamFeedback(activeCourseId, moduleId, kind, {
+        onPhase: (phase) => patchLastAssistant((t) => ({ ...t, phases: [...t.phases, phase] })),
+        onToken: (token) => patchLastAssistant((t) => ({ ...t, text: t.text + token })),
+        onError: (message) => {
+          toast.error("Something went wrong", { description: message });
+          patchLastAssistant((t) => ({ ...t, error: message, text: t.text || message }));
+        },
+      });
+      patchLastAssistant((t) => ({ ...t, streaming: false }));
+      void reloadCourses();
+    } catch {
+      toast.error("Connection lost", { description: "Could not load feedback. Try again." });
+      patchLastAssistant((t) => ({
+        ...t,
+        streaming: false,
+        error: "Could not load feedback.",
+        text: t.text || "Could not load feedback. Please try again.",
       }));
     } finally {
       setBusy(false);
@@ -463,6 +493,20 @@ export function ChatView({
       toast.error("Could not schedule the plan", { description: "Please try again." });
     }
   }
+
+  // Auto-request feedback once the course finishes loading (from the Get Feedback
+  // button). This streams from the dedicated grounded endpoint, not the chat pipeline.
+  // The kickoff is deferred a tick so the stream's state updates land after this
+  // effect, not synchronously inside it.
+  useEffect(() => {
+    if (!feedback || autoSentRef.current || busy) return;
+    if (courseId && turns.length === 0) return; // still loading existing turns
+    autoSentRef.current = true;
+    const { kind, moduleId } = feedback;
+    const id = setTimeout(() => void handleFeedback(kind, moduleId), 0);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feedback?.kind, feedback?.moduleId, turns.length, busy]);
 
   const isEmpty = turns.length === 0;
   // HITL gate: while the last turn is asking for a pace, or a quiz is open, typing

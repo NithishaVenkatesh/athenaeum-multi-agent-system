@@ -8,14 +8,15 @@ export default async function CoursePage({
 }) {
   const { courseId } = await params;
   const sp = searchParams ? await searchParams : {};
-  const feedbackKind = sp.feedback;
-  const feedbackModule = sp.module;
 
-  let initialMessage: string | undefined;
-  if (feedbackKind && feedbackModule) {
-    const kind = feedbackKind === "choices" ? "quiz" : "oral examination";
-    initialMessage = `I just failed the ${kind} assessment for module ${feedbackModule}. Can you help me understand what topics I should focus on and why I may have gone wrong?`;
-  }
+  // The "Get Feedback" button lands here with ?feedback=choices|llm&module=<id>.
+  // We hand ChatView a structured request so it streams grounded feedback via the
+  // dedicated endpoint (which bypasses the topic gate) instead of a chat message
+  // that the grounding layer would refuse as off-syllabus.
+  const kind: "choices" | "llm" | undefined =
+    sp.feedback === "choices" || sp.feedback === "llm" ? sp.feedback : undefined;
+  const moduleId = sp.module;
+  const feedback = kind && moduleId ? { kind, moduleId } : undefined;
 
-  return <ChatView courseId={courseId} initialMessage={initialMessage} />;
+  return <ChatView courseId={courseId} feedback={feedback} />;
 }

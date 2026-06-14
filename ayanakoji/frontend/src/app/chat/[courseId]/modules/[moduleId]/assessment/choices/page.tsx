@@ -2,7 +2,7 @@
 
 import { ArrowLeft, CheckCircle2, Loader2, XCircle } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { use, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -60,6 +60,7 @@ export default function ChoicesAssessmentPage({
 }) {
   const { courseId, moduleId } = use(params);
   const router = useRouter();
+  const isRetake = useSearchParams().get("retake") === "1";
 
   const [phase, setPhase] = useState<Phase>("loading");
   const [session, setSession] = useState<AssessmentSession | null>(null);
@@ -77,6 +78,17 @@ export default function ChoicesAssessmentPage({
     let cancelled = false;
     async function init() {
       try {
+        // Retake from the Evaluations tab: force a fresh attempt (new 5-question
+        // sample), bypassing the passed-redirect and resume paths below.
+        if (isRetake) {
+          const s = await startAssessment(courseId, moduleId, "choices", true);
+          if (!cancelled) {
+            setSession(s);
+            setPhase("quiz");
+          }
+          return;
+        }
+
         const summaries = await listModuleAssessments(courseId, moduleId);
         const choicesSummaries = summaries.filter((a) => a.type === "choices");
 
@@ -118,7 +130,7 @@ export default function ChoicesAssessmentPage({
     return () => {
       cancelled = true;
     };
-  }, [courseId, moduleId, llmHref, router]);
+  }, [courseId, moduleId, llmHref, router, isRetake]);
 
   const questions = session?.choice_questions ?? [];
   const q: SessionChoiceQuestion | undefined = questions[qIndex];

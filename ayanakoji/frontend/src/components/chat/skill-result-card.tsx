@@ -6,10 +6,14 @@
  * pace step. Re-rendered from the persisted skill_result meta on reload.
  */
 
+import { format } from "date-fns";
 import { motion, useReducedMotion } from "framer-motion";
+import { CalendarDays } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { SkillResult } from "@/lib/api";
 
 export function SkillResultCard({
@@ -24,7 +28,8 @@ export function SkillResultCard({
   onContinue: (deadline: string | null) => void;
 }) {
   const reduce = useReducedMotion();
-  const [deadline, setDeadline] = useState<string>("");
+  const [deadline, setDeadline] = useState<Date | undefined>(undefined);
+  const disabled = done || busy;
 
   return (
     <motion.div
@@ -63,22 +68,37 @@ export function SkillResultCard({
       )}
 
       <div className="space-y-1.5">
-        <label className="text-foreground/90 text-[11px] font-medium">
+        <span className="text-foreground/90 text-[11px] font-medium">
           Target deadline (optional)
-        </label>
-        <input
-          type="date"
-          value={deadline}
-          disabled={done || busy}
-          onChange={(e) => setDeadline(e.target.value)}
-          className="border-border/60 bg-background w-full rounded-lg border px-2.5 py-1.5 text-xs"
-        />
+        </span>
+        <Popover>
+          <PopoverTrigger
+            disabled={disabled}
+            className="border-border/60 bg-background hover:bg-accent/50 flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <CalendarDays className="text-muted-foreground size-3.5 shrink-0" />
+            {deadline ? (
+              <span>{format(deadline, "PPP")}</span>
+            ) : (
+              <span className="text-muted-foreground">Pick a date</span>
+            )}
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-auto p-0">
+            <Calendar
+              mode="single"
+              selected={deadline}
+              onSelect={setDeadline}
+              disabled={{ before: new Date() }}
+              autoFocus
+            />
+          </PopoverContent>
+        </Popover>
       </div>
 
       <Button
         size="sm"
-        disabled={done || busy}
-        onClick={() => onContinue(deadline || null)}
+        disabled={disabled}
+        onClick={() => onContinue(deadline ? format(deadline, "yyyy-MM-dd") : null)}
         className="text-xs"
       >
         {done ? "Continuing…" : "Continue to pace"}

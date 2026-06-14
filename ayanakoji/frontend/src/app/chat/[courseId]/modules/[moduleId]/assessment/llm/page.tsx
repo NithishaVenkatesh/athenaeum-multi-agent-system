@@ -14,7 +14,7 @@
 import { ArrowLeft, CheckCircle2, Loader2, Send, XCircle } from "lucide-react";
 import Link from "next/link";
 import { use, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -43,6 +43,7 @@ export default function LlmAssessmentPage({
 }) {
   const { courseId, moduleId } = use(params);
   const router = useRouter();
+  const isRetake = useSearchParams().get("retake") === "1";
 
   const [phase, setPhase] = useState<Phase>("loading");
   const [session, setSession] = useState<AssessmentSession | null>(null);
@@ -78,22 +79,25 @@ export default function LlmAssessmentPage({
           return;
         }
 
-        // Already passed LLM → show "already complete" briefly then back.
-        if (llmSummaries.some((a) => a.passed === true)) {
-          if (!cancelled) {
-            setPhase("redirect");
-            router.replace(moduleHref);
-          }
-          return;
-        }
-
-        // Resume in-progress LLM session.
-        const inProgress = llmSummaries.find((a) => a.completed_at === null);
         let s: AssessmentSession;
-        if (inProgress) {
-          s = await getAssessmentSession(courseId, inProgress.id);
+        if (isRetake) {
+          // Retake from the Evaluations tab: force a fresh oral attempt (choices
+          // stay a precondition, checked above), bypassing the passed-redirect.
+          s = await startAssessment(courseId, moduleId, "llm", true);
         } else {
-          s = await startAssessment(courseId, moduleId, "llm");
+          // Already passed LLM → show "already complete" briefly then back.
+          if (llmSummaries.some((a) => a.passed === true)) {
+            if (!cancelled) {
+              setPhase("redirect");
+              router.replace(moduleHref);
+            }
+            return;
+          }
+          // Resume in-progress LLM session, else start a new one.
+          const inProgress = llmSummaries.find((a) => a.completed_at === null);
+          s = inProgress
+            ? await getAssessmentSession(courseId, inProgress.id)
+            : await startAssessment(courseId, moduleId, "llm");
         }
         if (cancelled) return;
         setSession(s);
@@ -119,7 +123,7 @@ export default function LlmAssessmentPage({
     return () => {
       cancelled = true;
     };
-  }, [courseId, moduleId, choicesHref, moduleHref, router]);
+  }, [courseId, moduleId, choicesHref, moduleHref, router, isRetake]);
 
   async function handleSend() {
     if (!session || !input.trim() || sending) return;

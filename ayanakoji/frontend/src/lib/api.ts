@@ -511,6 +511,49 @@ function dispatchEvent(event: PipelineEvent, handlers: StreamHandlers): void {
   }
 }
 
+/**
+ * Stream grounded feedback on the learner's latest quiz/oral attempt for a module.
+ *
+ * This is the "Get Feedback" button's path. Unlike a normal chat message it does
+ * NOT run through the topic gate (a bare "why did I fail" question has none of the
+ * module's vocabulary, so grounding rejects it and the answer is refused). The
+ * backend grounds on the module's own material plus the learner's actual answers
+ * and persists both turns, so the same phase/token/done events apply here.
+ */
+export async function streamFeedback(
+  courseId: string,
+  moduleId: string,
+  kind: AssessmentType,
+  handlers: StreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/courses/${courseId}/modules/${moduleId}/feedback?type=${kind}`,
+    { method: "POST", headers: { Accept: "text/event-stream" }, signal },
+  );
+  if (!response.ok || !response.body) {
+    throw new Error(`Feedback stream failed: ${response.status}`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const events = buffer.split("\n\n");
+    buffer = events.pop() ?? "";
+    for (const event of events) {
+      const line = event.trim();
+      if (!line.startsWith("data:")) continue;
+      const payload = JSON.parse(line.slice(5).trim()) as PipelineEvent;
+      dispatchEvent(payload, handlers);
+    }
+  }
+}
+
 /** Accept a suggested course: link it to this chat and start attempt 1. */
 export function acceptCourse(
   courseId: string,
@@ -628,6 +671,33 @@ export function completeModule(
   );
 }
 
+// ── Evaluations (the canonical per-module set: a quiz + an oral each) ──────────
+
+/** One of a course's evaluations (two per module) with lock + latest-attempt score. */
+export interface Evaluation {
+  module_id: string;
+  module_title: string;
+  sequence: number;
+  type: AssessmentType;
+  locked: boolean;
+  completed: boolean;
+  attempted: boolean;
+  score: number | null;
+  passed: boolean | null;
+  review_assessment_id: string | null;
+  attempts: number;
+}
+
+/** The course's full evaluation set (2 per module), ordered and lock-aware. */
+export function listEvaluations(
+  courseId: string,
+  signal?: AbortSignal,
+): Promise<Evaluation[]> {
+  return requestJson<Evaluation[]>(`/api/courses/${courseId}/evaluations`, {
+    signal,
+  });
+}
+
 // ── Assessment session types ───────────────────────────────────────────────────
 
 export type AssessmentType = "choices" | "llm";
@@ -730,14 +800,21 @@ export interface LlmGraderHandlers {
 
 // ── Assessment session API calls ──────────────────────────────────────────────
 
-/** Start a new choices or LLM assessment session for a module. */
+/**
+ * Start a new choices or LLM assessment session for a module.
+ *
+ * Pass `force` to retake an assessment already passed (the Evaluations tab's
+ * Retake action) — the backend samples a fresh question set and persists it.
+ */
 export function startAssessment(
   courseId: string,
   moduleId: string,
   type: AssessmentType,
+  force = false,
 ): Promise<AssessmentSession> {
+  const query = force ? `?type=${type}&force=true` : `?type=${type}`;
   return requestJson<AssessmentSession>(
-    `/api/courses/${courseId}/modules/${moduleId}/assessments/start?type=${type}`,
+    `/api/courses/${courseId}/modules/${moduleId}/assessments/start${query}`,
     { method: "POST" },
   );
 }
