@@ -245,6 +245,43 @@ def test_post_message_to_missing_course_404(client: TestClient) -> None:
     assert client.post("/api/courses/nope/messages", json={"content": "hi"}).status_code == 404
 
 
+def test_client_disconnect_persists_partial_assistant_turn() -> None:
+    """A mid-stream disconnect still flushes the partial answer, never a dangling
+    user turn with no reply (critique C1)."""
+    import json as _json
+
+    from app.courses.repository import CourseRepository
+    from app.courses.router import _stream_turn
+    from app.db import session_scope
+
+    with session_scope() as setup:
+        repo = CourseRepository(setup)
+        course = repo.create(persona_id="EMP-001", chat_name="hi")
+        course_id = course.id
+        repo.append_message(course, role="user", content="hello there")
+
+    # Drive the raw SSE generator and close it after the first answer token arrives,
+    # simulating the browser going away mid-reply.
+    gen = _stream_turn(course_id, "hello there")
+    saw_token = False
+    for chunk in gen:
+        event = _json.loads(chunk.split("data: ", 1)[1])
+        if event["type"] == "token":
+            saw_token = True
+            break  # disconnect right after the first token
+    gen.close()  # GeneratorExit → the finally must persist what we have
+    assert saw_token, "expected at least one token before disconnect"
+
+    with session_scope() as check:
+        reloaded = CourseRepository(check).get(course_id)
+        assert reloaded is not None
+        roles = [m["role"] for m in reloaded.messages]
+        assert roles == ["user", "assistant"], roles  # not a dangling user turn
+        assistant = reloaded.messages[-1]
+        assert assistant["content"].strip()  # partial answer was saved
+        assert assistant.get("meta", {}).get("interrupted") is True
+
+
 def test_oversized_message_is_rejected_422(client: TestClient) -> None:
     """A message past MAX_MESSAGE_CHARS is rejected at the boundary, never stored (C2)."""
     from app.courses.schemas import MAX_MESSAGE_CHARS

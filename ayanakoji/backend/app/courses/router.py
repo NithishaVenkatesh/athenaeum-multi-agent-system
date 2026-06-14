@@ -294,76 +294,85 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
     # Persist the user's turn before streaming so it survives a client disconnect.
     repo.append_message(course, role="user", content=body.content)
 
-    def event_stream() -> Iterator[str]:
-        # A fresh session: the StreamingResponse body is produced after the request
-        # session's transaction has done its work.
-        with session_scope() as stream_session:
-            stream_repo = CourseRepository(stream_session)
-            current = stream_repo.get(course_id)
-            if current is None:  # pragma: no cover - just persisted above
-                yield _sse({"type": "error", "message": "course not found"})
-                return
+    return StreamingResponse(
+        _stream_turn(course_id, body.content),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
-            taken = _taken_courses(stream_repo, current.persona_id, exclude_id=current.id)
-            registered = _registered_courses(
-                stream_repo, current.persona_id, exclude_id=current.id
-            )
-            reserved = _reserved_intervals(
-                stream_repo, current.persona_id, exclude_id=current.id
-            )
-            # A pace change in the message ("revert to a slower pace") updates the
-            # course pace before planning, so the re-plan honors it.
-            requested_pace = parse_pace(body.content)
-            if requested_pace is not None and current.catalog_id:
-                current.pace = requested_pace.value
-                stream_repo.save(current)
-            pace = Pace(current.pace) if current.pace else None
-            # Apply any natural-language schedule edit ("start after June 30",
-            # "skip Mondays", "remove week 2") and persist it across re-plans.
-            current = _apply_schedule_edit(stream_repo, current, body.content)
-            start_date = (
-                date.fromisoformat(current.plan_start) if current.plan_start else date.today()
-            )
-            exclude_days = frozenset(current.plan_excludes)
-            skip_weeks = frozenset(current.plan_skip_weeks)
-            exam_date = (
-                date.fromisoformat(current.plan_exam_date)
-                if current.plan_exam_date
-                else None
-            )
-            # Recent turns + the pending action (e.g. a pace question) for follow-ups
-            # like a bare "yes". The trailing turn is the current message itself.
-            history, pending = _conversation_context(current)
-            history = history[:-1] if history else []
-            existing_modules = stream_repo.list_modules(current.id)
-            course_state = derive_course_state(
-                catalog_id=current.catalog_id,
-                pace=pace,
-                module_count=len(existing_modules),
-                completed_count=sum(1 for m in existing_modules if m.completed),
-            )
-            answer_parts: list[str] = []
-            final_text = ""  # what gets persisted as the assistant turn
-            plan_modules: list[dict[str, object]] | None = None
-            # Collect the turn's rendered artifacts so they survive a reload.
-            phases: list[dict[str, object]] = []
-            meta_suggestion: dict[str, object] | None = None
-            meta_plan: dict[str, object] | None = None
-            meta_pace: dict[str, object] | None = None
-            meta_new_chat: dict[str, object] | None = None
-            modules_as_dicts: list[dict[str, object]] = [
-                {
-                    "module_id": m.module_id,
-                    "title": m.title,
-                    "sequence": m.sequence,
-                    "complete_before": m.complete_before,
-                    "scheduled": m.scheduled,
-                    "completed": m.completed,
-                }
-                for m in existing_modules
-            ]
+
+def _stream_turn(course_id: str, content: str) -> Iterator[str]:
+    """SSE event generator for one learner turn (module-level so it is unit-testable).
+
+    Runs in its own session because the StreamingResponse body is produced after
+    the request session's work is done. The assistant turn is persisted in a
+    ``finally`` so a mid-stream client disconnect still flushes the partial answer
+    and any artifacts produced so far, instead of leaving a user turn with no
+    assistant reply (critique C1).
+    """
+    with session_scope() as stream_session:
+        stream_repo = CourseRepository(stream_session)
+        current = stream_repo.get(course_id)
+        if current is None:  # pragma: no cover - just persisted above
+            yield _sse({"type": "error", "message": "course not found"})
+            return
+
+        taken = _taken_courses(stream_repo, current.persona_id, exclude_id=current.id)
+        registered = _registered_courses(stream_repo, current.persona_id, exclude_id=current.id)
+        reserved = _reserved_intervals(stream_repo, current.persona_id, exclude_id=current.id)
+        # A pace change in the message ("revert to a slower pace") updates the
+        # course pace before planning, so the re-plan honors it.
+        requested_pace = parse_pace(content)
+        if requested_pace is not None and current.catalog_id:
+            current.pace = requested_pace.value
+            stream_repo.save(current)
+        pace = Pace(current.pace) if current.pace else None
+        # Apply any natural-language schedule edit ("start after June 30",
+        # "skip Mondays", "remove week 2") and persist it across re-plans.
+        current = _apply_schedule_edit(stream_repo, current, content)
+        start_date = (
+            date.fromisoformat(current.plan_start) if current.plan_start else date.today()
+        )
+        exclude_days = frozenset(current.plan_excludes)
+        skip_weeks = frozenset(current.plan_skip_weeks)
+        exam_date = (
+            date.fromisoformat(current.plan_exam_date) if current.plan_exam_date else None
+        )
+        # Recent turns + the pending action (e.g. a pace question) for follow-ups
+        # like a bare "yes". The trailing turn is the current message itself.
+        history, pending = _conversation_context(current)
+        history = history[:-1] if history else []
+        existing_modules = stream_repo.list_modules(current.id)
+        course_state = derive_course_state(
+            catalog_id=current.catalog_id,
+            pace=pace,
+            module_count=len(existing_modules),
+            completed_count=sum(1 for m in existing_modules if m.completed),
+        )
+        answer_parts: list[str] = []
+        final_text = ""  # what gets persisted as the assistant turn
+        plan_modules: list[dict[str, object]] | None = None
+        # Collect the turn's rendered artifacts so they survive a reload.
+        phases: list[dict[str, object]] = []
+        meta_suggestion: dict[str, object] | None = None
+        meta_plan: dict[str, object] | None = None
+        meta_pace: dict[str, object] | None = None
+        meta_new_chat: dict[str, object] | None = None
+        modules_as_dicts: list[dict[str, object]] = [
+            {
+                "module_id": m.module_id,
+                "title": m.title,
+                "sequence": m.sequence,
+                "complete_before": m.complete_before,
+                "scheduled": m.scheduled,
+                "completed": m.completed,
+            }
+            for m in existing_modules
+        ]
+        completed = False
+        try:
             for event in run_pipeline(
-                body.content,
+                content,
                 persona_id=current.persona_id,
                 catalog_id=current.catalog_id,
                 taken=taken,
@@ -388,7 +397,10 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
                 elif event.type == "phase":
                     phases.append(payload["phase"])
                 elif event.type == "suggestion":
-                    meta_suggestion = {"prompt": payload["prompt"], "options": payload["options"]}
+                    meta_suggestion = {
+                        "prompt": payload["prompt"],
+                        "options": payload["options"],
+                    }
                 elif event.type == "pace_request":
                     meta_pace = payload
                 elif event.type == "new_chat":
@@ -399,7 +411,9 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
                     final_text = event.reason
                 elif event.type == "error":
                     final_text = event.message
-
+            completed = True
+        finally:
+            # No `yield` may run here — the generator may be mid-teardown.
             if plan_modules is not None:
                 stream_repo.replace_modules(current.id, plan_modules)
             answer = "".join(answer_parts).strip() or final_text
@@ -411,13 +425,9 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
                     "pace_request": meta_pace,
                     "new_chat": meta_new_chat,
                 }
+                if not completed:
+                    meta["interrupted"] = True
                 stream_repo.append_message(current, role="assistant", content=answer, meta=meta)
-
-    return StreamingResponse(
-        event_stream(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
 
 
 @router.post("/{course_id}/pace", response_model=CourseRead, summary="Set the study pace")
