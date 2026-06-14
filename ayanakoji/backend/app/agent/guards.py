@@ -15,6 +15,7 @@ that leaked in ungrounded, so a regression is caught rather than shipped.
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Iterable, Iterator
 
 from app.agent.contracts import GroundingSource, StudyPlan
@@ -31,6 +32,62 @@ _CITATION = re.compile(r"\[([a-z]{2,}-[a-z0-9-]+)\]", re.IGNORECASE)
 # (cb-c01-m001, cb-c01-m100) must still be recognized and scrubbed (red-team A2 gap).
 _BARE_ID = re.compile(r"\b([a-z]{2}-c\d+-m\d+)\b", re.IGNORECASE)
 _WRAPPED_ID = re.compile(r"[\[(]?\b(?P<id>[a-z]{2}-c\d+-m\d+)\b[\])]?", re.IGNORECASE)
+
+# ── Obfuscation-robust id recognition (normalize → membership, NOT more regex) ───
+# The earlier guards equated *recognition* with the ASCII byte-shape, so an id-shaped
+# token was invisible to the guard the moment it was obfuscated — a Cyrillic prefix
+# (``сb-c99-m99``), superscript digits (``cb-c⁹⁹-m⁹⁹``), or spaces around the hyphens
+# (``cb - c99 - m99``) all sailed through unstripped because the regex never tokenized
+# them as ids at all. The homoglyph/script space is infinite, so the fix is algorithmic:
+#
+#   1. ONE deliberately permissive *shape* scanner finds candidate id tokens — any two
+#      leading letters (incl. homoglyphs), the ``c``/``m`` segment markers, digit-ish
+#      glyphs (incl. superscripts/fullwidth), and optional whitespace around the hyphens;
+#   2. each candidate's visible text is NORMALIZED (NFKC folds superscript/fullwidth
+#      digits → ascii; a minimal confusables fold maps look-alike letters → ascii; intra-
+#      token whitespace is collapsed), THEN the *normalized* form is checked against the
+#      allowed source ids (set membership). A normalized id in the allowed set is KEPT;
+#      one that is not is STRIPPED — and the ORIGINAL (obfuscated) span is what we remove.
+#
+# This keeps recognition decoupled from the exact glyphs while preserving the existing
+# semantics: real source ids pass verbatim, non-citation brackets like ``[1]`` are
+# untouched (they never match the c/m id shape), and phantom ids are scrubbed in ascii,
+# homoglyph, superscript, OR spaced form. We do NOT import gate_heuristic (avoid coupling).
+
+# Minimal Cyrillic/Greek look-alike fold — only the glyphs that can appear inside a
+# module-id token (the letters of "cb-cNN-mNN" plus common vertical prefixes). Mirrors
+# the idea of gate_heuristic._CONFUSABLES without importing it.
+_ID_CONFUSABLES = {
+    "а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "у": "y", "х": "x", "ѕ": "s",
+    "і": "i", "ј": "j", "к": "k", "м": "m", "н": "h", "т": "t", "в": "b", "ԁ": "d",
+    "ɡ": "g", "ν": "v", "α": "a", "ε": "e", "ο": "o", "ρ": "p", "ⅿ": "m", "ｃ": "c",
+}  # fmt: skip
+# Permissive id-shape scanner. ``[^\W\d_]`` is "any unicode letter" (so a homoglyph
+# prefix matches); ``c``/``m`` markers are matched after folding by re-deriving them
+# from the candidate; ``[^\s\-]`` for the segment bodies admits superscript/fullwidth
+# digits (which are not ``\d``); optional ``\s*`` straddles the hyphens for spaced ids.
+_ID_SHAPE = re.compile(
+    r"[^\W\d_]{2}\s*-\s*[^\W\d_]\s*[^\s\-\]\)]{1,4}\s*-\s*[^\W\d_]\s*[^\s\-\]\)]{1,4}",
+    re.UNICODE,
+)
+
+
+def _fold_id(token: str) -> str:
+    """Normalize an obfuscated id-shaped token to its canonical ascii compact form.
+
+    NFKC folds superscript/fullwidth digits and many compatibility glyphs to ascii;
+    the confusables map folds look-alike letters; whitespace is dropped so a spaced id
+    collapses to ``cb-c99-m99``. The result is what we check for set-membership.
+    """
+    folded = unicodedata.normalize("NFKC", token)
+    folded = "".join(_ID_CONFUSABLES.get(c, c) for c in folded)
+    folded = re.sub(r"\s+", "", folded)
+    return folded.lower()
+
+
+def _looks_like_id(folded: str) -> bool:
+    """True iff a *folded* token has the canonical module-id shape (xx-cNN-mNN)."""
+    return bool(_BARE_ID.fullmatch(folded))
 
 
 def numbers_in(text: str) -> set[str]:
@@ -165,9 +222,16 @@ def cited_refs(text: str) -> list[str]:
 
     Bracketed slugs are matched broadly (legacy behavior); strict module ids are also
     matched unbracketed so a phantom id in prose ("as covered in cb-c99-m99") is seen.
+    Obfuscated id-shaped tokens (homoglyph prefix, superscript digits, spaced hyphens)
+    are recognized too — each candidate is normalized (NFKC + confusables + whitespace
+    fold) and reported in its canonical compact form so the oracle sees a real id.
     """
     refs = [m.group(1).lower() for m in _CITATION.finditer(text)]
     refs += [m.group(1).lower() for m in _BARE_ID.finditer(text)]
+    for m in _ID_SHAPE.finditer(text):
+        folded = _fold_id(m.group(0))
+        if _looks_like_id(folded):
+            refs.append(folded)
     return refs
 
 
@@ -182,7 +246,12 @@ def strip_unknown_citations(text: str, sources: Iterable[GroundingSource]) -> st
 
     The grounded sources are the only legitimate citations; an LLM that fabricates a
     module id gets it scrubbed so the visible answer never cites a phantom, whether it
-    wrote it as ``[cb-c99-m99]``, ``(cb-c99-m99)``, or bare ``cb-c99-m99`` in prose (A2).
+    wrote it as ``[cb-c99-m99]``, ``(cb-c99-m99)``, bare ``cb-c99-m99`` in prose (A2),
+    or *obfuscated* — a homoglyph prefix (``сb-c99-m99``), superscript digits
+    (``cb-c⁹⁹-m⁹⁹``), or spaces around the hyphens (``cb - c99 - m99``). Recognition is
+    decoupled from the byte-shape: an id-shaped token is normalized (NFKC + confusables +
+    whitespace fold) and the *normalized* form checked against the allowed source set; a
+    member is kept verbatim, a non-member has its ORIGINAL (obfuscated) span removed.
     """
     allowed = {s.ref.lower() for s in sources}
 
@@ -192,9 +261,17 @@ def strip_unknown_citations(text: str, sources: Iterable[GroundingSource]) -> st
     def _drop_wrapped(match: re.Match[str]) -> str:
         return match.group(0) if match.group("id").lower() in allowed else ""
 
-    # Bracketed broad slugs first (legacy), then strict bare/parenthesized module ids.
+    def _drop_obfuscated(match: re.Match[str]) -> str:
+        folded = _fold_id(match.group(0))
+        if not _looks_like_id(folded):
+            return match.group(0)  # not actually an id shape once folded — leave alone
+        return match.group(0) if folded in allowed else ""
+
+    # Bracketed broad slugs first (legacy), then strict bare/parenthesized ascii ids,
+    # then the permissive normalize-then-membership pass for obfuscated id-shaped tokens.
     text = _CITATION.sub(_drop_bracketed, text)
-    return _WRAPPED_ID.sub(_drop_wrapped, text)
+    text = _WRAPPED_ID.sub(_drop_wrapped, text)
+    return _ID_SHAPE.sub(_drop_obfuscated, text)
 
 
 # ── Streaming grounding enforcement (M5 live streaming + H5 honesty) ─────────────
@@ -208,15 +285,28 @@ _GROUNDING_DISCLAIMER = (
 )
 
 
+# A *spaced* obfuscated id straddles several whitespace runs ("cb - c99 - m99"), so the
+# stream scrubber cannot decide a run in isolation — it must hold a run back while that
+# run could still be the start/middle of an id shape. This matches a token that is a
+# possible PREFIX of a (possibly spaced, possibly obfuscated) id, so we keep buffering
+# until we know the boundary is safe to flush.
+_ID_PREFIX = re.compile(
+    r"^[^\W\d_]{2}(\s*-\s*(?:[^\W\d_]\s*[^\s\-\]\)]{0,4}(\s*-\s*[^\W\d_]?\s*[^\s\-\]\)]{0,4})?)?)?$",
+    re.UNICODE,
+)
+
+
 def stream_grounded(tokens: Iterable[str], sources: Iterable[GroundingSource]) -> Iterator[str]:
     """Stream a tutor answer live while enforcing grounding (M5 + H5).
 
-    Streams word by word (a word is held only until its trailing whitespace, never the
-    whole answer), and for each word:
+    Streams in small flushes (a run is held only until it is provably not part of an
+    in-progress id, never the whole answer), and:
     - drops any invented module id before it reaches the client, whether the model wrote
-      it bracketed ``[cb-c99-m99]``, parenthesized ``(cb-c99-m99)``, or bare in prose
-      (``cb-c99-m99``) — the citation guard is no longer bound to square brackets (A2),
-      and a real id (or non-citation bracket like ``[1]``) is passed through verbatim; and
+      it bracketed ``[cb-c99-m99]``, parenthesized ``(cb-c99-m99)``, bare in prose
+      (``cb-c99-m99``), or *obfuscated* — homoglyph prefix (``сb-c99-m99``), superscript
+      digits (``cb-c⁹⁹-m⁹⁹``), or spaced hyphens (``cb - c99 - m99``); recognition is
+      normalize-then-membership, not the byte-shape (A2), and a real id (or non-citation
+      bracket like ``[1]``) is passed through verbatim; and
     - if the answer produced real substance yet never cited a single approved source,
       appends one honesty disclaimer at the end (claims, not just ids).
     """
@@ -224,10 +314,12 @@ def stream_grounded(tokens: Iterable[str], sources: Iterable[GroundingSource]) -
     has_sources = bool(allowed)
     cited = False
     content_len = 0
-    buf = ""  # current whitespace-delimited run
+    # ``segment`` accumulates runs+separators that might together form a spaced id; it is
+    # scrubbed and flushed as soon as the trailing run can no longer extend an id shape.
+    segment = ""
 
     def _scrub(run: str) -> str:
-        """Keep allowed citations, drop invented module ids (bracketed/paren/bare)."""
+        """Keep allowed citations, drop invented module ids (ascii/obfuscated)."""
         nonlocal cited, content_len
         if not run:
             return ""
@@ -246,18 +338,40 @@ def stream_grounded(tokens: Iterable[str], sources: Iterable[GroundingSource]) -
                 return match.group(0)
             return ""  # invented bare/parenthesized id, drop it
 
-        cleaned = _WRAPPED_ID.sub(_wrapped, _CITATION.sub(_bracketed, run))
+        def _obfuscated(match: re.Match[str]) -> str:
+            nonlocal cited
+            folded = _fold_id(match.group(0))
+            if not _looks_like_id(folded):
+                return match.group(0)  # not an id once folded — leave verbatim
+            if folded in allowed:
+                cited = True
+                return match.group(0)
+            return ""  # invented id (any glyph/spacing), drop it
+
+        cleaned = _ID_SHAPE.sub(
+            _obfuscated, _WRAPPED_ID.sub(_wrapped, _CITATION.sub(_bracketed, run))
+        )
         content_len += len(cleaned)
         return cleaned
 
+    def _last_run(seg: str) -> str:
+        """The trailing whitespace-delimited run of ``seg`` (may be empty)."""
+        return re.split(r"\s", seg)[-1]
+
     for token in tokens:
         for ch in token:
-            if ch.isspace():
-                yield _scrub(buf) + ch
-                buf = ""
-            else:
-                buf += ch
-    if buf:
-        yield _scrub(buf)
+            segment += ch
+            if not ch.isspace():
+                continue
+            # A separator arrived. If the segment so far still *could* be an id in
+            # progress (its compact tail is a valid id-prefix), keep buffering; else the
+            # segment is settled — scrub and flush it whole.
+            tail = re.sub(r"\s+", "", segment)
+            if tail and _ID_PREFIX.match(tail) and not _looks_like_id(tail.lower()):
+                continue
+            yield _scrub(segment)
+            segment = ""
+    if segment:
+        yield _scrub(segment)
     if has_sources and not cited and content_len >= _MIN_CONTENT_FOR_DISCLAIMER:
         yield _GROUNDING_DISCLAIMER
