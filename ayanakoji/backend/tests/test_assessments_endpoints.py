@@ -62,3 +62,19 @@ def test_get_unknown_assessment_is_404(client: TestClient, seeded: dict[str, str
     resp = client.get("/api/assessments/does-not-exist")
     assert resp.status_code == 404
     assert "not found" in resp.json()["detail"]
+
+
+def test_by_module_returns_both_bank_ids(client: TestClient, seeded: dict[str, str]) -> None:
+    resp = client.get("/api/assessments/by-module/cb-c01-m01")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["module_id"] == "cb-c01-m01"
+    expected = {seeded["cb-c01-m01-choices"], seeded["cb-c01-m01-llm"]}
+    assert set(body["assessment_ids"]) == expected
+    assert len(body["assessment_ids"]) == 2
+
+
+def test_by_module_unknown_module_is_empty(client: TestClient, seeded: dict[str, str]) -> None:
+    resp = client.get("/api/assessments/by-module/cb-c09-m09")
+    assert resp.status_code == 200
+    assert resp.json()["assessment_ids"] == []

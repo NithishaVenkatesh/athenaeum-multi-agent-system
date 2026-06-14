@@ -16,6 +16,7 @@ from app.assessments.engine import get_session
 from app.assessments.models import AssessmentBank
 from app.assessments.repository import AssessmentRepository
 from app.assessments.schemas import (
+    AssessmentIdList,
     AssessmentRead,
     ChoiceQuestionRead,
     LlmQuestionRead,
@@ -60,6 +61,24 @@ def _to_read(repo: AssessmentRepository, bank: AssessmentBank) -> AssessmentRead
         title=bank.title,
         choice_questions=choice_questions,
         llm_questions=llm_questions,
+    )
+
+
+@router.get(
+    "/by-module/{module_id}",
+    response_model=AssessmentIdList,
+    summary="List assessment ids for a module",
+)
+def assessments_by_module(module_id: str, session: SessionDep) -> AssessmentIdList:
+    """Assessment (bank) ids for one module — the two tests: choices + llm.
+
+    Empty list when the module has no authored banks (not a 404 — a module with no
+    assessments is a valid, queryable state).
+    """
+    repo = AssessmentRepository(session)
+    return AssessmentIdList(
+        module_id=module_id,
+        assessment_ids=repo.assessment_ids_for_module(module_id),
     )
 
 
