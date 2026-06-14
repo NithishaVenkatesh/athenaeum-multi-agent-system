@@ -1,0 +1,106 @@
+{
+  "course_id": "as-c03",
+  "module_id": "as-c03-m02",
+  "module_title": "Designing security operations",
+  "choices": [
+    {
+      "id": "as-c03-m02-c01",
+      "module_id": "as-c03-m02",
+      "kind": "mcq",
+      "prompt": "According to the module, which statement best captures the distinction between Microsoft Defender XDR and Microsoft Sentinel?",
+      "choices": [
+        "XDR is the depth layer that natively understands specific estates and ships high-fidelity incidents with built-in response, while Sentinel (SIEM) is the breadth layer that ingests logs from anything and correlates organization-wide.",
+        "Sentinel is the depth layer for identities and endpoints, while XDR is the breadth layer that ingests firewall and on-premises logs.",
+        "XDR and SIEM perform identical correlation, so the choice between them is purely about licensing cost.",
+        "Sentinel natively owns endpoint and email telemetry and acts on it directly, while XDR only stores logs for long-term compliance retention."
+      ],
+      "correct_answers": [
+        "XDR is the depth layer that natively understands specific estates and ships high-fidelity incidents with built-in response, while Sentinel (SIEM) is the breadth layer that ingests logs from anything and correlates organization-wide."
+      ]
+    },
+    {
+      "id": "as-c03-m02-c02",
+      "module_id": "as-c03-m02",
+      "kind": "mcq",
+      "prompt": "The module recommends a specific design pattern for making XDR and SIEM work together rather than overlap. Which pattern is it?",
+      "choices": [
+        "Re-implement each of XDR's native detections as KQL analytics rules in Sentinel so the SIEM is the only place detections live.",
+        "Let XDR own the estates it natively covers and stream its incidents into Sentinel, so Sentinel becomes the single investigation surface correlating XDR's deep signals with everything else.",
+        "Disable Sentinel ingestion for any source XDR covers and rely solely on XDR's pane for all investigations.",
+        "Forward all Sentinel logs into XDR so XDR can perform organization-wide correlation across firewalls and legacy systems."
+      ],
+      "correct_answers": [
+        "Let XDR own the estates it natively covers and stream its incidents into Sentinel, so Sentinel becomes the single investigation surface correlating XDR's deep signals with everything else."
+      ]
+    },
+    {
+      "id": "as-c03-m02-c03",
+      "module_id": "as-c03-m02",
+      "kind": "mcq",
+      "prompt": "In the Meridian Harbour walkthrough, why does the KQL analytics rule join inbox-rule creation events with bulk outbound mail from the same identity, rather than alerting on either signal alone?",
+      "choices": [
+        "Because KQL cannot evaluate a single table without a join, so the join is a syntactic requirement.",
+        "Because joining lets the rule run faster against the Log Analytics workspace than two separate rules would.",
+        "Because correlating two weak signals into one strong signal in the same window is far more suspicious and far less noisy than either single-signal rule, which either misses or screams.",
+        "Because Defender XDR requires both tables to be present before it will isolate a device."
+      ],
+      "correct_answers": [
+        "Because correlating two weak signals into one strong signal in the same window is far more suspicious and far less noisy than either single-signal rule, which either misses or screams."
+      ]
+    },
+    {
+      "id": "as-c03-m02-c04",
+      "module_id": "as-c03-m02",
+      "kind": "msq",
+      "prompt": "Per the module, which statements accurately describe SOAR using Microsoft Sentinel?",
+      "choices": [
+        "Playbooks in Sentinel are built on Azure Logic Apps and are triggered by an automation rule when an incident is created.",
+        "A playbook can execute deterministic, time-critical first-response steps such as disabling the user, revoking sessions, opening a ticket, and posting to the SOC channel.",
+        "SOAR should automate ambiguous decisions that require judgment, removing the need for any human approval step.",
+        "An automation rule binds an analytics rule to a playbook on incident creation."
+      ],
+      "correct_answers": [
+        "Playbooks in Sentinel are built on Azure Logic Apps and are triggered by an automation rule when an incident is created.",
+        "A playbook can execute deterministic, time-critical first-response steps such as disabling the user, revoking sessions, opening a ticket, and posting to the SOC channel.",
+        "An automation rule binds an analytics rule to a playbook on incident creation."
+      ]
+    },
+    {
+      "id": "as-c03-m02-c05",
+      "module_id": "as-c03-m02",
+      "kind": "msq",
+      "prompt": "Which of the following are common pitfalls the module explicitly warns against in security operations design?",
+      "choices": [
+        "Re-implementing XDR's native detections in the SIEM, which wastes effort and creates double alerts.",
+        "Treating MITRE ATT&CK coverage as a checkbox, where a green technique backed by one brittle, untuned rule is mistaken for real coverage.",
+        "Auto-disabling a service account that legitimately sends bulk mail, because automating decisions that need judgment can cause an outage.",
+        "Streaming XDR incidents into Sentinel, which the module identifies as a wasteful anti-pattern to avoid."
+      ],
+      "correct_answers": [
+        "Re-implementing XDR's native detections in the SIEM, which wastes effort and creates double alerts.",
+        "Treating MITRE ATT&CK coverage as a checkbox, where a green technique backed by one brittle, untuned rule is mistaken for real coverage.",
+        "Auto-disabling a service account that legitimately sends bulk mail, because automating decisions that need judgment can cause an outage."
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "as-c03-m02-l01",
+      "module_id": "as-c03-m02",
+      "prompt": "A teammate proposes ingesting endpoint telemetry into Sentinel and writing Sentinel KQL rules to detect malware, instead of using Defender XDR. Explain the architectural objection and what the module recommends doing instead.",
+      "reference_answer": "Defender XDR is the depth layer that natively understands endpoint telemetry; it correlates signals within and across the estates it owns and ships high-fidelity, context-rich incidents with built-in response actions like isolating a device or disabling a user. Re-deriving those detections as KQL rules in the SIEM (Sentinel) duplicates work, loses that native context, and produces redundant double alerts. The module flags this as the 'Re-implementing XDR detections in the SIEM' pitfall. Instead, let XDR own the estates it natively covers and stream its incidents into Sentinel, so Sentinel is the single investigation surface that correlates XDR's deep signals with the breadth of everything else. The principle: use XDR for depth on estates it owns, and the SIEM for breadth across sources XDR does not natively cover."
+    },
+    {
+      "id": "as-c03-m02-l02",
+      "module_id": "as-c03-m02",
+      "prompt": "An impossible-travel detection in Sentinel fires 200 times a day and analysts have started ignoring it. Beyond simply raising the threshold, what design change does the module recommend to reduce noise without losing real detections, and why does it work?",
+      "reference_answer": "The module recommends correlating the impossible-travel signal with a second independent signal—such as access to a sensitive resource or another anomalous action—so that only the combination of signals raises an alert, rather than the single signal alone. This is the same multi-signal correlation principle demonstrated in the walkthrough, where a stealthy inbox-rule creation is joined with a burst of outbound mail from the same identity in the same window. Combining two weak signals into one strong, high-fidelity incident raises fidelity rather than merely suppressing volume. Crucially, it cuts false positives without dropping true detections, because single-signal rules either miss real attacks or scream with noise. Just raising the threshold risks discarding genuine detections, whereas correlation preserves them while making the alert meaningful."
+    },
+    {
+      "id": "as-c03-m02-l03",
+      "module_id": "as-c03-m02",
+      "prompt": "Leadership asks, 'Are we protected against data exfiltration?' Explain how the MITRE ATT&CK framework lets you answer with evidence rather than an opinion, including how it is used as a coverage map.",
+      "reference_answer": "MITRE ATT&CK is a public knowledge base of real adversary tactics (goals such as initial access, persistence, and exfiltration) and techniques (how they achieve those goals). Used as a coverage map, you plot each of your detections against the techniques it catches—for example, tagging the inbox-rule detection to collection via email rules and exfiltration over the mail channel. To answer leadership, you map your detections to the exfiltration tactic's techniques and show which techniques are covered, which are not, and the remediation plan to close the gaps. This converts the yes/no question into a defensible coverage heatmap you can show the board: here is what we detect, here is what we do not yet, and here is the plan. The module also warns against treating coverage as a checkbox—a green technique with one brittle, untuned rule is not real coverage—so detections should be validated against simulated technique behavior, not merely confirmed to exist."
+    }
+  ]
+}
