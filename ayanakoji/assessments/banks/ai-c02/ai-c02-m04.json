@@ -1,0 +1,104 @@
+{
+  "course_id": "ai-c02",
+  "module_id": "ai-c02-m04",
+  "module_title": "Speech and translation solutions",
+  "choices": [
+    {
+      "id": "ai-c02-m04-c01",
+      "module_id": "ai-c02-m04",
+      "prompt": "In the Azure AI Speech mental model described in the module, which object acts as the \"ears\" of a voice assistant, turning audio into text?",
+      "kind": "mcq",
+      "choices": [
+        "SpeechRecognizer",
+        "SpeechSynthesizer",
+        "SpeechConfig",
+        "ResultReason"
+      ],
+      "correct_answers": [
+        "SpeechRecognizer"
+      ]
+    },
+    {
+      "id": "ai-c02-m04-c02",
+      "module_id": "ai-c02-m04",
+      "prompt": "Larkspur's order-status reply must read the tracking number \"88231\" as \"eight eight two three one\" rather than \"eighty-eight thousand two hundred thirty-one.\" Which SSML element forces this digit-by-digit reading?",
+      "kind": "mcq",
+      "choices": [
+        "<say-as interpret-as=\"digits\">",
+        "<break time=\"400ms\"/>",
+        "<prosody rate=\"-10%\">",
+        "<voice name=\"en-US-AriaNeural\">"
+      ],
+      "correct_answers": [
+        "<say-as interpret-as=\"digits\">"
+      ]
+    },
+    {
+      "id": "ai-c02-m04-c03",
+      "module_id": "ai-c02-m04",
+      "prompt": "You must transcribe a backlog of 5,000 recorded support calls overnight for quality analysis, with no human waiting on results. According to the module's guidance, which recognition mode fits and why?",
+      "kind": "mcq",
+      "choices": [
+        "Batch transcription, because it runs asynchronously and trades latency for throughput and cost efficiency on stored audio",
+        "Real-time recognition, because streaming returns partial then final results with low latency",
+        "Real-time recognition, because it is always cheaper than batch for large archives",
+        "Batch transcription, because it streams audio turn by turn for live conversations"
+      ],
+      "correct_answers": [
+        "Batch transcription, because it runs asynchronously and trades latency for throughput and cost efficiency on stored audio"
+      ]
+    },
+    {
+      "id": "ai-c02-m04-c04",
+      "module_id": "ai-c02-m04",
+      "prompt": "In the walkthrough's server-side synthesis code, why is the SpeechSynthesizer created with audio_config=None?",
+      "kind": "mcq",
+      "choices": [
+        "So the audio is returned as bytes in result.audio_data to stream to the phone channel, instead of playing on the host's local speaker",
+        "So the synthesizer reads structured values digit by digit without needing SSML",
+        "So recognition language is automatically matched to the caller's audio",
+        "So the synthesis call runs asynchronously and never blocks for a result"
+      ],
+      "correct_answers": [
+        "So the audio is returned as bytes in result.audio_data to stream to the phone channel, instead of playing on the host's local speaker"
+      ]
+    },
+    {
+      "id": "ai-c02-m04-c05",
+      "module_id": "ai-c02-m04",
+      "prompt": "Which of the following are common pitfalls the module explicitly warns about? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Accepting default text-to-speech for structured values like numbers, dates, currency, and confirmation codes",
+        "Using real-time recognition to stream a bulk archive of recorded calls",
+        "Mismatching the recognizer's configured language with the actual audio",
+        "Provisioning the Speech resource in a region close to your users"
+      ],
+      "correct_answers": [
+        "Accepting default text-to-speech for structured values like numbers, dates, currency, and confirmation codes",
+        "Using real-time recognition to stream a bulk archive of recorded calls",
+        "Mismatching the recognizer's configured language with the actual audio"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "ai-c02-m04-l01",
+      "module_id": "ai-c02-m04",
+      "prompt": "An assistant reads back \"Your refund of $45.20 will arrive on 2026-07-01\" and customers complain the amount and date sound wrong. Explain the root cause and how you would fix it using SSML, naming the specific elements involved.",
+      "reference_answer": "The root cause is that plain text handed to the synthesizer gets a default reading, and defaults frequently mis-read structured values such as currency and dates. The fix is to author SSML instead of passing raw strings, wrapping the structured values in <say-as> with the appropriate interpret-as types — for example a currency or cardinal interpretation for the amount and a date interpretation for the date — so the synthesizer reads them correctly. SSML is an XML format that wraps text in elements controlling voice, rate, pitch, volume, pronunciation, and pauses. The module stresses that anywhere accuracy matters to the listener, you should author SSML rather than accept the default reading, which is the difference between a demo voice and one customers trust with values like a confirmation number."
+    },
+    {
+      "id": "ai-c02-m04-l02",
+      "module_id": "ai-c02-m04",
+      "prompt": "You need to both transcribe 5,000 archived support calls for quality analysis and power a live phone assistant. Explain which recognition mode fits each workload and the single deciding factor the module gives for choosing between them.",
+      "reference_answer": "For the 5,000 archived calls you use batch transcription: you point it at stored audio files and collect results asynchronously, trading latency for throughput and cost efficiency, which suits a backlog processed overnight with no one waiting. For the live phone assistant you use real-time recognition, where audio streams in and partial then final results come back with low latency, turn by turn. The deciding factor is whether a human is waiting on the other end. Picking the wrong mode hurts — real-time APIs for thousands of archived files waste money and hit rate limits, while batch for a live call adds unacceptable delay."
+    },
+    {
+      "id": "ai-c02-m04-l03",
+      "module_id": "ai-c02-m04",
+      "prompt": "A caller speaks Portuguese and your agent speaks English, in real time. Describe how Azure AI Speech components handle the inbound audio and produce spoken English back, and name the overall pattern this creates.",
+      "reference_answer": "The inbound Portuguese audio is handled by a TranslationRecognizer configured with the source language (Portuguese) and target language (English); it fuses recognition and translation into one pipeline and returns English text — that is speech-to-text translation. To produce spoken English back, you synthesize that translated text with a SpeechSynthesizer, which returns audio you can stream to the caller. Combining the TranslationRecognizer with synthesis of the translated text gives you speech-to-speech translation, and the reverse direction handles the agent's reply back to the caller. This builds on the text translation concepts from Analyzing and translating text, now applied to audio in real time."
+    }
+  ]
+}
