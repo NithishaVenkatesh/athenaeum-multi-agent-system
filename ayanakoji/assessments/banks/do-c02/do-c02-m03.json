@@ -1,0 +1,104 @@
+{
+  "course_id": "do-c02",
+  "module_id": "do-c02-m03",
+  "module_title": "Testing strategy and quality gates",
+  "choices": [
+    {
+      "id": "do-c02-m03-c01",
+      "module_id": "do-c02-m03",
+      "prompt": "According to the module's testing pyramid, which test layer belongs at the wide base — fast, isolated, with no network or database — and should run as the first job in the pipeline?",
+      "kind": "mcq",
+      "choices": [
+        "Unit tests, because thousands run in seconds so a broken unit fails in under a minute",
+        "Integration tests, because they verify components actually talk to each other",
+        "Load tests, because they validate behavior under realistic traffic",
+        "End-to-end tests, because they exercise the whole system the way a user would"
+      ],
+      "correct_answers": [
+        "Unit tests, because thousands run in seconds so a broken unit fails in under a minute"
+      ]
+    },
+    {
+      "id": "do-c02-m03-c02",
+      "module_id": "do-c02-m03",
+      "prompt": "A pull request raises project coverage from 72% to 91%, but a reviewer is uneasy. Based on the module, what is the most likely reason coverage can rise while real safety does not?",
+      "kind": "mcq",
+      "choices": [
+        "Coverage measures lines executed, not assertions made, so the new tests may run code without meaningfully verifying it",
+        "Coverage only counts branches, so adding line-based tests inflates the number without testing anything",
+        "Coverage tools cannot measure integration tests, so the figure reflects only unit tests",
+        "Coverage above 90% is always inaccurate because the Cobertura format rounds up"
+      ],
+      "correct_answers": [
+        "Coverage measures lines executed, not assertions made, so the new tests may run code without meaningfully verifying it"
+      ]
+    },
+    {
+      "id": "do-c02-m03-c03",
+      "module_id": "do-c02-m03",
+      "prompt": "In the module's distinction between the two gating mechanisms, which statements are TRUE? Select all that apply.",
+      "kind": "msq",
+      "choices": [
+        "A quality gate is an automatic pass/fail condition inside the pipeline, such as tests green or coverage above threshold",
+        "A release gate sits between stages and guards promotion, for example between deploy-to-staging and deploy-to-production",
+        "Release gates come in two flavors: approvals (a named human or group signs off) and automatic gates (the pipeline polls an external signal)",
+        "A passing test suite (quality gate) is what decides a change should ship right now"
+      ],
+      "correct_answers": [
+        "A quality gate is an automatic pass/fail condition inside the pipeline, such as tests green or coverage above threshold",
+        "A release gate sits between stages and guards promotion, for example between deploy-to-staging and deploy-to-production",
+        "Release gates come in two flavors: approvals (a named human or group signs off) and automatic gates (the pipeline polls an external signal)"
+      ]
+    },
+    {
+      "id": "do-c02-m03-c04",
+      "module_id": "do-c02-m03",
+      "prompt": "In the order-service walkthrough YAML, which task enforces the quality gate by failing the build when line coverage falls below the 80% floor?",
+      "kind": "mcq",
+      "choices": [
+        "BuildQualityChecks@9 with checkCoverage: true, coverageType: 'lines', coverageThreshold: '80'",
+        "PublishCodeCoverageResults@2 with the Cobertura summaryFileLocation",
+        "UseDotNet@2 configured with packageType: sdk, version: '8.x'",
+        "The dotnet test script using --collect:\"XPlat Code Coverage\""
+      ],
+      "correct_answers": [
+        "BuildQualityChecks@9 with checkCoverage: true, coverageType: 'lines', coverageThreshold: '80'"
+      ]
+    },
+    {
+      "id": "do-c02-m03-c05",
+      "module_id": "do-c02-m03",
+      "prompt": "A build has green tests, 85% coverage, and a clean security scan, but the on-call engineer wants to hold it until Monday rather than deploy on a Friday afternoon. Per the module, which mechanism enforces that decision and what is it?",
+      "kind": "mcq",
+      "choices": [
+        "An environment approval acting as a release gate — the build is good, but a human controls when it deploys",
+        "A coverage threshold acting as a quality gate — it blocks the build until conditions are met",
+        "A linting check acting as a quality gate — it refuses to promote until the code is clean",
+        "An integration-test stage acting as a release gate — it verifies dependencies before production"
+      ],
+      "correct_answers": [
+        "An environment approval acting as a release gate — the build is good, but a human controls when it deploys"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "do-c02-m03-l01",
+      "module_id": "do-c02-m03",
+      "prompt": "Explain why the testing pyramid is shaped like a pyramid rather than a rectangle, and what goes wrong when a team inverts it. Reference the layers and the economic reasoning the module gives.",
+      "reference_answer": "The shape is economic: tests trade speed for realism, and the cost of catching a bug rises sharply the later it is caught. A bug caught by a unit test costs seconds, the same bug caught by a load test costs a provisioned environment and a long run, and caught in production it costs an incident — so you push detection down and left. The wide base is fast, isolated unit tests (no network or database) that run thousands in seconds and run first in the pipeline; above them are slower integration tests needing provisioned dependencies; the narrow top is expensive load tests run least often, on a schedule or before a major release. A team that inverts the pyramid — mostly slow end-to-end tests with few unit tests — gets a pipeline that is slow, flaky, and expensive, so developers learn to ignore red runs and stop trusting it."
+    },
+    {
+      "id": "do-c02-m03-l02",
+      "module_id": "do-c02-m03",
+      "prompt": "Compare quality gates and release gates: how do they differ in mechanism and purpose, and why does the module warn against confusing them? Use the order-service example to illustrate.",
+      "reference_answer": "A quality gate is an automatic, pass/fail condition inside the pipeline that a build must satisfy to continue — tests green, coverage above threshold, no high-severity vulnerabilities, linting clean — and it keeps bad builds from advancing. A release gate sits between stages and guards promotion (for example between staging and production); it comes as approvals, where a named human or group signs off for governance/change control, or as automatic gates, where the pipeline polls an external signal like a monitoring system, a change-management ticket, or a security scan and proceeds only when the signal is good. The module warns against confusing them because a passing test suite does not mean a change should ship now, and an approval does not mean the code is correct — quality gates govern correctness, release gates govern timing and authority. In the order-service pipeline the BuildQualityChecks coverage check is the quality gate that would have caught the untested pricing refactor, while the production environment's approval is the release gate where a human decides when the good build goes out."
+    },
+    {
+      "id": "do-c02-m03-l03",
+      "module_id": "do-c02-m03",
+      "prompt": "Walk through how you would treat code coverage in the pipeline so it helps rather than misleads, including the specific pitfall to avoid and the supporting practice the module recommends.",
+      "reference_answer": "Code coverage measures which lines or branches your tests execute, so integrated into the pipeline it answers 'is this code path tested at all?' — excellent for catching a change like the pricing refactor that shipped with zero tests touching the new branch. But coverage measures execution, not assertion: a test can run a line and assert nothing meaningful, so ninety percent coverage with weak assertions catches less than sixty percent with sharp ones. I would treat coverage as a floor and a trend — fail the build if coverage on changed code drops below a threshold (the walkthrough gates at 80% line coverage via BuildQualityChecks) and watch the direction over time — and never make 'raise the number' the goal, since the cheapest way to raise it is assertion-free tests. The supporting practice is to review assertion quality in code review so the metric reflects real verification rather than just executed lines."
+    }
+  ]
+}
