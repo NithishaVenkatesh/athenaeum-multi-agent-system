@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from app.agent.contracts import (
+    CourseProgress,
     CourseSuggestion,
     GroundingSource,
     NewChatEvent,
@@ -29,6 +30,7 @@ from app.agent.contracts import (
     PhaseName,
     PhaseStatus,
     PhaseTelemetry,
+    ProgressSnapshot,
     Route,
     RouteDecision,
     SkillGateRequestEvent,
@@ -637,6 +639,39 @@ def _work_offline(persona: Persona) -> str:
     )
 
 
+def _next_free_slot_reply(persona: Persona, *, settings: Settings) -> AgentReply:
+    """Deterministic 'your next free slot is …' from the learner's own calendar."""
+    from app.agent.clock import today_in_timezone
+    from app.agent.study_plan import next_free_slot
+
+    today = today_in_timezone(persona.timezone)
+    slot = next_free_slot(persona, today)
+    if slot is not None:
+        reply = (
+            f"Your next free slot is {slot.weekday.capitalize()} {slot.date}, "
+            f"{slot.start}-{slot.end}. Want me to schedule some study time then?"
+        )
+        detail = f"Next free slot {slot.weekday} {slot.date} {slot.start}-{slot.end}"
+    else:
+        reply = (
+            "Your working hours look fully booked this week, so I couldn't find an open slot. "
+            "Free up a block and I can plan study time around it."
+        )
+        detail = "No free slot found within working hours"
+    return AgentReply(
+        telemetry=_answer_telemetry(
+            summary="Found your next free slot",
+            reasoning=f"Computed from {persona.codename}'s own calendar: {detail}.",
+            route=Route.WORK_IQ,
+            sources=[],
+            model="offline" if settings.llm_offline else None,
+            tier=None,
+            steps=[TraceStep(label="Calendar scan", passed=slot is not None, detail=detail)],
+        ),
+        tokens=_offline_stream(reply),
+    )
+
+
 def answer_work(
     text: str,
     *,
@@ -673,6 +708,15 @@ def answer_work(
             ),
             tokens=_offline_stream(reply),
         )
+
+    # "When is my next free slot?" → a concrete answer from the learner's own
+    # calendar, deterministic in both modes (the LLM only has aggregate work
+    # signals, not the slot, so we never let it guess one). Work IQ stays isolated
+    # to THIS persona, so a colleague named in the text is simply never fetched.
+    from app.agent.router_agent import wants_next_free_slot
+
+    if wants_next_free_slot(text):
+        return _next_free_slot_reply(persona, settings=settings)
 
     ws = persona.work_signals
     sources = _work_sources(persona)
@@ -1255,6 +1299,18 @@ def _need_course_reply(
     )
 
 
+def _next_sessions_text(next_mod: dict[str, object]) -> str:
+    """' Your next sessions: …' for a module's first few scheduled blocks (or '')."""
+    raw_scheduled = next_mod.get("scheduled")
+    next_sessions = (list(raw_scheduled) if isinstance(raw_scheduled, list) else [])[:3]
+    parts = [
+        f"{s['day'].capitalize()} {s['start']}–{s['end']}"
+        for s in next_sessions
+        if isinstance(s, dict) and s.get("day") and s.get("start") and s.get("end")
+    ]
+    return f" Your next sessions: {', '.join(parts)}." if parts else ""
+
+
 def answer_upcoming(
     modules: list[dict[str, object]],
     *,
@@ -1281,17 +1337,7 @@ def answer_upcoming(
     else:
         title = str(next_mod.get("title", ""))
         deadline = str(next_mod.get("complete_before", ""))
-        raw_scheduled = next_mod.get("scheduled")
-        next_sessions = (list(raw_scheduled) if isinstance(raw_scheduled, list) else [])[:3]
-        sessions_text = ""
-        if next_sessions:
-            parts = [
-                f"{s['day'].capitalize()} {s['start']}–{s['end']}"
-                for s in next_sessions
-                if isinstance(s, dict) and s.get("day") and s.get("start") and s.get("end")
-            ]
-            if parts:
-                sessions_text = f" Your next sessions: {', '.join(parts)}."
+        sessions_text = _next_sessions_text(next_mod)
         reply = (
             f'Your next module is "{title}", due by {deadline}.{sessions_text} '
             "Open the Modules tab to start, or ask me anything about it."
@@ -1307,6 +1353,159 @@ def answer_upcoming(
             sources=[],
             model="offline" if settings.llm_offline else None,
             tier=None,
+        ),
+        tokens=_offline_stream(reply),
+    )
+
+
+def _status_of(course: CourseProgress) -> str:
+    """A short completion phrase for one enrolled course."""
+    done = course.modules_total > 0 and course.modules_completed >= course.modules_total
+    if course.passed or done:
+        return "complete"
+    if course.modules_total == 0:
+        return "not started"
+    return f"{course.modules_completed} of {course.modules_total} modules"
+
+
+def _enrolled_list(courses: list[CourseProgress]) -> str:
+    """'You're enrolled in N courses: A (complete), B (1 of 3 modules), …'."""
+    if not courses:
+        return ""
+    items = ", ".join(f"{c.title} ({_status_of(c)})" for c in courses)
+    word = "course" if len(courses) == 1 else "courses"
+    return f"You're enrolled in {len(courses)} {word}: {items}."
+
+
+def _other_courses_upcoming(courses: list[CourseProgress]) -> str:
+    """'In your other courses, coming up: \"X\" in B by date; …' (excludes current)."""
+    pending = [
+        c
+        for c in courses
+        if not c.is_current
+        and c.next_module_title
+        and not (c.passed or (c.modules_total and c.modules_completed >= c.modules_total))
+    ]
+    if not pending:
+        return ""
+    bits = []
+    for c in pending:
+        due = f" by {c.next_module_due}" if c.next_module_due else ""
+        bits.append(f'"{c.next_module_title}" in {c.title}{due}')
+    return "In your other courses, coming up: " + "; ".join(bits) + "."
+
+
+def _progress_narration(snapshot: ProgressSnapshot, modules: list[dict[str, object]]) -> str:
+    """A detailed, deterministic learning overview from the learner's OWN data.
+
+    Combines cross-course completion counts, the list of enrolled courses, this
+    chat's module-by-module progress with what to start next, and what is coming up
+    across the learner's OTHER courses. Every figure is the learner's own, so this
+    never invents or discloses anyone else's data.
+    """
+    total = len(modules)
+    done = sum(1 for m in modules if m.get("completed"))
+    next_mod = next((m for m in modules if not m.get("completed")), None)
+    title = snapshot.current_title
+    parts: list[str] = []
+
+    # Cross-course standing (course-level), when the learner has any linked courses.
+    if snapshot.courses_total > 0:
+        pending = max(0, snapshot.courses_total - snapshot.courses_completed)
+        course_word = "course" if snapshot.courses_total == 1 else "courses"
+        parts.append(
+            f"Across your {snapshot.courses_total} {course_word}, you've completed "
+            f"{snapshot.courses_completed} and have {pending} still in progress."
+        )
+
+    # The enrolled-courses list (answers 'show me the courses I'm enrolled in').
+    enrolled = _enrolled_list(snapshot.courses)
+    if enrolled:
+        parts.append(enrolled)
+
+    # Current chat's course (module-level).
+    if title and total > 0:
+        if done >= total:
+            parts.append(
+                f"In {title}, all {total} modules are done. Consider taking the certification "
+                "exam or starting a new course."
+            )
+        else:
+            remaining = total - done
+            module_word = "module" if remaining == 1 else "modules"
+            parts.append(
+                f"In {title}, you've completed {done} of {total} modules, with {remaining} "
+                f"{module_word} to go."
+            )
+            if next_mod is not None:
+                nxt = str(next_mod.get("title", ""))
+                deadline = str(next_mod.get("complete_before", ""))
+                parts.append(
+                    f'Start next with "{nxt}", due by {deadline}.'
+                    f"{_next_sessions_text(next_mod)} Open the Modules tab to begin."
+                )
+    elif title and total == 0:
+        parts.append(
+            f"This chat is set up for {title}, but you don't have a study plan yet. Ask me to "
+            "build one and I'll schedule your modules around your calendar."
+        )
+    elif snapshot.courses_total == 0:
+        parts.append(
+            "You haven't started any courses yet. Ask me to recommend one and we'll begin."
+        )
+
+    # What's coming up in the learner's OTHER courses (answers 'upcoming modules
+    # from other courses').
+    others = _other_courses_upcoming(snapshot.courses)
+    if others:
+        parts.append(others)
+
+    if not parts:
+        parts.append("Open any course chat to see its module-by-module progress.")
+
+    return " ".join(parts)
+
+
+def answer_progress(
+    modules: list[dict[str, object]],
+    *,
+    snapshot: ProgressSnapshot | None = None,
+    settings: Settings | None = None,
+) -> AgentReply:
+    """Report the learner's OWN learning status: enrolled courses, completion,
+    what's next in this course, and what's coming up across their other courses.
+
+    Pure deterministic, no LLM. The snapshot only ever holds the current learner's
+    own data (built from their own persona id), so this is isolated by construction:
+    a colleague named in the message can never surface another person's data.
+    """
+    settings = settings or get_settings()
+    snapshot = snapshot or ProgressSnapshot()
+    total = len(modules)
+    done = sum(1 for m in modules if m.get("completed"))
+    reply = _progress_narration(snapshot, modules)
+    steps = [
+        TraceStep(
+            label="Progress lookup",
+            passed=True,
+            detail=(
+                f"Courses {snapshot.courses_completed}/{snapshot.courses_total} complete; "
+                f"this course modules {done}/{total} complete"
+            ),
+        ),
+    ]
+    return AgentReply(
+        telemetry=_answer_telemetry(
+            summary="Reported your learning progress",
+            reasoning=(
+                f"Own progress: {snapshot.courses_completed}/{snapshot.courses_total} courses, "
+                f"{done}/{total} modules in this course."
+            ),
+            route=Route.PROGRESS,
+            sources=[],
+            model="offline" if settings.llm_offline else None,
+            tier=None,
+            steps=steps,
         ),
         tokens=_offline_stream(reply),
     )

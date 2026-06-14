@@ -121,6 +121,46 @@ def test_foundry_flow_emits_suggestion_offline() -> None:
     assert events[-1].suggested is True
 
 
+def test_progress_flow_reports_own_status_offline() -> None:
+    from app.agent.contracts import ProgressSnapshot
+
+    modules = [
+        {
+            "module_id": "cb-c01-m01",
+            "title": "Azure App Service Fundamentals",
+            "sequence": 1,
+            "complete_before": "2026-07-01",
+            "scheduled": [],
+            "completed": True,
+        },
+        {
+            "module_id": "cb-c01-m02",
+            "title": "Containers and Docker",
+            "sequence": 2,
+            "complete_before": "2026-07-15",
+            "scheduled": [],
+            "completed": False,
+        },
+    ]
+    snapshot = ProgressSnapshot(
+        courses_total=2, courses_completed=1, current_title="Azure Cloud Backend"
+    )
+    events = list(
+        run_pipeline(
+            "how many courses have I completed and how many are pending",
+            persona_id="EMP-001",
+            catalog_id="cb-c01",
+            modules=modules,
+            progress=snapshot,
+        )
+    )
+    assert events[-1].route is Route.PROGRESS
+    text = "".join(e.token for e in events if e.type == "token")
+    # Course-level standing AND this course's module-level detail, all the user's own data.
+    assert "2 courses" in text and "completed 1" in text
+    assert "1 of 2 modules" in text
+
+
 def test_work_flow_uses_persona_offline() -> None:
     learner = get_repository().list_personas(learners_only=True)[0]
     events = list(

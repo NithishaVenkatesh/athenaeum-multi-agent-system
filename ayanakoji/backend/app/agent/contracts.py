@@ -36,6 +36,7 @@ class Route(StrEnum):
     STUDY_PLAN = "study_plan"  # "make me a study plan" → workload-aware schedule for the course
     WORK_IQ = "work_iq"  # the learner's own schedule / workload / capacity
     UPCOMING = "upcoming"  # "what's my next module / session" → next scheduled module + deadline
+    PROGRESS = "progress"  # "how much have I completed / how many left" → own completion status
     GENERAL = "general"  # off-topic → helpful answer + steer back to learning
 
 
@@ -127,6 +128,43 @@ class TakenCourse(BaseModel):
     passed: bool = Field(
         default=False,
         description="True once every module's tests are passed (derived from test results)",
+    )
+
+
+class CourseProgress(BaseModel):
+    """One of the learner's enrolled courses, with its completion + next module.
+
+    Used to answer 'show my enrolled courses' and 'upcoming modules across my
+    courses'. All fields are the current learner's own data.
+    """
+
+    catalog_id: str
+    title: str
+    passed: bool = False
+    modules_total: int = Field(default=0, ge=0)
+    modules_completed: int = Field(default=0, ge=0)
+    next_module_title: str | None = None
+    next_module_due: str | None = None
+    is_current: bool = Field(default=False, description="The course this chat is locked to")
+
+
+class ProgressSnapshot(BaseModel):
+    """The learner's OWN completion status, precomputed at the call site (deterministic).
+
+    Cross-course counts come from the persona's linked chats; the current chat's
+    per-module detail is derived separately from the plan modules. Every field is
+    the current learner's own data, so the progress answer never touches the
+    cross-user safety path that work_iq carries.
+    """
+
+    courses_total: int = Field(default=0, ge=0, description="Distinct linked courses")
+    courses_completed: int = Field(default=0, ge=0, description="Of those, fully passed")
+    current_title: str | None = Field(
+        default=None, description="Title of the course this chat is locked to, if any"
+    )
+    courses: list[CourseProgress] = Field(
+        default_factory=list,
+        description="Per-course enrollment + next module (for listing / cross-course upcoming)",
     )
 
 

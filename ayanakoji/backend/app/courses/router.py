@@ -22,16 +22,18 @@ from sqlmodel import Session
 from app.agent.answer import answer_feedback
 from app.agent.clock import today_in_timezone
 from app.agent.contracts import (
+    CourseProgress,
     DoneEvent,
     Pace,
     PhaseEvent,
     PlanEvent,
+    ProgressSnapshot,
     ScheduledBlock,
     TakenCourse,
     TokenEvent,
 )
 from app.agent.orchestrator import run_pipeline
-from app.agent.router_agent import is_acceptance, is_refusal
+from app.agent.router_agent import is_acceptance, is_progress_intent, is_refusal
 from app.agent.schedule_edit import parse_adjustment, parse_pace
 from app.agent.state import derive_course_state
 from app.agent.study_plan import occupied_intervals
@@ -437,6 +439,79 @@ def _taken_courses(
     return [TakenCourse(catalog_id=cid, passed=passed) for cid, passed in best.items()]
 
 
+def _course_progress_list(
+    repo: CourseRepository, persona_id: str, current: Course
+) -> list[CourseProgress]:
+    """Per-course enrollment + next module across the persona's chats (deduped by catalog).
+
+    Most-recent chat wins per catalog course. The next module is the first not-yet-
+    completed module in sequence (completion derived from tests). All the learner's own.
+    """
+    out: list[CourseProgress] = []
+    seen: set[str] = set()
+    for course in repo.list_for_persona(persona_id):  # most-recently-updated first
+        if not course.catalog_id or course.catalog_id in seen:
+            continue
+        seen.add(course.catalog_id)
+        node = get_catalog_course(course.catalog_id)
+        modules = repo.list_modules(course.id)
+        done = repo.completed_module_ids(course.id)
+        nxt = next(
+            (m for m in sorted(modules, key=lambda m: m.sequence) if m.module_id not in done),
+            None,
+        )
+        out.append(
+            CourseProgress(
+                catalog_id=course.catalog_id,
+                title=node.title if node else course.catalog_id,
+                passed=bool(modules) and len(done) >= len(modules),
+                modules_total=len(modules),
+                modules_completed=len(done),
+                next_module_title=nxt.title if nxt else None,
+                next_module_due=nxt.complete_before if nxt else None,
+                is_current=course.id == current.id,
+            )
+        )
+    return out
+
+
+def _progress_snapshot(
+    taken: list[TakenCourse],
+    current: Course,
+    *,
+    module_count: int,
+    completed_count: int,
+    repo: CourseRepository | None = None,
+    detailed: bool = False,
+) -> ProgressSnapshot:
+    """The learner's own completion status, from data already gathered this turn.
+
+    Cheap path (every turn): ``taken`` already dedupes the persona's OTHER courses by
+    catalog; fold in THIS chat's course so a 'how many courses' count includes it once.
+    Detailed path (only when the turn is a progress/enrollment question): also build the
+    per-course list with next modules. All the learner's own data.
+    """
+    node = get_catalog_course(current.catalog_id) if current.catalog_id else None
+    current_title = node.title if node else None
+    if detailed and repo is not None:
+        courses = _course_progress_list(repo, current.persona_id, current)
+        return ProgressSnapshot(
+            courses_total=len(courses),
+            courses_completed=sum(1 for c in courses if c.passed),
+            current_title=current_title,
+            courses=courses,
+        )
+    best: dict[str, bool] = {t.catalog_id: t.passed for t in taken}
+    if current.catalog_id:
+        current_passed = module_count > 0 and completed_count >= module_count
+        best[current.catalog_id] = best.get(current.catalog_id, False) or current_passed
+    return ProgressSnapshot(
+        courses_total=len(best),
+        courses_completed=sum(1 for passed in best.values() if passed),
+        current_title=current_title,
+    )
+
+
 def _registered_courses(
     repo: CourseRepository, persona_id: str, *, exclude_id: str
 ) -> dict[str, tuple[str, str]]:
@@ -607,6 +682,17 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
             }
             for m in existing_modules
         ]
+        # The learner's own completion status, for a "how much have I done?" turn.
+        # Build the richer per-course list only when the turn actually asks about
+        # progress / enrollment (keeps unrelated turns from paying the extra reads).
+        progress = _progress_snapshot(
+            taken,
+            current,
+            module_count=len(existing_modules),
+            completed_count=len(completed_ids),
+            repo=stream_repo,
+            detailed=is_progress_intent(content),
+        )
         completed = False
         try:
             for event in run_pipeline(
@@ -625,6 +711,7 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
                 exam_date=exam_date,
                 plan_constraints=current.plan_constraints or None,
                 modules=modules_as_dicts,
+                progress=progress,
                 course_state=course_state,
                 history=history or None,
                 pending=pending,

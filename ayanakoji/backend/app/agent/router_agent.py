@@ -125,9 +125,21 @@ _GREETING_INTENT_RE = re.compile(
 _WORK_STRONG_RE = re.compile(
     r"\bmy\s+(schedule|calendar|week|day|meetings?|workload|capacity|hours|availability)"
     r"|\b(on[\s-]?call|too\s+busy|overloaded|swamped|collaboration\s+load)\b"
-    r"|\bfree\s+time\b|\bfocus\s+time\b|\bmeeting\s+load\b",
+    r"|\bfree\s+(time|slot|window|hours?)\b|\bfocus\s+time\b|\bmeeting\s+load\b"
+    r"|\bnext\s+free\b|\bspare\s+time\b|\bwhen\s+(?:am\s+i|i'?m)\s+(?:next\s+)?free\b",
     re.IGNORECASE,
 )
+# "When is my next free slot/window" → a concrete next-free-slot answer from the calendar.
+_FREE_SLOT_RE = re.compile(
+    r"\bnext\s+free\b|\bfree\s+(slot|window)\b|\bwhen\s+(?:am\s+i|i'?m)\s+(?:next\s+)?free\b"
+    r"|\bwhen\s+(?:is|'?s)\s+my\s+next\s+free\b",
+    re.IGNORECASE,
+)
+
+
+def wants_next_free_slot(text: str) -> bool:
+    """True if the learner is asking when their next free slot/window is."""
+    return bool(_FREE_SLOT_RE.search(text))
 # Weaker timing signals → Work IQ only if the turn isn't really about course content.
 _WORK_TIMING_RE = re.compile(
     r"when\s+should\s+i\s+study|how\s+much\s+time|fit\s+(this|it|study)\s+(in|around)"
@@ -154,6 +166,46 @@ _UPCOMING_RE = re.compile(
     r"|upcoming\s+(?:module|session|study|class|deadline)s?)\b",
     re.IGNORECASE,
 )
+# "How much have I completed / how many courses left / my progress" → Progress route.
+# Requires a completion/progress word so catalog-breadth asks ("how many courses are
+# there") and timing asks ("how much time") never match. This is the learner asking
+# about their OWN completion status — answered directly, never via the work_iq gate.
+_COMPLETION = r"(complete|completed|completing|done|finish|finished|passed|left|remaining|pending)"
+_PROGRESS_RE = re.compile(
+    r"\bmy\s+progress\b"
+    r"|\bprogress\s+(so\s+far|report|summary|update|check|overview)\b"
+    r"|how\s+(am\s+i\s+doing|far\s+along|far\s+am\s+i)\b"
+    rf"|how\s+(many|much)\b[^?.!]{{0,40}}\b{_COMPLETION}\b"
+    rf"|what\s+have\s+i\s+{_COMPLETION}\b"
+    rf"|\b(courses?|modules?)\s+(?:have\s+i\s+|i'?ve\s+|i\s+have\s+)?{_COMPLETION}\b"
+    r"|\bam\s+i\s+(done|finished)\b"
+    r"|how\s+(close|near)\s+am\s+i\s+to\s+(finishing|completing|done)\b",
+    re.IGNORECASE,
+)
+# "Show / list the courses I'm enrolled in" → Progress (a learning overview), NOT
+# recommend (which pitches NEW courses). Requires a self/enrolled marker so a catalog
+# browse ("show me courses") is untouched.
+_ENROLLED_RE = re.compile(
+    r"\bmy\s+(enrolled\s+|current\s+)?courses\b"
+    r"|\bcourses?\s+i\s+(?:have\s+|'ve\s+)?(?:enrolled|enroled|taken|started|signed\s+up"
+    r"|am\s+(?:taking|doing|enrolled\s+in))\b"
+    r"|\benrolled\s+(?:courses|in|for)\b"
+    r"|\bam\s+i\s+enrolled\b"
+    r"|\bwhat\s+courses?\s+(?:am|have|do)\s+i\b"
+    r"|\b(?:show|list|see|view)\s+(?:me\s+)?(?:all\s+)?my\s+courses\b",
+    re.IGNORECASE,
+)
+# Cross-course scope words; with module/next/upcoming context these mean "what's
+# coming up across my courses" → Progress overview, not the single-course Upcoming.
+_CROSS_COURSE_RE = re.compile(
+    r"\b(other|all|across|each|every|both)\b[^?.!]{0,20}\bcourses?\b"
+    r"|\bcourses?\b[^?.!]{0,20}\b(other|all|each|every)\b"
+    r"|\bmy\s+other\s+courses?\b",
+    re.IGNORECASE,
+)
+_MODULE_CTX_RE = re.compile(
+    r"\b(module|modules|upcoming|next|progress|left|remaining|due|deadlines?)\b", re.IGNORECASE
+)
 
 # The GENERAL→content correction (in _parse_decision) only second-guesses the model
 # when it is *uncertain* it's off-platform. Below TRUST: the model is barely leaning
@@ -179,12 +231,14 @@ _ROUTE_SYSTEM = (
     "or verticals exist, or help choosing (in ANY of the five tracks).\n"
     "- upcoming: asks what the NEXT module or session to study is, where they are in their "
     "plan, what is coming up, or what they should do next in their current course.\n"
+    "- progress: asks how much THEY have completed, how many courses or modules are done, "
+    "remaining, or pending, or for their own progress / how far along they are.\n"
     "- study_plan: asks to build/make a study plan or schedule, or how/when to study.\n"
     "- foundry_iq: asks about the CONTENT of a specific course/cert/Azure topic.\n"
     "- work_iq: asks about THEIR OWN schedule, workload, meetings, capacity, or study timing.\n"
     "- general: only genuinely off-platform topics.\n"
     'Reply ONLY with JSON: {"route":'
-    '"greeting|recommend|upcoming|study_plan|foundry_iq|work_iq|general",'
+    '"greeting|recommend|upcoming|progress|study_plan|foundry_iq|work_iq|general",'
     '"reasoning":"<short>","off_topic":0..1,"confidence":0..1}.'
 )
 
@@ -207,6 +261,30 @@ def _study_plan_decision() -> RouteDecision:
     return RouteDecision(
         route=Route.STUDY_PLAN,
         reasoning="Study-plan request (build, schedule edit, or pace change) for the course.",
+        off_topic=0.0,
+        confidence=0.85,
+    )
+
+
+def is_progress_intent(text: str) -> bool:
+    """True for a question about the learner's OWN learning status: how much is
+    completed/remaining, which courses they're enrolled in, or what's coming up
+    across their courses.
+
+    High-signal and deterministic so it wins over the LLM, which tends to misfile
+    completion asks as work_iq (data-less deflection) and enrollment/cross-course
+    asks as recommend/upcoming (wrong answer).
+    """
+    if _PROGRESS_RE.search(text) or _ENROLLED_RE.search(text):
+        return True
+    # "upcoming / next modules across my OTHER courses" — cross-course overview.
+    return bool(_CROSS_COURSE_RE.search(text) and _MODULE_CTX_RE.search(text))
+
+
+def _progress_decision() -> RouteDecision:
+    return RouteDecision(
+        route=Route.PROGRESS,
+        reasoning="Asks about their own progress / how much is completed or remaining.",
         off_topic=0.0,
         confidence=0.85,
     )
@@ -245,6 +323,8 @@ def classify(
         )
     if is_plan_intent(text):
         return _study_plan_decision()
+    if is_progress_intent(text):
+        return _progress_decision()
     if _UPCOMING_RE.search(text):
         return RouteDecision(
             route=Route.UPCOMING,
@@ -388,6 +468,8 @@ def _parse_decision(
         return classify(text, grounding=grounding, pending=pending)
     if is_plan_intent(text):
         return _study_plan_decision()
+    if is_progress_intent(text):
+        return _progress_decision()
 
     try:
         data = json.loads(raw)

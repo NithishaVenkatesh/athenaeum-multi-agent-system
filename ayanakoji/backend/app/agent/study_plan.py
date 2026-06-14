@@ -271,6 +271,44 @@ def weekly_study_slots(
     return sorted(slots, key=lambda s: (_WEEKDAY_INDEX.get(s.day, 9), s.start))
 
 
+@dataclass(frozen=True)
+class FreeSlot:
+    """The learner's next concrete free opening, resolved to a real calendar date."""
+
+    date: str  # ISO date
+    weekday: str  # 'tue'
+    start: str  # HH:MM
+    end: str  # HH:MM
+    source: str
+
+
+def next_free_slot(persona: Persona, today: date) -> FreeSlot | None:
+    """The soonest available study opening on/after ``today`` (or None if none).
+
+    Uses the same calendar-grounded slots the planner does (free gaps within
+    working hours plus dedicated study blocks), resolves each recurring weekday to
+    its next real date on/after today, and returns the earliest. Their own data only.
+    """
+    slots = weekly_study_slots(persona)
+    best: tuple[tuple[date, int], WeeklySlot, date] | None = None
+    for slot in slots:
+        offset = (_WEEKDAY_INDEX.get(slot.day, 0) - today.weekday()) % 7
+        on = today + timedelta(days=offset)
+        key = (on, slot.start)
+        if best is None or key < best[0]:
+            best = (key, slot, on)
+    if best is None:
+        return None
+    _, slot, on = best
+    return FreeSlot(
+        date=on.isoformat(),
+        weekday=slot.day,
+        start=_to_hhmm(slot.start),
+        end=_to_hhmm(slot.end),
+        source=slot.source,
+    )
+
+
 # ── 3. Schedule modules sequentially into the repeating weekly slots ───────────
 
 

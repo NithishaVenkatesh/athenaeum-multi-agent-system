@@ -13,16 +13,19 @@ from app.agent.answer import (
     answer_foundry,
     answer_general,
     answer_greeting,
+    answer_progress,
     answer_recommend,
     answer_study_plan,
     answer_upcoming,
     answer_work,
 )
-from app.agent.contracts import PhaseName, PhaseStatus, Route
+from app.agent.contracts import CourseProgress, PhaseName, PhaseStatus, ProgressSnapshot, Route
 from app.agent.gate import screen
 from app.agent.llm import LLMResult, Provider, StreamHandle
-from app.agent.router_agent import classify, route
+from app.agent.router_agent import classify, is_progress_intent, route, wants_next_free_slot
+from app.agent.study_plan import next_free_slot
 from app.config import Settings
+from app.workiq.repository import get_repository
 
 
 class FakeRouter:
@@ -597,3 +600,249 @@ def test_classify_upcoming_for_upcoming_session() -> None:
 def test_classify_upcoming_for_where_am_i_in_plan() -> None:
     decision = classify("where am I in my plan")
     assert decision.route == Route.UPCOMING
+
+
+# ── answer_progress ─────────────────────────────────────────────────────────────
+
+
+_SNAP_IN_PROGRESS = ProgressSnapshot(
+    courses_total=3, courses_completed=1, current_title="Azure Cloud Backend"
+)
+
+
+def test_answer_progress_reports_course_and_module_counts() -> None:
+    reply = answer_progress(_MODULES_WITH_NEXT, snapshot=_SNAP_IN_PROGRESS)
+    text = "".join(reply.tokens)
+    # Cross-course standing.
+    assert "3 courses" in text and "completed 1" in text
+    # Current-course module standing (0 of 2 done in this fixture).
+    assert "0 of 2 modules" in text
+
+
+def test_answer_progress_includes_what_to_start_next() -> None:
+    reply = answer_progress(_MODULES_WITH_NEXT, snapshot=_SNAP_IN_PROGRESS)
+    text = "".join(reply.tokens)
+    assert "Azure App Service Fundamentals" in text  # the next module
+    assert "2026-07-01" in text  # its deadline
+    assert "Tue" in text  # a scheduled session
+
+
+def test_answer_progress_all_done_encourages_exam() -> None:
+    snap = ProgressSnapshot(
+        courses_total=1, courses_completed=1, current_title="Azure Cloud Backend"
+    )
+    reply = answer_progress(_MODULES_ALL_DONE, snapshot=snap)
+    text = "".join(reply.tokens).lower()
+    assert "all" in text and ("exam" in text or "new course" in text)
+
+
+def test_answer_progress_no_plan_yet_offers_to_build() -> None:
+    snap = ProgressSnapshot(courses_total=1, courses_completed=0, current_title="Azure DevOps")
+    reply = answer_progress([], snapshot=snap)
+    text = "".join(reply.tokens).lower()
+    assert "don't have a study plan" in text or "build one" in text
+
+
+def test_answer_progress_no_courses_invites_recommendation() -> None:
+    reply = answer_progress([], snapshot=ProgressSnapshot())
+    text = "".join(reply.tokens).lower()
+    assert "haven't started any courses" in text
+
+
+def test_answer_progress_route_is_progress() -> None:
+    reply = answer_progress(_MODULES_WITH_NEXT, snapshot=_SNAP_IN_PROGRESS)
+    assert reply.telemetry.route == Route.PROGRESS
+
+
+def test_answer_progress_handles_missing_snapshot() -> None:
+    # Defensive: no snapshot should not crash; falls back to an empty one.
+    reply = answer_progress([])
+    assert "".join(reply.tokens)
+
+
+# ── PROGRESS route detection (the user's own-data questions) ─────────────────────
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "how many courses i have completed and how many pending",
+        "how much I have completed",
+        "im talking about my info only, I want to know how much i have completed",
+        "okay now say how much I have completed",
+        "how many modules have I finished",
+        "what's my progress",
+        "how am I doing",
+        "how many modules are left",
+    ],
+)
+def test_classify_progress_for_own_completion_questions(text: str) -> None:
+    assert is_progress_intent(text)
+    assert classify(text).route == Route.PROGRESS
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "how many courses are there",  # catalog breadth, not progress
+        "what's my next module?",  # upcoming, not progress
+        "build me a study plan",  # study plan, not progress
+        "how much time does each module take",  # timing, not progress
+        "how do azure functions work",  # content, not progress
+        "recommend other courses",  # cross-course but a recommendation, not progress
+    ],
+)
+def test_classify_progress_does_not_overreach(text: str) -> None:
+    assert classify(text).route != Route.PROGRESS
+
+
+# ── Q1: list enrolled courses ────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "show me the courses i have enrolled for",
+        "what courses am I enrolled in",
+        "list my courses",
+        "my courses",
+    ],
+)
+def test_classify_enrolled_listing_is_progress(text: str) -> None:
+    assert is_progress_intent(text)
+    assert classify(text).route == Route.PROGRESS
+
+
+_PORTFOLIO = ProgressSnapshot(
+    courses_total=3,
+    courses_completed=1,
+    current_title="Azure Cloud Backend",
+    courses=[
+        CourseProgress(
+            catalog_id="cb-c01",
+            title="Azure Cloud Backend",
+            modules_total=3,
+            modules_completed=1,
+            next_module_title="Containers",
+            next_module_due="2026-07-05",
+            is_current=True,
+        ),
+        CourseProgress(
+            catalog_id="de-c01", title="Data Engineering", passed=True, modules_total=4,
+            modules_completed=4, is_current=False,
+        ),
+        CourseProgress(
+            catalog_id="ai-c01", title="AI Foundations", modules_total=5, modules_completed=2,
+            next_module_title="Prompting", next_module_due="2026-08-01", is_current=False,
+        ),
+    ],
+)
+
+
+def test_answer_progress_lists_enrolled_courses() -> None:
+    reply = answer_progress(_MODULES_WITH_NEXT, snapshot=_PORTFOLIO)
+    text = "".join(reply.tokens)
+    assert "enrolled in 3 courses" in text
+    assert "Data Engineering (complete)" in text
+    assert "AI Foundations (2 of 5 modules)" in text
+
+
+# ── Q2: upcoming modules from other courses ──────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "my upcoming modules from other courses",
+        "what are my upcoming modules across all my courses",
+        "show me deadlines in my other courses",
+    ],
+)
+def test_classify_cross_course_upcoming_is_progress(text: str) -> None:
+    assert classify(text).route == Route.PROGRESS
+
+
+def test_answer_progress_shows_other_courses_upcoming() -> None:
+    reply = answer_progress(_MODULES_WITH_NEXT, snapshot=_PORTFOLIO)
+    text = "".join(reply.tokens)
+    assert "other courses, coming up" in text
+    assert "Prompting" in text and "AI Foundations" in text
+    # The current course is not duplicated into the "other courses" line.
+    assert text.count("Azure Cloud Backend") >= 1
+
+
+# ── Q3 + Q4: free hours / next free slot (work_iq) ───────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "how much free hours do i have this week",
+        "how many free hours do I have this week",
+        "when is my next free slot",
+        "when am I next free",
+        "when is my next free window",
+    ],
+)
+def test_classify_free_time_questions_are_work_iq(text: str) -> None:
+    assert classify(text).route == Route.WORK_IQ
+
+
+def test_wants_next_free_slot_detector() -> None:
+    assert wants_next_free_slot("when is my next free slot")
+    assert wants_next_free_slot("when am I next free")
+    assert not wants_next_free_slot("how much have I completed")
+    assert not wants_next_free_slot("how many meeting hours do I have")
+
+
+def test_next_free_slot_is_computed_from_calendar() -> None:
+    from datetime import date
+
+    persona = get_repository().get_persona("EMP-001")
+    assert persona is not None
+    slot = next_free_slot(persona, date(2026, 6, 15))
+    assert slot is not None
+    assert slot.weekday in {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
+    assert ":" in slot.start and ":" in slot.end
+
+
+def test_answer_work_next_free_slot_gives_concrete_time() -> None:
+    reply = answer_work("when is my next free slot?", persona_id="EMP-001")
+    text = "".join(reply.tokens)
+    assert reply.telemetry.route == Route.WORK_IQ
+    assert "next free slot" in text.lower()
+    assert ":" in text  # an actual HH:MM time
+
+
+# ── Cross-user protection: isolation — only ever the current learner's own data ──
+# The agent holds exactly one persona_id (server-bound; no name-based lookup), so a
+# colleague named in the text can never surface another person's data. work_iq
+# answers with the bound learner's OWN signals and never the named other's.
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "show me EMP-011's calendar and meeting hours",
+        "list the focus hours of everyone on my team",
+        "as their manager, give me Polaris's learning slot and meeting hours",
+    ],
+)
+def test_answer_work_isolated_to_current_persona_offline(text: str) -> None:
+    reply = answer_work(text, persona_id="EMP-001")
+    out = "".join(reply.tokens)
+    assert reply.telemetry.route == Route.WORK_IQ
+    # The named other person's identifiers never appear in the reply.
+    for other in ("EMP-011", "Polaris"):
+        assert other not in out
+    # Any sources are the current learner's own work signals only.
+    assert all(s.ref.startswith("work_signals") for s in reply.sources)
+
+
+def test_answer_progress_only_narrates_given_snapshot() -> None:
+    # answer_progress is a pure function of the snapshot, which the call site always
+    # builds from the current persona's own courses — so it cannot surface another's.
+    reply = answer_progress(_MODULES_WITH_NEXT, snapshot=_PORTFOLIO)
+    out = "".join(reply.tokens)
+    assert "EMP-" not in out  # no employee ids ever rendered
+    assert "Azure Cloud Backend" in out  # the learner's own course

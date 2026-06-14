@@ -28,6 +28,7 @@ from app.agent.answer import (
     answer_foundry,
     answer_general,
     answer_greeting,
+    answer_progress,
     answer_recommend,
     answer_study_plan,
     answer_upcoming,
@@ -42,6 +43,7 @@ from app.agent.contracts import (
     PhaseEvent,
     PipelineEvent,
     PlanEvent,
+    ProgressSnapshot,
     Route,
     RouteDecision,
     TakenCourse,
@@ -100,6 +102,7 @@ def _dispatch(
     exam_date: date | None,
     plan_constraints: dict[str, object] | None,
     modules: list[dict[str, object]],
+    progress: ProgressSnapshot | None,
     router: ModelRouter | None,
     grounding: CourseGrounding,
     settings: Settings,
@@ -121,6 +124,8 @@ def _dispatch(
         )
     if decision.route is Route.UPCOMING:
         return answer_upcoming(modules, settings=settings)
+    if decision.route is Route.PROGRESS:
+        return answer_progress(modules, snapshot=progress, settings=settings)
     if decision.route is Route.STUDY_PLAN:
         return answer_study_plan(
             text,
@@ -165,6 +170,7 @@ def run_pipeline(
     exam_date: date | None = None,
     plan_constraints: dict[str, object] | None = None,
     modules: list[dict[str, object]] | None = None,
+    progress: ProgressSnapshot | None = None,
     course_state: CourseState | None = None,
     history: list[dict[str, str]] | None = None,
     pending: str | None = None,
@@ -236,6 +242,7 @@ def run_pipeline(
                 exam_date=exam_date,
                 plan_constraints=plan_constraints,
                 modules=modules or [],
+                progress=progress,
                 router=router,
                 grounding=grounding,
                 settings=settings,
