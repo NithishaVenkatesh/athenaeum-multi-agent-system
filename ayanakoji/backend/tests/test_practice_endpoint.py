@@ -120,3 +120,41 @@ def test_practise_then_submit_full_loop(client, session) -> None:
     assert "take_evaluation" in submit_body
     with session_scope() as s:
         assert not CourseRepository(s).get(course_id).practice_active
+
+
+# ── Per-module practice start (the module-page "Practise" button deep-link) ──────
+
+
+def test_module_practice_start_streams_and_persists(client, session) -> None:
+    """The module-page Practise button targets a SPECIFIC module, not the current one."""
+    course_id = _make_course_with_module(session)
+
+    with client.stream(
+        "POST", f"/api/courses/{course_id}/modules/cb-c01-m01/practice/start", json={}
+    ) as resp:
+        assert resp.status_code == 200
+        body = "".join(resp.iter_text())
+    assert '"type": "practice"' in body
+    assert '"correct":' not in body  # answer key never crosses the wire
+
+    with session_scope() as s:
+        active = CourseRepository(s).get(course_id).practice_active
+    assert active["module_id"] == "cb-c01-m01"
+    assert len(active["questions"]) == 5
+    # The round can then be graded by the shared submit endpoint.
+    selections = {q["id"]: [q["correct"]] for q in active["questions"]}
+    with client.stream(
+        "POST", f"/api/courses/{course_id}/practice/submit", json={"selections": selections}
+    ) as resp:
+        assert "take_evaluation" in "".join(resp.iter_text())
+
+
+def test_module_practice_start_404_for_unknown_module(client, session) -> None:
+    course_id = _make_course_with_module(session)
+    resp = client.post(f"/api/courses/{course_id}/modules/nope-m99/practice/start", json={})
+    assert resp.status_code == 404
+
+
+def test_module_practice_start_404_for_missing_course(client) -> None:
+    resp = client.post("/api/courses/nope/modules/cb-c01-m01/practice/start", json={})
+    assert resp.status_code == 404
