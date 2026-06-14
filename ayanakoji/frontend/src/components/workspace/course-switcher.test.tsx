@@ -55,6 +55,8 @@ describe("CourseSwitcher", () => {
     pathnameRef.current = "/chat";
     mockListCourses.mockResolvedValue([COURSE]);
     renderSwitcher();
-    await waitFor(() => expect(screen.getByText("New chat")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("New chat")).toBeInTheDocument(),
+    );
   });
 });

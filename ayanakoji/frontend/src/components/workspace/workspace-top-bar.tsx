@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AccountButton } from "@/components/workspace/account-button";
 import { CourseSwitcher } from "@/components/workspace/course-switcher";
 import { PageSwitcher } from "@/components/workspace/page-switcher";
+import { StreakButton } from "@/components/workspace/streak-button";
 
 export function WorkspaceTopBar() {
   return (
@@ -22,7 +23,10 @@ export function WorkspaceTopBar() {
 
       <PageSwitcher />
 
-      <AccountButton />
+      <div className="flex items-center gap-2">
+        <StreakButton />
+        <AccountButton />
+      </div>
     </header>
   );
 }

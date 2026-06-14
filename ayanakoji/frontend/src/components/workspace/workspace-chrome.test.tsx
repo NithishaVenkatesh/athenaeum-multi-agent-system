@@ -59,7 +59,11 @@ describe("WorkspaceChrome", () => {
       </PersonaProvider>,
     );
 
-    await waitFor(() => expect(screen.getByText("course content")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText("course content")).toBeInTheDocument(),
+    );
+    expect(
+      screen.getByRole("button", { name: /sign out/i }),
+    ).toBeInTheDocument();
   });
 });

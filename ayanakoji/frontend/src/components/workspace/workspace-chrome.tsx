@@ -9,6 +9,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 import { usePersona } from "@/components/persona-provider";
+import { NotificationsProvider } from "@/components/workspace/notifications-context";
 import { WorkspaceProvider } from "@/components/workspace/workspace-context";
 import { WorkspaceTopBar } from "@/components/workspace/workspace-top-bar";
 
@@ -30,10 +31,12 @@ export function WorkspaceChrome({ children }: { children: React.ReactNode }) {
 
   return (
     <WorkspaceProvider personaId={persona.employee_id}>
-      <div className="flex min-h-dvh flex-col">
-        <WorkspaceTopBar />
-        <main className="flex flex-1 flex-col">{children}</main>
-      </div>
+      <NotificationsProvider personaId={persona.employee_id}>
+        <div className="flex min-h-dvh flex-col">
+          <WorkspaceTopBar />
+          <main className="flex flex-1 flex-col">{children}</main>
+        </div>
+      </NotificationsProvider>
     </WorkspaceProvider>
   );
 }

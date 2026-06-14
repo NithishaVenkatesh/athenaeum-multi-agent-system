@@ -40,7 +40,11 @@ describe("RenameCourseDialog", () => {
     const onOpenChange = vi.fn();
     const onRenamed = vi.fn();
     render(
-      <RenameCourseDialog course={COURSE} onOpenChange={onOpenChange} onRenamed={onRenamed} />,
+      <RenameCourseDialog
+        course={COURSE}
+        onOpenChange={onOpenChange}
+        onRenamed={onRenamed}
+      />,
     );
 
     const input = screen.getByRole("textbox", { name: "Chat name" });
@@ -49,7 +53,9 @@ describe("RenameCourseDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
-      expect(mockPatch).toHaveBeenCalledWith("c1", { chat_name: "Functions deep dive" }),
+      expect(mockPatch).toHaveBeenCalledWith("c1", {
+        chat_name: "Functions deep dive",
+      }),
     );
     expect(onRenamed).toHaveBeenCalled();
     expect(onOpenChange).toHaveBeenCalledWith(false);
@@ -58,7 +64,11 @@ describe("RenameCourseDialog", () => {
   it("does not patch when the name is unchanged", () => {
     const onOpenChange = vi.fn();
     render(
-      <RenameCourseDialog course={COURSE} onOpenChange={onOpenChange} onRenamed={vi.fn()} />,
+      <RenameCourseDialog
+        course={COURSE}
+        onOpenChange={onOpenChange}
+        onRenamed={vi.fn()}
+      />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -68,7 +78,11 @@ describe("RenameCourseDialog", () => {
 
   it("renders nothing when no course is selected", () => {
     render(
-      <RenameCourseDialog course={null} onOpenChange={vi.fn()} onRenamed={vi.fn()} />,
+      <RenameCourseDialog
+        course={null}
+        onOpenChange={vi.fn()}
+        onRenamed={vi.fn()}
+      />,
     );
     expect(screen.queryByRole("textbox", { name: "Chat name" })).toBeNull();
   });
