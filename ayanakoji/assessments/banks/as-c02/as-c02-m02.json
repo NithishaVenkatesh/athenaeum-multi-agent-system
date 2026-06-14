@@ -1,0 +1,105 @@
+{
+  "course_id": "as-c02",
+  "module_id": "as-c02-m02",
+  "module_title": "Designing governance",
+  "choices": [
+    {
+      "id": "as-c02-m02-c01",
+      "module_id": "as-c02-m02",
+      "prompt": "According to the module, what is the primary purpose of management groups in the Azure resource hierarchy?",
+      "kind": "mcq",
+      "choices": [
+        "To apply policy and access above the subscription level, with inheritance flowing down the tree",
+        "To serve as the primary unit of billing and the boundary for many quotas",
+        "To hold resources that share a common lifecycle within a subscription",
+        "To attach key-value metadata used for cost allocation and operations"
+      ],
+      "correct_answers": [
+        "To apply policy and access above the subscription level, with inheritance flowing down the tree"
+      ]
+    },
+    {
+      "id": "as-c02-m02-c02",
+      "module_id": "as-c02-m02",
+      "prompt": "Helios must roll out a strict \"production resources must use private networking\" rule across an estate that currently violates it widely. Per the module's measure-then-enforce guidance, which Azure Policy effect should you start with?",
+      "kind": "mcq",
+      "choices": [
+        "audit — records non-compliance without blocking so you can measure before enforcing",
+        "deny — rejects non-compliant resources immediately so the violation stops at once",
+        "deployIfNotExists — deploys the missing networking configuration automatically",
+        "modify — adds the required networking tag to non-compliant resources"
+      ],
+      "correct_answers": [
+        "audit — records non-compliance without blocking so you can measure before enforcing"
+      ]
+    },
+    {
+      "id": "as-c02-m02-c03",
+      "module_id": "as-c02-m02",
+      "prompt": "In the Helios walkthrough, why does assigning the \"Allowed locations\" policy at the management-group scope satisfy the requirement that the rule apply to every current and future subscription?",
+      "kind": "mcq",
+      "choices": [
+        "Policy is inherited down the hierarchy, so every existing and future subscription beneath the group is automatically subject to it without per-subscription work",
+        "The az CLI automatically copies the assignment into each subscription whenever a new one is created",
+        "Management groups are the primary billing unit, so any cost-related policy applies to all subscriptions they bill for",
+        "Subscriptions cannot hold policy assignments, so the control must live one level up to take effect"
+      ],
+      "correct_answers": [
+        "Policy is inherited down the hierarchy, so every existing and future subscription beneath the group is automatically subject to it without per-subscription work"
+      ]
+    },
+    {
+      "id": "as-c02-m02-c04",
+      "module_id": "as-c02-m02",
+      "prompt": "Which statements about a resource tagging strategy are accurate according to the module? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Tags carry no permissions but are connective metadata enabling cost management, operations, and automation",
+        "Tags are not automatically inherited by child resources from a resource group; you enforce or copy them with Azure Policy",
+        "A small mandatory tag set that is enforced is better than a sprawling taxonomy nobody maintains",
+        "Tags grant scoped access permissions, so finance teams can use them to control who can spend in each cost center"
+      ],
+      "correct_answers": [
+        "Tags carry no permissions but are connective metadata enabling cost management, operations, and automation",
+        "Tags are not automatically inherited by child resources from a resource group; you enforce or copy them with Azure Policy",
+        "A small mandatory tag set that is enforced is better than a sprawling taxonomy nobody maintains"
+      ]
+    },
+    {
+      "id": "as-c02-m02-c05",
+      "module_id": "as-c02-m02",
+      "prompt": "Which identity-governance mechanisms does the module describe, and what does each do? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Access reviews periodically force owners to re-certify who still needs access, catching expired contractors",
+        "Entitlement management packages roles and resources into access packages users can request, with built-in approval and expiry",
+        "An initiative groups related policies into a policy set so a coherent bundle can be assigned as one unit and reported against",
+        "deployIfNotExists and modify are gatekeeping effects that require a human to approve every deployment before resources are created"
+      ],
+      "correct_answers": [
+        "Access reviews periodically force owners to re-certify who still needs access, catching expired contractors",
+        "Entitlement management packages roles and resources into access packages users can request, with built-in approval and expiry"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "as-c02-m02-l01",
+      "module_id": "as-c02-m02",
+      "prompt": "Explain why the module recommends shaping the management-group tree around where you need to inherit policy and access rather than mirroring the company's org chart by business unit. What problems does the org-chart approach create?",
+      "reference_answer": "Policy and RBAC are inherited down the management-group tree, so the shape of the tree determines where you can enforce a control once and have it apply to everything beneath it. A tree that copies the org chart looks tidy but breaks on every reorganization and tends to add extra layers that carry no controls, which is pure cognitive overhead with little benefit beyond a few levels. The module instead advises assigning policy and broad RBAC at the management-group level so it is inherited, reserving subscriptions for billing and isolation boundaries rather than fine-grained control. The Cloud Adoption Framework landing-zone model is offered as a hybrid example, separating platform resources (shared networking, identity, management) from application landing zones, with separation for sandbox and decommissioned subscriptions. The guiding principle is to shape the tree around where you actually need to inherit policy and access, and to avoid an overly deep tree."
+    },
+    {
+      "id": "as-c02-m02-l02",
+      "module_id": "as-c02-m02",
+      "prompt": "The finance team at Helios cannot attribute cloud spend to business units. Walk through how you would use tagging and Azure Policy to fix this reliably, and explain what makes the solution trustworthy.",
+      "reference_answer": "Define a small mandatory tag set — for example a costCenter tag such as costCenter = renewables-grid that lets finance attribute spend — and document the allowed values, since a sprawling taxonomy nobody maintains is worse than a small enforced one. The critical step is enforcement: tags applied by convention alone decay within weeks and then can't be trusted for cost allocation, so you enforce them with Azure Policy rather than relying on people remembering. Because tags are not automatically inherited by child resources from a resource group, you use Azure Policy to enforce or copy them, applying a modify effect to add a default tag or deny to reject untagged resources. Enforcement is what makes the tags reliable enough to trust for attributing spend to business units, and the compliance dashboard plus remediation tasks bring existing non-compliant resources into line."
+    },
+    {
+      "id": "as-c02-m02-l03",
+      "module_id": "as-c02-m02",
+      "prompt": "Compare the audit, deny, and remediation (deployIfNotExists/modify) Azure Policy effects, and explain the tradeoffs of each when rolling out a new control across an existing estate.",
+      "reference_answer": "audit records non-compliance without blocking, which is useful for measuring the scale of violations before you enforce anything, so it is the safe starting point on an estate that currently violates the rule widely. deny rejects a non-compliant resource at creation time — the hard guardrail that would have stopped Helios's forbidden-region database — but jumping straight to deny across an existing estate can block legitimate work and trigger a flood of failures, so the module recommends a measure-then-enforce migration: start with audit, communicate and remediate, then switch the assignment to deny once the estate is clean. deployIfNotExists and modify are remediation effects that automatically deploy a missing resource (such as a diagnostic setting) or add a missing tag, but they act on your behalf and require a managed identity with sufficient rights or remediation silently fails. Related policies can be grouped into an initiative (policy set) so a regulatory baseline is assigned as one unit and compliance reports as a single number."
+    }
+  ]
+}
