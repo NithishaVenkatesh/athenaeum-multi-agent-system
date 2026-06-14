@@ -44,6 +44,10 @@ SAFETY_HEADROOM = 1.5  # internal buffer so estimates run generous, never surfac
 SESSION_GRANULARITY = 15  # round estimates to a tidy quarter-hour
 PACE_FACTOR: dict[Pace, float] = {Pace.SLOWER: 1.35, Pace.NORMAL: 1.0, Pace.FASTER: 0.75}
 
+# --- Skill-gap correction (conservative ±20%, gated by pace direction) ---
+MAX_SKILL_ADJ = 0.20  # cap on how far a module's time moves at a score extreme
+NEUTRAL_SCORE = 0.5  # midpoint: 2 of 4 correct ⇒ no change; missing score ⇒ neutral
+
 # --- Calendar interpretation ---
 _STUDY_CATEGORIES = {"learning"}  # dedicated study blocks already in the calendar
 _WEEKDAY_ORDER = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
@@ -109,6 +113,38 @@ def estimate_module_minutes(module: ModuleInfo, pace: Pace) -> int:
     )
     raw = content * SAFETY_HEADROOM * PACE_FACTOR[pace]
     rounded = round(raw / SESSION_GRANULARITY) * SESSION_GRANULARITY
+    return max(SESSION_GRANULARITY, int(rounded))
+
+
+def skill_factor(score: float, pace: Pace, max_adj: float = MAX_SKILL_ADJ) -> float:
+    """Per-module time multiplier from a skill score, gated by pace direction.
+
+    ``score`` is the fraction of the module's skill-check questions answered
+    correctly (0..1). At ``NEUTRAL_SCORE`` the factor is 1.0. Mastery (high score)
+    lessens time; weakness (low score) extends it, by at most ``max_adj`` at the
+    extremes. Pace constrains the direction: slower may only lessen, faster may
+    only extend, normal may do both (the locked product rules).
+    """
+    raw = 1.0 - max_adj * (2.0 * score - 1.0)
+    if pace is Pace.SLOWER:
+        return min(1.0, raw)  # lessen only — never pad a relaxed plan
+    if pace is Pace.FASTER:
+        return max(1.0, raw)  # extend only — never trim an intensive plan
+    return raw  # normal: both directions
+
+
+def apply_skill_correction(
+    pace_minutes: int, score: float, pace: Pace, max_adj: float = MAX_SKILL_ADJ
+) -> int:
+    """Apply the pace-gated skill factor to a pace-corrected minute budget.
+
+    Re-rounds to the session granularity and floors at one granularity unit so a
+    fully-mastered short module never collapses to zero.
+    """
+    rounded = (
+        round(pace_minutes * skill_factor(score, pace, max_adj) / SESSION_GRANULARITY)
+        * SESSION_GRANULARITY
+    )
     return max(SESSION_GRANULARITY, int(rounded))
 
 
