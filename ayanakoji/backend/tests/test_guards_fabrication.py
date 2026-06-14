@@ -44,6 +44,13 @@ def test_cited_refs_sees_bare_ids() -> None:
     assert "cb-c99-m99" in cited_refs("attributed to cb-c99-m99 in the text")
 
 
+@pytest.mark.parametrize("phantom", ["cb-c01-m001", "cb-c01-m100", "cb-c01-m0001"])
+def test_strip_removes_three_plus_digit_phantom(phantom: str) -> None:
+    """Red-team A2 gap: a fabricated 3+ digit module suffix must be scrubbed too."""
+    out = strip_unknown_citations(f"see module {phantom} for details", _sources())
+    assert phantom not in out, f"phantom survived: {out!r}"
+
+
 def test_stream_drops_bare_phantom_id() -> None:
     out = "".join(stream_grounded(["Functions ", "scale, ", "see cb-c99-m99 now"], _sources()))
     assert "cb-c99-m99" not in out

@@ -27,8 +27,10 @@ _CITATION = re.compile(r"\[([a-z]{2,}-[a-z0-9-]+)\]", re.IGNORECASE)
 # bare or parenthesized id in prose ("as covered in cb-c99-m99", "(cb-c99-m99)") is
 # caught WITHOUT flagging ordinary hyphenated English ("real-world", "event-driven") —
 # the citation guard is no longer bound to square brackets (A2).
-_BARE_ID = re.compile(r"\b([a-z]{2}-c\d{1,2}-m\d{1,2})\b", re.IGNORECASE)
-_WRAPPED_ID = re.compile(r"[\[(]?\b(?P<id>[a-z]{2}-c\d{1,2}-m\d{1,2})\b[\])]?", re.IGNORECASE)
+# Any digit count after c/m: real ids are cNN-mNN, but a fabricated 3+ digit suffix
+# (cb-c01-m001, cb-c01-m100) must still be recognized and scrubbed (red-team A2 gap).
+_BARE_ID = re.compile(r"\b([a-z]{2}-c\d+-m\d+)\b", re.IGNORECASE)
+_WRAPPED_ID = re.compile(r"[\[(]?\b(?P<id>[a-z]{2}-c\d+-m\d+)\b[\])]?", re.IGNORECASE)
 
 
 def numbers_in(text: str) -> set[str]:
