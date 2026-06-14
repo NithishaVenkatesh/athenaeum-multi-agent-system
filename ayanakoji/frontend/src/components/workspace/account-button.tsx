@@ -7,6 +7,12 @@ import { useRouter } from "next/navigation";
 
 import { usePersona } from "@/components/persona-provider";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { avatarDataUri } from "@/lib/avatar";
 
 export function AccountButton() {
@@ -36,10 +42,24 @@ export function AccountButton() {
           {persona.employee_id}
         </span>
       </span>
-      <Button variant="ghost" size="sm" onClick={handleSignOut}>
-        <LogOut />
-        <span className="hidden sm:inline">Sign out</span>
-      </Button>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Sign out"
+                onClick={handleSignOut}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <LogOut />
+              </Button>
+            }
+          />
+          <TooltipContent>Sign out</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </div>
   );
 }

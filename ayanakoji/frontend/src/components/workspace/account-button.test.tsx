@@ -6,7 +6,9 @@ import { PersonaProvider } from "@/components/persona-provider";
 import type { PersonaSummary } from "@/lib/api";
 
 const { replaceMock } = vi.hoisted(() => ({ replaceMock: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: replaceMock }) }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: replaceMock }),
+}));
 
 const SAMPLE: PersonaSummary = {
   employee_id: "EMP-001",
@@ -40,5 +42,20 @@ describe("AccountButton", () => {
     fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
     expect(replaceMock).toHaveBeenCalledWith("/login");
     expect(window.localStorage.getItem("athenaeum.persona")).toBeNull();
+  });
+
+  it("renders sign out as an icon-only button (accessible name, no visible label)", async () => {
+    window.localStorage.setItem("athenaeum.persona", JSON.stringify(SAMPLE));
+
+    render(
+      <PersonaProvider>
+        <AccountButton />
+      </PersonaProvider>,
+    );
+
+    const button = await screen.findByRole("button", { name: /sign out/i });
+    // Icon-only: the accessible name comes from aria-label, not visible text.
+    expect(button).toHaveAttribute("aria-label", "Sign out");
+    expect(button).not.toHaveTextContent("Sign out");
   });
 });
