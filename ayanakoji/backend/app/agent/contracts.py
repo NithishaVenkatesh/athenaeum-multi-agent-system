@@ -285,6 +285,16 @@ class PaceRequestEvent(BaseModel):
     options: list[Pace] = Field(default_factory=lambda: [Pace.SLOWER, Pace.NORMAL, Pace.FASTER])
 
 
+class SkillGateRequestEvent(BaseModel):
+    """Ask whether the learner is a fresher or wants a skill check (a HITL gate)."""
+
+    type: Literal["skill_gate_request"] = "skill_gate_request"
+    catalog_id: str
+    title: str
+    prompt: str = Field(description="The question shown above the two choices")
+    options: list[str] = Field(default_factory=lambda: ["fresher", "assessment"])
+
+
 class NewChatEvent(BaseModel):
     """Steer the learner to another chat (a fresh one, or the course's existing one).
 
@@ -319,6 +329,7 @@ PipelineEvent = (
     | SuggestionEvent
     | PlanEvent
     | PaceRequestEvent
+    | SkillGateRequestEvent
     | NewChatEvent
     | BlockedEvent
     | ErrorEvent
