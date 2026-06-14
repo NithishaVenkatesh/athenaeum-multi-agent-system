@@ -1,0 +1,103 @@
+{
+  "course_id": "cb-c02",
+  "module_id": "cb-c02-m02",
+  "module_title": "Reacting to data with the change feed",
+  "choices": [
+    {
+      "id": "cb-c02-m02-c01",
+      "module_id": "cb-c02-m02",
+      "prompt": "In its standard mode, what does the Cosmos DB change feed surface for an item that was updated three times before your consumer reads it?",
+      "kind": "mcq",
+      "choices": [
+        "The latest version of the item, once",
+        "All three intermediate versions, in the order they were written",
+        "The original creation version plus the latest version",
+        "A delete event followed by the latest version"
+      ],
+      "correct_answers": [
+        "The latest version of the item, once"
+      ]
+    },
+    {
+      "id": "cb-c02-m02-c02",
+      "module_id": "cb-c02-m02",
+      "prompt": "A teammate points two unrelated change feed processors at the same lease container to save on resources. According to the module, what is the consequence?",
+      "kind": "mcq",
+      "choices": [
+        "They corrupt each other's bookmarks because the lease container is the processor's durable memory",
+        "Nothing breaks; the lease container is designed to be shared across processors",
+        "The change feed automatically emits delete events to compensate",
+        "The processors fall back to polling the container every minute"
+      ],
+      "correct_answers": [
+        "They corrupt each other's bookmarks because the lease container is the processor's durable memory"
+      ]
+    },
+    {
+      "id": "cb-c02-m02-c03",
+      "module_id": "cb-c02-m02",
+      "prompt": "The change feed gives at-least-once delivery, so consumers must be idempotent. Which approaches does the module recommend to keep a consumer safe to re-run? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Use the item's id plus a version such as _etag as a deduplication key and skip duplicates",
+        "Write a \"notified\" marker before or atomically with sending an external side effect",
+        "Disable the lease container so progress is never bookmarked",
+        "Send each SMS twice so at least one is guaranteed to arrive"
+      ],
+      "correct_answers": [
+        "Use the item's id plus a version such as _etag as a deduplication key and skip duplicates",
+        "Write a \"notified\" marker before or atomically with sending an external side effect"
+      ]
+    },
+    {
+      "id": "cb-c02-m02-c04",
+      "module_id": "cb-c02-m02",
+      "prompt": "Marketing wants the change feed to fire when a delivery row is deleted. Why won't this work directly, and what is the standard pattern the module prescribes?",
+      "kind": "mcq",
+      "choices": [
+        "Standard mode does not emit delete events; use a soft delete by setting a deleted flag (optionally with TTL) so the deletion arrives as an update",
+        "Deletes are emitted but only after the lease container is cleared; recreate the lease container to receive them",
+        "Deletes are surfaced only in the pull model; switch from the Cosmos DB trigger to query_items_change_feed",
+        "Deletes require routing the container through Service Bus dead-lettering before the feed can see them"
+      ],
+      "correct_answers": [
+        "Standard mode does not emit delete events; use a soft delete by setting a deleted flag (optionally with TTL) so the deletion arrives as an update"
+      ]
+    },
+    {
+      "id": "cb-c02-m02-c05",
+      "module_id": "cb-c02-m02",
+      "prompt": "The module contrasts the change feed with a message queue. Which statement reflects that distinction correctly?",
+      "kind": "mcq",
+      "choices": [
+        "The change feed is an ordered log of current item state; for competing-consumer messaging with explicit acks and dead-lettering, use Service Bus or Queue Storage",
+        "The change feed is a message queue with built-in acks and dead-lettering, so Service Bus is unnecessary",
+        "The change feed and Service Bus both emit delete events, so they are interchangeable",
+        "The change feed should be polled every minute like a queue to avoid missing messages"
+      ],
+      "correct_answers": [
+        "The change feed is an ordered log of current item state; for competing-consumer messaging with explicit acks and dead-lettering, use Service Bus or Queue Storage"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "cb-c02-m02-l01",
+      "module_id": "cb-c02-m02",
+      "prompt": "Explain why the change feed is preferable to a cron job that polls the deliveries container every minute for recently changed rows. Address freshness, cost, and reliability.",
+      "reference_answer": "Polling is expensive because the cron job burns RUs scanning the whole container for changes that mostly aren't there. It is laggy, lagging up to a minute behind the actual write. It is also fragile: it can miss changes when two happen within one poll window, and it has to track by hand which rows it already saw. The change feed instead reads Cosmos DB's existing ordered log of every committed write, so you receive each changed item in order without scanning or comparing timestamps. The module frames it as the database's outbox that your consumer empties in order, never having to poll \"anything new?\"."
+    },
+    {
+      "id": "cb-c02-m02-l02",
+      "module_id": "cb-c02-m02",
+      "prompt": "Walk through how the change feed processor and the lease container together make a consumer safe to restart and able to scale.",
+      "reference_answer": "The change feed processor distributes the container's partitions across however many consumer instances you run, tracks how far each has read, and rebalances when instances come and go. It records that progress in a separate lease container holding one lease document per partition range, each storing a continuation token (a bookmark). On a crash the lease still holds the last acknowledged position, so a new instance picks up the lease and resumes from the bookmark rather than from the beginning or from \"now.\" To scale, you run more instances and the processor spreads the leases across them; run one and it holds them all. Because the lease container is the durable memory of the pattern, it must not be deleted or shared between unrelated processors."
+    },
+    {
+      "id": "cb-c02-m02-l03",
+      "module_id": "cb-c02-m02",
+      "prompt": "Compare standard change feed mode against the need to react to deletes and to every intermediate revision, and describe the workarounds the module gives for each limitation.",
+      "reference_answer": "Standard mode has two boundaries: it coalesces to the latest version per item, so if an item is updated several times before you read you see only the final state once rather than each intermediate revision, and it does not emit delete events. To capture every revision you need all-versions-and-deletes mode (verifying availability and configuration in the docs) or an append-only write pattern. To react to deletions you use a soft delete: set a deleted: true flag, often with a short TTL, so the deletion shows up as an update your consumer can react to. These workarounds let an ordered-log-of-current-state feed approximate behaviors it does not natively provide."
+    }
+  ]
+}
