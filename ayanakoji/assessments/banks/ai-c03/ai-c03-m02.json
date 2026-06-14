@@ -1,0 +1,106 @@
+{
+  "course_id": "ai-c03",
+  "module_id": "ai-c03-m02",
+  "module_title": "Custom vision models",
+  "choices": [
+    {
+      "id": "ai-c03-m02-c01",
+      "module_id": "ai-c03-m02",
+      "kind": "mcq",
+      "prompt": "Driftwood's assembly-line team needs to count how many cracked tent poles appear in a single photo and know where each one is. According to the module, which model type should they train and why?",
+      "choices": [
+        "Image classification, because it assigns a single label to the whole image quickly and cheaply",
+        "Object detection, because counting and locating multiple instances requires a bounding box per instance",
+        "Image classification, because it returns a ranked list of tags with probabilities for each pole",
+        "Object detection, because it is always more accurate than classification on visually similar SKUs"
+      ],
+      "correct_answers": [
+        "Object detection, because counting and locating multiple instances requires a bounding box per instance"
+      ]
+    },
+    {
+      "id": "ai-c03-m02-c02",
+      "module_id": "ai-c03-m02",
+      "kind": "mcq",
+      "prompt": "A returns classifier reports 96% overall accuracy, yet the team complains it keeps misrouting the rare Trailhead 28. Based on the module, what is the most likely diagnosis?",
+      "choices": [
+        "Average precision was computed incorrectly, so the headline accuracy is simply a reporting bug",
+        "High accuracy on an imbalanced dataset is masking poor per-tag recall, and the Trailhead 28 likely has too few example images",
+        "The confidence threshold in the consuming app is set too low, so good predictions are sent to manual review",
+        "The model was trained as object detection when classification was the correct choice for routing"
+      ],
+      "correct_answers": [
+        "High accuracy on an imbalanced dataset is masking poor per-tag recall, and the Trailhead 28 likely has too few example images"
+      ]
+    },
+    {
+      "id": "ai-c03-m02-c03",
+      "module_id": "ai-c03-m02",
+      "kind": "mcq",
+      "prompt": "After retraining and improving a model, the returns service still behaves like the old version even though no code changed. Per the module, what was most likely forgotten?",
+      "choices": [
+        "Setting a confidence threshold in the consuming application",
+        "Publishing the new iteration (or repointing the app to the new published name)",
+        "Adding more images per tag to cover real-world lighting and angles",
+        "Switching the project from classification to object detection"
+      ],
+      "correct_answers": [
+        "Publishing the new iteration (or repointing the app to the new published name)"
+      ]
+    },
+    {
+      "id": "ai-c03-m02-c04",
+      "module_id": "ai-c03-m02",
+      "kind": "msq",
+      "prompt": "According to the module, which statements about labeling data for a custom vision model are correct?",
+      "choices": [
+        "A useful working floor is roughly 50 images per tag, with more for visually subtle distinctions",
+        "Each tag's images should span real production variation such as lighting, angle, background, and partial occlusion",
+        "Tuning training settings is the single highest-leverage activity, outweighing data curation",
+        "Mislabeled or inconsistently labeled images teach the model the wrong thing, and a confident wrong model is worse than no model"
+      ],
+      "correct_answers": [
+        "A useful working floor is roughly 50 images per tag, with more for visually subtle distinctions",
+        "Each tag's images should span real production variation such as lighting, angle, background, and partial occlusion",
+        "Mislabeled or inconsistently labeled images teach the model the wrong thing, and a confident wrong model is worse than no model"
+      ]
+    },
+    {
+      "id": "ai-c03-m02-c05",
+      "module_id": "ai-c03-m02",
+      "kind": "msq",
+      "prompt": "In the walkthrough, the consuming code applies a 0.80 confidence gate to the top prediction. Which statements about this design choice match the module?",
+      "choices": [
+        "The prediction model always returns a ranked list of tags with probabilities and never refuses to answer",
+        "Predictions come back sorted by probability, highest first, so the top entry is the model's best guess",
+        "Where you set the threshold is the precision/recall trade-off made operational",
+        "Without the gate the API would return no prediction at all when confidence is low"
+      ],
+      "correct_answers": [
+        "The prediction model always returns a ranked list of tags with probabilities and never refuses to answer",
+        "Predictions come back sorted by probability, highest first, so the top entry is the model's best guess",
+        "Where you set the threshold is the precision/recall trade-off made operational"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "ai-c03-m02-l01",
+      "module_id": "ai-c03-m02",
+      "prompt": "Explain the decision between image classification and object detection, including how the choice follows from the question being answered and how labeling cost factors in. Use Driftwood's returns scenario to illustrate.",
+      "reference_answer": "Image classification assigns one or more labels to the whole image and answers 'what is this a picture of?', while object detection finds instances within an image and returns a label plus a bounding box for each, answering 'what is in this image, where, and how many?'. The choice follows directly from the question: if Driftwood only needs to route a returned-item photo to the right SKU, classification is correct and far cheaper. Object detection is dramatically more expensive to label because you draw a box around every instance in every image rather than just picking a tag, and it needs more images to reach the same confidence. So you should reserve detection for cases that genuinely require counting or locating instances, such as counting defective buckles on an assembly-line image. The rule is to match the model type to the question, then to the labeling budget."
+    },
+    {
+      "id": "ai-c03-m02-l02",
+      "module_id": "ai-c03-m02",
+      "prompt": "Describe precision, recall, and average precision, and explain why the module warns against chasing a single headline accuracy number. Give a business example of when you would favor recall versus precision.",
+      "reference_answer": "Precision answers 'when the model predicts a tag, how often is it right?', while recall answers 'of all the images that truly have the tag, how many did the model catch?'; these two trade off against each other. Average precision (AP), and mean AP across tags for detection, summarizes the precision/recall curve into a single comparable number that is useful for comparing iterations. The module warns that on a skewed or imbalanced dataset, a headline accuracy number lies: a model that always predicts your most common SKU can post high accuracy while being useless, which is why you should always look at per-tag precision and recall and watch for tags with too few images. The right balance is a business decision: a returns-fraud screen might favor recall to catch every suspicious item while tolerating false alarms, whereas an auto-publish-to-storefront flow favors precision so it never mislabels a product publicly."
+    },
+    {
+      "id": "ai-c03-m02-l03",
+      "module_id": "ai-c03-m02",
+      "prompt": "Walk through how a published Custom Vision iteration is consumed from application code, and explain how the confidence threshold turns a probabilistic model into a reliable business process. Reference the SDK and the publish/iteration relationship.",
+      "reference_answer": "Once an iteration is trained and published under a name like returns-triage-v3, the returns service consumes it using the azure-cognitiveservices-vision-customvision prediction SDK, authenticating with a Prediction-Key via ApiKeyCredentials and a CustomVisionPredictionClient pointed at the prediction endpoint, then calling classify_image with the project ID, published name, and image bytes. The model always returns a ranked list of tags with probabilities, sorted highest first, and never refuses to answer, so the application itself must decide a threshold below which a prediction is not trustworthy enough to act on automatically. In the walkthrough a 0.80 gate routes the top prediction to the SKU if its probability is high enough, otherwise sends the case to a manual review queue; that gate is the precision/recall trade-off made operational and is what converts a probabilistic model into a reliable business process. Crucially, only a published iteration is callable by name at the prediction endpoint, so training alone has no effect and pointing the app at a stale published name silently serves an old model."
+    }
+  ]
+}
