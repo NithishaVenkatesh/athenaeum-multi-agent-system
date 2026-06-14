@@ -81,13 +81,20 @@ GROUNDING (critical): Use ONLY concepts, services, commands, limits and tradeoff
 module markdown EXPLICITLY discusses. Do NOT introduce outside Azure facts, pricing, or trivia
 the module does not cover. If unsure a fact is in the module, do not ask about it.`
 
+function metaLines(mod) {
+  const lines = []
+  if (mod.summary) lines.push(`Summary: ${mod.summary}`)
+  if (mod.objectives && mod.objectives.length) lines.push(`Objectives: ${mod.objectives.join(' | ')}`)
+  if (mod.grounded_skills && mod.grounded_skills.length)
+    lines.push(`Grounded skills: ${mod.grounded_skills.join(' | ')}`)
+  return lines.join('\n')
+}
+
 function authorPrompt(mod) {
   return `You are authoring the assessment question bank for ONE module of the Athenaeum learning platform.
 
 Module: ${mod.module_id} — "${mod.title}" (course ${mod.course_id})
-Summary: ${mod.summary}
-Objectives: ${(mod.objectives || []).join(' | ')}
-Grounded skills: ${(mod.grounded_skills || []).join(' | ')}
+${metaLines(mod)}
 
 FIRST, use the Read tool to read the full module teaching content at:
 ${mod.content_path}
@@ -174,7 +181,19 @@ async function authorOne(mod) {
   return { module_id: mod.module_id, course_id: mod.course_id, bank, review, attempts }
 }
 
-const modules = (args && args.modules) || []
+// Robust args handling: accept an object {modules:[...]}, a bare array, or a JSON string.
+let parsedArgs = args
+if (typeof parsedArgs === 'string') {
+  try {
+    parsedArgs = JSON.parse(parsedArgs)
+  } catch (e) {
+    parsedArgs = null
+  }
+}
+const modules = Array.isArray(parsedArgs)
+  ? parsedArgs
+  : (parsedArgs && parsedArgs.modules) || []
+log(`args type=${typeof args}; resolved ${modules.length} modules.`)
 log(`Authoring ${modules.length} module banks (5 MCQ/MSQ + 3 LLM each)…`)
 const results = await parallel(modules.map((m) => () => authorOne(m)))
 
