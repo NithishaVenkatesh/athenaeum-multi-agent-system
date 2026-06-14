@@ -23,6 +23,9 @@ def _offline_env(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.config import get_settings
 
     monkeypatch.setenv("OFFLINE_LLM", "true")
+    # Keep startup hermetic: the app lifespan must not pull banks from Azure / disk.
+    # Seeding is exercised directly in test_assessments_seed.py.
+    monkeypatch.setenv("SEED_ASSESSMENTS_ON_STARTUP", "false")
     get_settings.cache_clear()
 
 

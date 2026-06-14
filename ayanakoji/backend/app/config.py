@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     # Account name only; auth is DefaultAzureCredential (no secrets in repo).
     azure_storage_account: str | None = None
     assessment_blob_container: str = "assessment-banks"
+    # Seed assessments.db at startup (Azure Blob when configured, else local JSON).
+    # CI/tests set this false and seed explicitly so startup stays hermetic.
+    seed_assessments_on_startup: bool = True
 
     # Force the deterministic offline LLM path even when Foundry creds are present
     # (used by CI/E2E/smoke so the chat works without live Azure calls).

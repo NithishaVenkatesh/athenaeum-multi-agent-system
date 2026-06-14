@@ -9,7 +9,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from app.assessments.azure_blob import blob_key, list_bank_keys, pull_bank, push_banks
+from app.assessments.azure_blob import (
+    blob_key,
+    list_bank_keys,
+    pull_all_banks,
+    pull_bank,
+    push_banks,
+)
 
 from tests.test_assessments_loader import _write_banks
 from tests.test_assessments_validation import make_valid_bank
@@ -95,6 +101,25 @@ def test_list_bank_keys(tmp_path: Path) -> None:
     push_banks(client=client, container="c", root=tmp_path)
     keys = list_bank_keys(client=client, container="c")
     assert keys == [blob_key("cb-c01", "cb-c01-m01"), blob_key("cb-c01", "cb-c01-m02")]
+
+
+def test_pull_all_banks_returns_every_bank(tmp_path: Path) -> None:
+    _write_banks(
+        tmp_path,
+        [make_valid_bank("cb-c01", "cb-c01-m01"), make_valid_bank("cb-c01", "cb-c01-m02")],
+    )
+    client = FakeBlobServiceClient()
+    push_banks(client=client, container="c", root=tmp_path)
+
+    banks = pull_all_banks(client=client, container="c")
+
+    assert [b["module_id"] for b in banks] == ["cb-c01-m01", "cb-c01-m02"]
+    assert all(len(b["choices"]) == 10 and len(b["llm"]) == 3 for b in banks)
+
+
+def test_pull_all_banks_empty_container_returns_empty() -> None:
+    client = FakeBlobServiceClient()
+    assert pull_all_banks(client=client, container="c") == []
 
 
 def test_push_refuses_invalid_bank(tmp_path: Path) -> None:

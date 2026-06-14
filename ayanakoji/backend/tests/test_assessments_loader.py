@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
-from app.assessments.loader import BankValidationError, seed_database
+from app.assessments.loader import BankValidationError, seed_database, seed_from_banks
 from app.assessments.models import AssessmentBank, BankChoiceQuestion, BankLlmQuestion
 from sqlmodel import Session, select
 
@@ -73,6 +73,35 @@ def test_seed_rejects_invalid_bank(assessments_session: Session, tmp_path: Path)
     _write_banks(tmp_path, [bad])
     with pytest.raises(BankValidationError):
         seed_database(assessments_session, root=tmp_path)
+
+
+def test_seed_from_banks_loads_in_memory(assessments_session: Session) -> None:
+    """The Azure path seeds from in-memory dicts (no disk) the same as ``seed_database``."""
+    banks = [make_valid_bank("cb-c01", "cb-c01-m01"), make_valid_bank("cb-c01", "cb-c01-m02")]
+
+    counts = seed_from_banks(assessments_session, banks)
+
+    assert counts == {"files": 2, "banks": 4, "choice_questions": 20, "llm_questions": 6}
+
+
+def test_seed_from_banks_rejects_invalid_bank(assessments_session: Session) -> None:
+    bad = make_valid_bank()
+    bad["choices"][0]["correct_answers"] = ["not-an-option"]
+    with pytest.raises(BankValidationError):
+        seed_from_banks(assessments_session, [bad])
+
+
+def test_seed_from_empty_banks_leaves_db_untouched(
+    assessments_session: Session, tmp_path: Path
+) -> None:
+    """An empty source must not wipe an already-populated bank (failed-pull guard)."""
+    _write_banks(tmp_path, [make_valid_bank("cb-c01", "cb-c01-m01")])
+    seed_database(assessments_session, root=tmp_path)
+
+    counts = seed_from_banks(assessments_session, [])
+
+    assert counts["choice_questions"] == 10  # rows survived the empty reseed
+    assert counts["files"] == 0
 
 
 def test_assessments_db_is_separate_from_workspace(

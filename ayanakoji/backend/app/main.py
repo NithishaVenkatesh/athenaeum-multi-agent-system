@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from app import __version__
 from app.assessments.engine import init_db as assessments_init_db
 from app.assessments.router import router as assessments_router
+from app.assessments.seed import seed_on_startup
 from app.catalog.router import router as catalog_router
 from app.config import get_settings
 from app.courses.assessment_router import router as assessment_session_router
@@ -52,6 +53,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Create both DB schemas on startup, then run the notifications cron loop."""
     init_db()
     assessments_init_db()
+    if get_settings().seed_assessments_on_startup:
+        seed_on_startup()
 
     interval = get_settings().notify_tick_seconds
     tick_task = asyncio.create_task(run_notification_loop(interval)) if interval > 0 else None

@@ -82,16 +82,27 @@ def _add_bank(session: Session, bank: dict[str, Any]) -> None:
         )
 
 
-def seed_database(session: Session, *, root: Path | None = None) -> dict[str, int]:
-    """Clear and reload all banks from disk. Returns row counts. Raises on invalid bank."""
-    files = iter_bank_files(root)
-    banks: list[dict[str, Any]] = []
-    for path in files:
-        bank = json.loads(path.read_text(encoding="utf-8"))
-        errors = validate_bank(bank)
-        if errors:
-            raise BankValidationError(f"{path.name}: " + "; ".join(errors))
-        banks.append(bank)
+def _count(session: Session, model: type) -> int:
+    return int(session.exec(select(func.count()).select_from(model)).one())
+
+
+def _summary(session: Session, *, files: int) -> dict[str, int]:
+    return {
+        "files": files,
+        "banks": _count(session, AssessmentBank),
+        "choice_questions": _count(session, BankChoiceQuestion),
+        "llm_questions": _count(session, BankLlmQuestion),
+    }
+
+
+def _load_banks(session: Session, banks: list[dict[str, Any]]) -> dict[str, int]:
+    """Clear and reload pre-validated banks. Refuses to wipe the DB to empty.
+
+    An empty ``banks`` list leaves the existing rows untouched — a failed/empty
+    source must never silently delete a populated question bank.
+    """
+    if not banks:
+        return _summary(session, files=0)
 
     session.exec(delete(BankChoiceQuestion))
     session.exec(delete(BankLlmQuestion))
@@ -99,13 +110,29 @@ def seed_database(session: Session, *, root: Path | None = None) -> dict[str, in
     for bank in banks:
         _add_bank(session, bank)
     session.commit()
+    return _summary(session, files=len(banks))
 
-    def _count(model: type) -> int:
-        return int(session.exec(select(func.count()).select_from(model)).one())
 
-    return {
-        "files": len(files),
-        "banks": _count(AssessmentBank),
-        "choice_questions": _count(BankChoiceQuestion),
-        "llm_questions": _count(BankLlmQuestion),
-    }
+def seed_from_banks(session: Session, banks: list[dict[str, Any]]) -> dict[str, int]:
+    """Validate, then clear-and-reload the given in-memory banks (e.g. pulled from Azure).
+
+    Raises ``BankValidationError`` on the first invalid bank; nothing is written when
+    any bank is invalid (validation happens before the clear-and-reload).
+    """
+    for bank in banks:
+        errors = validate_bank(bank)
+        if errors:
+            raise BankValidationError(f"{bank.get('module_id', '?')}: " + "; ".join(errors))
+    return _load_banks(session, banks)
+
+
+def seed_database(session: Session, *, root: Path | None = None) -> dict[str, int]:
+    """Clear and reload all banks from disk. Returns row counts. Raises on invalid bank."""
+    banks: list[dict[str, Any]] = []
+    for path in iter_bank_files(root):
+        bank = json.loads(path.read_text(encoding="utf-8"))
+        errors = validate_bank(bank)
+        if errors:
+            raise BankValidationError(f"{path.name}: " + "; ".join(errors))
+        banks.append(bank)
+    return _load_banks(session, banks)

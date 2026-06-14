@@ -93,6 +93,23 @@ def pull_bank(
     return data
 
 
+def pull_all_banks(
+    *, client: _BlobClient | None = None, container: str | None = None
+) -> list[dict[str, Any]]:
+    """Download and parse every bank JSON in the container (the startup seed source).
+
+    Returns the banks sorted by blob key for determinism. Validation is left to the
+    seeding step so there is a single place that decides what is loadable.
+    """
+    client = client or build_client()
+    container = container or get_settings().assessment_blob_container
+    banks: list[dict[str, Any]] = []
+    for key in list_bank_keys(client=client, container=container):
+        raw = client.get_blob_client(container, key).download_blob().readall()
+        banks.append(json.loads(raw))
+    return banks
+
+
 def local_bank_index(root: Path | None = None) -> dict[str, tuple[str, str]]:
     """Map module_id -> (course_id, blob_key) for every local bank (smoke helper)."""
     index: dict[str, tuple[str, str]] = {}
