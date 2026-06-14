@@ -1,0 +1,106 @@
+{
+  "course_id": "do-c01",
+  "module_id": "do-c01-m04",
+  "module_title": "Traceability and flow of work",
+  "choices": [
+    {
+      "id": "do-c01-m04-c01",
+      "module_id": "do-c01-m04",
+      "prompt": "According to the module, what is the correct order of links in the traceability chain that lets you move in either direction for any change?",
+      "kind": "mcq",
+      "choices": [
+        "work item → branch/commit → pull request → deployment",
+        "pull request → work item → deployment → branch/commit",
+        "deployment → work item → branch/commit → pull request",
+        "branch/commit → work item → pull request → deployment"
+      ],
+      "correct_answers": [
+        "work item → branch/commit → pull request → deployment"
+      ]
+    },
+    {
+      "id": "do-c01-m04-c02",
+      "module_id": "do-c01-m04",
+      "prompt": "In the Azure Boards–GitHub integration described, how does a developer create the live, two-way link between a GitHub commit and a Boards work item?",
+      "kind": "mcq",
+      "choices": [
+        "By including the recognized work-item reference syntax (commonly AB#123) in the commit message, PR title, or description",
+        "By manually attaching the commit hash inside the Azure Boards work item form after each push",
+        "By tagging the deployed commit with the work item number using git tag",
+        "By configuring a GitHub Actions workflow that posts the commit to the Boards REST API"
+      ],
+      "correct_answers": [
+        "By including the recognized work-item reference syntax (commonly AB#123) in the commit message, PR title, or description"
+      ]
+    },
+    {
+      "id": "do-c01-m04-c03",
+      "module_id": "do-c01-m04",
+      "prompt": "A team finds that its cycle time is short but its lead time is long. Per the module, what does this gap most likely indicate?",
+      "kind": "mcq",
+      "choices": [
+        "Queue and wait time before work actively starts — such as backlog prioritization, waiting for review, or waiting to be picked up",
+        "That the active work itself is slow and engineers need more capacity",
+        "That deployment frequency is too low and releases should be batched",
+        "That time to recovery is rising because incidents are getting harder to fix"
+      ],
+      "correct_answers": [
+        "Queue and wait time before work actively starts — such as backlog prioritization, waiting for review, or waiting to be picked up"
+      ]
+    },
+    {
+      "id": "do-c01-m04-c04",
+      "module_id": "do-c01-m04",
+      "prompt": "Which of the following are flow metrics the module names as part of the complete picture of whether a team is fast and stable? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Lead time",
+        "Cycle time",
+        "Deployment frequency",
+        "Number of open pull requests per engineer"
+      ],
+      "correct_answers": [
+        "Lead time",
+        "Cycle time",
+        "Deployment frequency"
+      ]
+    },
+    {
+      "id": "do-c01-m04-c05",
+      "module_id": "do-c01-m04",
+      "prompt": "Which practices does the module present as ways to make traceability assemble automatically rather than depending on human diligence? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Reference the work item ID in branch names, commit messages, and the pull request via a linking convention",
+        "Tag the deployed commit as a permanent anchor for what shipped",
+        "Connect the Azure Boards app to the GitHub repository so AB# mentions auto-link",
+        "Require each engineer to manually email a change summary after every deploy"
+      ],
+      "correct_answers": [
+        "Reference the work item ID in branch names, commit messages, and the pull request via a linking convention",
+        "Tag the deployed commit as a permanent anchor for what shipped",
+        "Connect the Azure Boards app to the GitHub repository so AB# mentions auto-link"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "do-c01-m04-l01",
+      "module_id": "do-c01-m04",
+      "prompt": "Walk through how the integration and conventions in this module let an on-call engineer answer \"what changed?\" at 2 a.m. after a bad deploy, naming the specific links in the chain and the artifacts that capture them.",
+      "reference_answer": "The engineer starts from the deployment anchor: the release tag (e.g. v2.5.0) marks exactly which commit shipped. From the failing commit they find the merged pull request, because the PR title and commit message referenced the work item with the recognized syntax (AB#1042) and the Azure Boards–GitHub integration turned that mention into a live two-way link. The work item AB#1042 (the loyalty-points change) then identifies the feature and the why behind the change. This works because each link — work item → branch/commit → pull request → deployment — was captured by the workflow itself (branch/commit conventions, AB# auto-linking, and release tags) rather than left to human diligence. Together the planning link and the deployment anchor let the engineer trace a deployed commit back to its work items in under a minute."
+    },
+    {
+      "id": "do-c01-m04-l02",
+      "module_id": "do-c01-m04",
+      "prompt": "Compare lead time and cycle time as the module defines them, and explain why the gap between them is the most useful thing to watch on a dashboard.",
+      "reference_answer": "Lead time runs from when a request is made (the work item is created) until it is delivered to the customer — the customer's view of how long until they get what they asked for. Cycle time is the narrower span from when work actively starts (\"in progress\") until it is done — the team's view of how long the work itself takes. Lead time minus cycle time is roughly the queue and wait time, which is often where the real delay hides. Watching the gap is valuable because a short cycle time with a long lead time means the work is fast but waits before starting — in backlog prioritization, review, or to be picked up — pointing to a process problem to fix rather than a person to push. Reporting one metric as the other hides exactly the queue time you most need to see."
+    },
+    {
+      "id": "do-c01-m04-l03",
+      "module_id": "do-c01-m04",
+      "prompt": "Explain why the module insists that flow metrics measure the system and not individuals, and describe what goes wrong if a manager uses cycle time to rank engineers.",
+      "reference_answer": "Flow metrics like lead time, cycle time, deployment frequency, and time to recovery describe how work flows through the system, which the module calls the only honest way to use them. Their value is diagnostic — exposing where flow stalls, such as a widening lead-minus-cycle gap that signals queuing, or a rising recovery time that signals incidents are getting harder to fix — so the team can act on causes. If a manager uses cycle time to rank individuals, people game their numbers by splitting tickets or avoiding hard work, which corrupts the data and the team. That destroys the metric's diagnostic value: the rule is measure the flow and fix the system, not weaponize the numbers against people."
+    }
+  ]
+}
