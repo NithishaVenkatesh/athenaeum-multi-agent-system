@@ -1,0 +1,104 @@
+{
+  "course_id": "de-c03",
+  "module_id": "de-c03-m01",
+  "module_title": "Stream processing with Stream Analytics and Event Hubs",
+  "choices": [
+    {
+      "id": "de-c03-m01-c01",
+      "module_id": "de-c03-m01",
+      "prompt": "According to the module, what best describes how Event Hubs stores and serves events?",
+      "kind": "mcq",
+      "choices": [
+        "An append-only log where each event gets an offset within a partition and is retained for a configured time regardless of whether anyone has read it",
+        "A queue where each message is popped by exactly one consumer and deleted once read",
+        "A key-value store that overwrites the previous reading for each vessel as new ones arrive",
+        "A blob storage container that a nightly batch job scans end to end"
+      ],
+      "correct_answers": [
+        "An append-only log where each event gets an offset within a partition and is retained for a configured time regardless of whether anyone has read it"
+      ]
+    },
+    {
+      "id": "de-c03-m01-c02",
+      "module_id": "de-c03-m01",
+      "prompt": "Tidewater needs every reading from a single ferry processed strictly in order, while readings from different ferries may interleave freely. Why does keying the producer by vessel id achieve this?",
+      "kind": "mcq",
+      "choices": [
+        "Events with the same key always land in the same partition, and ordering is guaranteed within a partition, so each ferry stays ordered while different ferries spread across partitions",
+        "The partition key forces all events from all vessels into a single partition so global order is preserved",
+        "Keying by vessel id makes Stream Analytics sort events by timestamp before processing them",
+        "The partition key guarantees exactly-once delivery, which is what keeps the readings ordered"
+      ],
+      "correct_answers": [
+        "Events with the same key always land in the same partition, and ordering is guaranteed within a partition, so each ferry stays ordered while different ferries spread across partitions"
+      ]
+    },
+    {
+      "id": "de-c03-m01-c03",
+      "module_id": "de-c03-m01",
+      "prompt": "A teammate wants to raise a live hub's partition count from 8 to 32 to \"go faster\" and is surprised when ordering bugs appear. Based on the module, which statements about this plan are correct?",
+      "kind": "msq",
+      "choices": [
+        "Partition count is effectively fixed at hub creation and cannot simply be raised on a running hub without disruption",
+        "Reshuffling keys across more partitions can break the per-vessel order that the alerting logic depends on",
+        "Adding partitions only helps throughput if the query actually parallelizes across them",
+        "Partition count and throughput are the same setting, so raising partitions is the standard way to provision more throughput"
+      ],
+      "correct_answers": [
+        "Partition count is effectively fixed at hub creation and cannot simply be raised on a running hub without disruption",
+        "Reshuffling keys across more partitions can break the per-vessel order that the alerting logic depends on",
+        "Adding partitions only helps throughput if the query actually parallelizes across them"
+      ]
+    },
+    {
+      "id": "de-c03-m01-c04",
+      "module_id": "de-c03-m01",
+      "prompt": "The alert sink occasionally shows the same violation twice. According to the module, what is the correct diagnosis and fix?",
+      "kind": "mcq",
+      "choices": [
+        "It is not a query bug; at-least-once delivery can re-emit results after a restart, so make the sink idempotent (write by a natural key) or dedupe downstream",
+        "It is a bug in the WHERE clause, which should be tightened to exclude boundary speeds like exactly 8 knots",
+        "It is caused by TIMESTAMP BY using event time, which should be removed so the engine uses arrival time instead",
+        "It is a partition-count problem; raising the partition count will eliminate the duplicate rows"
+      ],
+      "correct_answers": [
+        "It is not a query bug; at-least-once delivery can re-emit results after a restart, so make the sink idempotent (write by a natural key) or dedupe downstream"
+      ]
+    },
+    {
+      "id": "de-c03-m01-c05",
+      "module_id": "de-c03-m01",
+      "prompt": "In the Stream Analytics query, what is the purpose of the `TIMESTAMP BY event_time` clause?",
+      "kind": "mcq",
+      "choices": [
+        "It tells the engine to use the reading's own timestamp as event time rather than the arrival time",
+        "It sorts the output rows chronologically before they are written to the sink",
+        "It sets the retention period of the event hub partition to match event_time",
+        "It deduplicates events that share the same event_time so each violation is emitted once"
+      ],
+      "correct_answers": [
+        "It tells the engine to use the reading's own timestamp as event time rather than the arrival time"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "de-c03-m01-l01",
+      "module_id": "de-c03-m01",
+      "prompt": "Explain why the Tidewater team cannot solve the speeding-ferry problem by making their existing nightly batch job faster, and describe at a high level the streaming path the module builds instead, naming the two core services and their roles.",
+      "reference_answer": "The batch job dumps readings into blob storage and runs once nightly, which is useless for stopping a ferry that is speeding right now; the requirement is to flag a violation within a few seconds, and no amount of speeding up a batch job changes its fundamentally after-the-fact nature. The module's streaming path instead processes each reading as it arrives. Event Hubs acts as a partitioned, replayable ingestion buffer in front of the engine, retaining events by offset so a crashed processor can resume from its last committed offset. Azure Stream Analytics is the engine: it runs continuous SQL over the moving stream, filtering and projecting readings, and emits an alert row the moment a vessel exceeds the no-wake threshold. The result is wired to a sink such as a SQL table or Power BI dataset for the live board."
+    },
+    {
+      "id": "de-c03-m01-l02",
+      "module_id": "de-c03-m01",
+      "prompt": "Describe what it means for a Stream Analytics job to be \"embarrassingly parallel,\" how streaming units (SUs) relate to that, and what kind of query prevents the job from scaling by adding SUs.",
+      "reference_answer": "A Stream Analytics job expresses its parallelism in streaming units (SUs), the compute-and-memory allocation it runs on. To use SUs effectively the job must be parallelizable: the input partition key, the partitioning of the query, and the output must line up so each partition's data is processed independently. When they line up the job is \"embarrassingly parallel\" and scales simply by adding SUs. A query that forces the engine to see all partitions at once — for example a global aggregation — makes the job shuffle all partitions together, so adding SUs stops helping. The remedy is to partition the query consistently with the input where possible and verify the job actually shows as parallel."
+    },
+    {
+      "id": "de-c03-m01-l03",
+      "module_id": "de-c03-m01",
+      "prompt": "Explain the at-least-once delivery guarantee in distributed streaming, the concrete consequence it has for a sink, and the two defenses the module recommends.",
+      "reference_answer": "Distributed streaming systems generally promise at-least-once delivery rather than exactly-once on the wire: if a processor emits a result to a sink and then crashes before recording success, on restart it reprocesses the same input and emits the result again. The concrete consequence is that the sink will occasionally see duplicate rows, so the design must not break when it does. The module recommends two defenses: an idempotent sink that writes by a natural key (for example vessel id plus event time) so a re-write is a no-op, or downstream deduplication on an event id. The takeaway is to assume duplicates will happen rather than assuming each result lands exactly once."
+    }
+  ]
+}
