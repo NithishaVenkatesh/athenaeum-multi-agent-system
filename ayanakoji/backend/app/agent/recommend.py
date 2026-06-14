@@ -204,9 +204,28 @@ def recommend_overview(
 # Generic words in course titles that don't identify a specific course on their own.
 _COURSE_STOPWORDS = frozenset(
     {
-        "and", "for", "the", "with", "your", "from", "into",
-        "course", "courses", "class", "module", "track", "cert", "certification",
-        "want", "take", "start", "open", "continue", "resume", "please", "azure",
+        "and",
+        "for",
+        "the",
+        "with",
+        "your",
+        "from",
+        "into",
+        "course",
+        "courses",
+        "class",
+        "module",
+        "track",
+        "cert",
+        "certification",
+        "want",
+        "take",
+        "start",
+        "open",
+        "continue",
+        "resume",
+        "please",
+        "azure",
     }
 )
 

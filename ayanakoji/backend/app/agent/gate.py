@@ -168,11 +168,13 @@ def screen(
     # 1) Fast regex pre-filter (always runs; cheap, deterministic, offline-safe).
     hit = _regex_hit(text)
     if hit is not None:
-        steps.append(TraceStep(
-            label="Regex pre-filter",
-            passed=False,
-            detail=f"Matched injection pattern: /{hit[:80]}/i",
-        ))
+        steps.append(
+            TraceStep(
+                label="Regex pre-filter",
+                passed=False,
+                detail=f"Matched injection pattern: /{hit[:80]}/i",
+            )
+        )
         verdict = InjectionVerdict(
             blocked=True,
             reason="Message matches a known injection/jailbreak pattern.",
@@ -180,11 +182,13 @@ def screen(
         )
         return verdict, _build_telemetry(verdict, model="regex-prefilter", tier=None, steps=steps)
 
-    steps.append(TraceStep(
-        label="Regex pre-filter",
-        passed=True,
-        detail=f"{len(_PATTERNS)} injection/jailbreak patterns checked — none matched.",
-    ))
+    steps.append(
+        TraceStep(
+            label="Regex pre-filter",
+            passed=True,
+            detail=f"{len(_PATTERNS)} injection/jailbreak patterns checked — none matched.",
+        )
+    )
 
     # 2) Offline: the pre-filter is the whole gate (no model available).
     if settings.llm_offline:
@@ -196,22 +200,26 @@ def screen(
     #    general LLM is ever called (M2).
     guard_verdict = _prompt_guard_verdict(text, settings, guard_fn)
     if guard_verdict is not None:
-        steps.append(TraceStep(
-            label="Groq Prompt Guard 2",
-            passed=not guard_verdict.blocked,
-            detail=guard_verdict.reason,
-            model=settings.groq_model_guard,
-        ))
+        steps.append(
+            TraceStep(
+                label="Groq Prompt Guard 2",
+                passed=not guard_verdict.blocked,
+                detail=guard_verdict.reason,
+                model=settings.groq_model_guard,
+            )
+        )
         if guard_verdict.blocked:
             return guard_verdict, _build_telemetry(
                 guard_verdict, model=settings.groq_model_guard, tier=None, steps=steps
             )
     else:
-        steps.append(TraceStep(
-            label="Groq Prompt Guard 2",
-            passed=None,
-            detail="Skipped — Groq not configured or unreachable.",
-        ))
+        steps.append(
+            TraceStep(
+                label="Groq Prompt Guard 2",
+                passed=None,
+                detail="Skipped — Groq not configured or unreachable.",
+            )
+        )
 
     # 4) Azure LLM classifier — the secondary semantic net (only when the guard
     #    cleared the turn): catches intent-level attacks the guard underweights.
@@ -228,32 +236,38 @@ def screen(
             max_tokens=120,
         )
         verdict = _parse_verdict(result.text)
-        steps.append(TraceStep(
-            label="Azure LLM classifier",
-            passed=not verdict.blocked,
-            detail=f"Confidence {verdict.confidence:.0%} — {verdict.reason}",
-            model=result.model,
-        ))
-        return verdict, _build_telemetry(
-            verdict, model=result.model, tier=result.tier, steps=steps
+        steps.append(
+            TraceStep(
+                label="Azure LLM classifier",
+                passed=not verdict.blocked,
+                detail=f"Confidence {verdict.confidence:.0%} — {verdict.reason}",
+                model=result.model,
+            )
         )
+        return verdict, _build_telemetry(verdict, model=result.model, tier=result.tier, steps=steps)
     except AllProvidersDown:
-        steps.append(TraceStep(
-            label="Azure LLM classifier",
-            passed=None,
-            detail="Unavailable — Azure/LLM providers unreachable.",
-        ))
+        steps.append(
+            TraceStep(
+                label="Azure LLM classifier",
+                passed=None,
+                detail="Unavailable — Azure/LLM providers unreachable.",
+            )
+        )
         # The specialist already cleared this turn → that is a real clean signal.
         if guard_verdict is not None:
             return guard_verdict, _build_telemetry(
                 guard_verdict, model=settings.groq_model_guard, tier=None, steps=steps
             )
         # 5) Fail open: every classifier unreachable, but the regex pre-filter cleared it.
-        steps.append(TraceStep(
-            label="Fail-open",
-            passed=True,
-            detail="All online classifiers unreachable — regex pre-filter cleared this message.",
-        ))
+        steps.append(
+            TraceStep(
+                label="Fail-open",
+                passed=True,
+                detail=(
+                    "All online classifiers unreachable — regex pre-filter cleared this message."
+                ),
+            )
+        )
         verdict = InjectionVerdict(
             blocked=False, reason="Regex pre-filter passed; classifiers unavailable."
         )

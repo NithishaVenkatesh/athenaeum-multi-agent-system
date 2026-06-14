@@ -44,7 +44,9 @@ class FakeProvider:
         assert isinstance(result, list)
         return iter(result)
 
-    def complete_tools(self, *a: object, **k: object) -> tuple[str, list[object]]:  # pragma: no cover
+    def complete_tools(
+        self, *a: object, **k: object
+    ) -> tuple[str, list[object]]:  # pragma: no cover
         raise AssertionError("FakeProvider has no scripted tool calls")
 
 
@@ -222,9 +224,7 @@ class _Transient(Exception):
 
 def test_retry_recovers_a_transient_blip_on_the_same_rung() -> None:
     # Azure rung 1 hits a 429 then succeeds on retry — it never falls to Groq.
-    azure = FakeProvider(
-        Provider.AZURE, [_Transient(429), RawCompletion(text="recovered")]
-    )
+    azure = FakeProvider(Provider.AZURE, [_Transient(429), RawCompletion(text="recovered")])
     groq = FakeProvider(Provider.GROQ, [])
     router = ModelRouter(_settings(), azure=azure, groq=groq, sleep=lambda _s: None)
     result = router.complete(Capability.FAST, [{"role": "user", "content": "hi"}])
@@ -275,7 +275,10 @@ def test_open_circuit_skips_a_dead_provider() -> None:
     clock["t"] = 120.0
     azure3 = FakeProvider(Provider.AZURE, [RawCompletion(text="azure-back")])
     router3 = ModelRouter(
-        _settings(), azure=azure3, groq=FakeProvider(Provider.GROQ, []), breaker=breaker,
+        _settings(),
+        azure=azure3,
+        groq=FakeProvider(Provider.GROQ, []),
+        breaker=breaker,
         sleep=lambda _s: None,
     )
     assert router3.complete(Capability.FAST, [{"role": "user", "content": "3"}]).text == (

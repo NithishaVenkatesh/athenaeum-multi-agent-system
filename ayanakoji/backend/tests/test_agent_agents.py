@@ -449,7 +449,6 @@ def test_recommend_still_suggests_without_a_course() -> None:
 from app.agent.answer import cross_chat_redirect  # noqa: E402
 from app.agent.contracts import NewChatEvent  # noqa: E402
 
-
 # cb-c02 = "Cloud Data & Storage for Developers"; "developers" is a unique title token.
 _REGISTERED: dict[str, tuple[str, str]] = {
     "cb-c02": ("chat-abc123", "Cloud Data & Storage for Developers"),

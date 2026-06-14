@@ -182,34 +182,45 @@ def build_plan_from_args(
     it, so a partial/garbled tool call still produces a valid plan.
     """
     pace_raw = args.get("pace")
-    pace = Pace(pace_raw) if pace_raw in ("slower", "normal", "faster") else (ctx.pace or Pace.NORMAL)
+    pace = (
+        Pace(pace_raw) if pace_raw in ("slower", "normal", "faster") else (ctx.pace or Pace.NORMAL)
+    )
     start = _iso_date(args.get("start_date")) or ctx.start_date or ctx.today
+
+    exclude_days_val = args.get("exclude_days")
     exclude = (
-        frozenset(d for d in args["exclude_days"] if d in _WEEKDAYS)
-        if isinstance(args.get("exclude_days"), list)
+        frozenset(d for d in exclude_days_val if d in _WEEKDAYS)
+        if isinstance(exclude_days_val, list)
         else frozenset()
     ) or ctx.exclude_days
+
+    skip_weeks_val = args.get("skip_weeks")
     skip = (
-        frozenset(int(w) for w in args["skip_weeks"] if isinstance(w, int) and w >= 1)
-        if isinstance(args.get("skip_weeks"), list)
+        frozenset(int(w) for w in skip_weeks_val if isinstance(w, int) and w >= 1)
+        if isinstance(skip_weeks_val, list)
         else frozenset()
     ) or ctx.skip_weeks
     exam = _iso_date(args.get("exam_date")) or ctx.exam_date
 
     time_window: tuple[int, int] | None = ctx.time_window
-    lo = _to_minutes(args["earliest_time"]) if isinstance(args.get("earliest_time"), str) else None
-    hi = _to_minutes(args["latest_time"]) if isinstance(args.get("latest_time"), str) else None
+    earliest_val = args.get("earliest_time")
+    latest_val = args.get("latest_time")
+    lo = _to_minutes(earliest_val) if isinstance(earliest_val, str) else None
+    hi = _to_minutes(latest_val) if isinstance(latest_val, str) else None
     if lo is not None or hi is not None:
         time_window = (lo or 0, hi or 24 * 60)
 
+    max_session_val = args.get("max_session_minutes")
     max_session = (
-        int(args["max_session_minutes"])
-        if isinstance(args.get("max_session_minutes"), int) and args["max_session_minutes"] > 0  # type: ignore[operator]
+        max_session_val
+        if isinstance(max_session_val, int) and max_session_val > 0
         else ctx.max_session_minutes
     )
+
+    excluded_dates_val = args.get("excluded_dates")
     extra_dates = (
-        frozenset(d for d in args["excluded_dates"] if _iso_date(d) is not None)
-        if isinstance(args.get("excluded_dates"), list)
+        frozenset(d for d in excluded_dates_val if _iso_date(d) is not None)
+        if isinstance(excluded_dates_val, list)
         else frozenset()
     ) or ctx.excluded_dates
 

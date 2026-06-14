@@ -49,8 +49,8 @@ SessionDep = Annotated[Session, Depends(get_session)]
 AssessmentSessionDep = Annotated[Session, Depends(get_assessment_session)]
 
 PASS_THRESHOLD = 5.0  # score >= 5.0 / 10.0 → passed
-CHOICES_SAMPLE = 5    # learner sees 5 of 10 bank questions per session
-LLM_SAMPLE = 1        # learner answers 1 of 3 LLM questions per session
+CHOICES_SAMPLE = 5  # learner sees 5 of 10 bank questions per session
+LLM_SAMPLE = 1  # learner answers 1 of 3 LLM questions per session
 
 
 def _require_course(repo: CourseRepository, course_id: str) -> None:
@@ -58,9 +58,7 @@ def _require_course(repo: CourseRepository, course_id: str) -> None:
         raise HTTPException(status_code=404, detail=f"course '{course_id}' not found")
 
 
-def _require_module(
-    repo: CourseRepository, course_id: str, module_id: str
-) -> CourseModule:
+def _require_module(repo: CourseRepository, course_id: str, module_id: str) -> CourseModule:
 
     m = repo.get_module(course_id, module_id)
     if m is None:
@@ -208,35 +206,35 @@ def start_assessment(
     llm_qs: list[LlmQuestion] = []
 
     if type == "choices":
-        bank_questions = a_repo.choice_questions(bank.id)
+        choice_bank = a_repo.choice_questions(bank.id)
         # Sample 5 of 10 randomly; different each attempt.
-        sample = random.sample(bank_questions, min(CHOICES_SAMPLE, len(bank_questions)))
-        for seq, bq in enumerate(sample, 1):
-            q = ChoiceQuestion(
+        sample = random.sample(choice_bank, min(CHOICES_SAMPLE, len(choice_bank)))
+        for seq, cbq in enumerate(sample, 1):
+            cq = ChoiceQuestion(
                 assessment_id=assessment.id,
-                bank_question_id=bq.id,
+                bank_question_id=cbq.id,
                 sequence=seq,
-                prompt=bq.prompt,
-                choices=list(bq.choices),
-                correct_answers=list(bq.correct_answers),
+                prompt=cbq.prompt,
+                choices=list(cbq.choices),
+                correct_answers=list(cbq.correct_answers),
             )
-            repo.add_choice_question(q)
-            choice_qs.append(q)
+            repo.add_choice_question(cq)
+            choice_qs.append(cq)
 
     else:  # llm
-        bank_questions = a_repo.llm_questions(bank.id)
+        llm_bank = a_repo.llm_questions(bank.id)
         # Round-robin: prior attempt count tells us which to show next.
         prior_attempts = attempt_number - 1
         # Cycle through all 3 before repeating.
-        idx = prior_attempts % len(bank_questions)
-        bq = bank_questions[idx]
-        q = LlmQuestion(
+        idx = prior_attempts % len(llm_bank)
+        lbq = llm_bank[idx]
+        lq = LlmQuestion(
             assessment_id=assessment.id,
-            bank_question_id=bq.id,
-            prompt=bq.prompt,
+            bank_question_id=lbq.id,
+            prompt=lbq.prompt,
         )
-        repo.add_llm_question(q)
-        llm_qs.append(q)
+        repo.add_llm_question(lq)
+        llm_qs.append(lq)
 
     return _to_session_read(assessment, choice_qs, llm_qs)
 
@@ -520,9 +518,7 @@ def llm_turn(
     last question in the assessment, the assessment is auto-submitted.
     """
     return StreamingResponse(
-        _stream_llm_turn(
-            course_id, assessment_id, question_id, body.content, session, asmtsession
-        ),
+        _stream_llm_turn(course_id, assessment_id, question_id, body.content, session, asmtsession),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -590,11 +586,13 @@ def _stream_llm_turn(
         repo.save_llm_question(q)
         if result.reply:
             yield _sse({"type": "token", "token": result.reply})
-        yield _sse({
-            "type": "grade",
-            "score": result.grade.score,
-            "reasoning": result.grade.reasoning,
-        })
+        yield _sse(
+            {
+                "type": "grade",
+                "score": result.grade.score,
+                "reasoning": result.grade.reasoning,
+            }
+        )
         # Check if all questions are graded → auto-submit.
         _auto_submit_llm_if_complete(repo, a)
     else:

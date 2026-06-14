@@ -105,9 +105,7 @@ _GROUNDING_DISCLAIMER = (
 )
 
 
-def stream_grounded(
-    tokens: Iterable[str], sources: Iterable[GroundingSource]
-) -> Iterator[str]:
+def stream_grounded(tokens: Iterable[str], sources: Iterable[GroundingSource]) -> Iterator[str]:
     """Stream a tutor answer live while enforcing grounding (M5 + H5).
 
     Yields tokens as they arrive (no buffer-then-restream), but:

@@ -169,9 +169,7 @@ def _day_study_slots(day: DaySchedule, work_start: int, work_end: int) -> list[W
     return [s for s in slots if s.minutes >= _MIN_SLOT_MINUTES]
 
 
-def _clip_to_window(
-    slots: list[WeeklySlot], window: tuple[int, int] | None
-) -> list[WeeklySlot]:
+def _clip_to_window(slots: list[WeeklySlot], window: tuple[int, int] | None) -> list[WeeklySlot]:
     """Clip slots to a [earliest, latest] minute-of-day window (e.g. evenings only).
 
     A slot is trimmed to the overlap with the window and dropped if what remains is
@@ -453,7 +451,9 @@ def build_study_plan(
             f"At this pace the plan finishes {days_over} day(s) after your exam on "
             f"{exam_date.isoformat()}. Consider a faster pace or additional study sessions."
         )
-        balloon_warning = overrun_msg if balloon_warning is None else f"{balloon_warning} {overrun_msg}"
+        balloon_warning = (
+            overrun_msg if balloon_warning is None else f"{balloon_warning} {overrun_msg}"
+        )
 
     return StudyPlan(
         catalog_id=catalog_id,

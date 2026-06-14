@@ -386,8 +386,7 @@ def test_oversized_message_is_rejected_422(client: TestClient) -> None:
     course_id = _create(client)["id"]
     huge = "a" * (MAX_MESSAGE_CHARS + 1)
     assert (
-        client.post(f"/api/courses/{course_id}/messages", json={"content": huge}).status_code
-        == 422
+        client.post(f"/api/courses/{course_id}/messages", json={"content": huge}).status_code == 422
     )
     # A message exactly at the limit is accepted (stream opens, status 200).
     at_limit = "b" * MAX_MESSAGE_CHARS

@@ -26,6 +26,7 @@ import time
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
+from functools import partial
 from typing import Any, Protocol
 
 from app.config import Settings, get_settings
@@ -317,7 +318,7 @@ class _OpenAICompatibleProvider:
         kwargs = self._kwargs(model, max_tokens)
         response = self._client.chat.completions.create(
             model=model,
-            messages=self._project_messages(model, messages),  # type: ignore[arg-type]
+            messages=self._project_messages(model, messages),
             tools=tools,
             tool_choice=tool_choice,
             **kwargs,
@@ -482,8 +483,12 @@ class ModelRouter:
             started = time.monotonic()
             try:
                 raw = self._retry(
-                    lambda p=provider, a=attempt: p.complete(
-                        a.model, messages, json_mode=json_mode, max_tokens=max_tokens
+                    partial(
+                        provider.complete,
+                        attempt.model,
+                        messages,
+                        json_mode=json_mode,
+                        max_tokens=max_tokens,
                     )
                 )
             except Exception as exc:  # noqa: BLE001 — record and try the next rung
@@ -530,7 +535,7 @@ class ModelRouter:
             attempted = True
             try:
                 first, iterator = self._retry(
-                    lambda p=provider, a=attempt: _open_stream(p, a.model, messages, max_tokens)
+                    partial(_open_stream, provider, attempt.model, messages, max_tokens)
                 )
             except StopIteration:
                 # Empty stream — treat as a failure and try the next rung.
@@ -583,9 +588,13 @@ class ModelRouter:
         last: Exception | None = None
         for provider, attempt in rungs:
             try:
-                result = self._tool_loop(provider, attempt, messages, tools, handlers, max_rounds, max_tokens)
+                result = self._tool_loop(
+                    provider, attempt, messages, tools, handlers, max_rounds, max_tokens
+                )
             except Exception as exc:  # noqa: BLE001 — record and try the next provider
-                logger.warning("tier %d %s tool loop failed: %s", attempt.tier, attempt.provider, exc)
+                logger.warning(
+                    "tier %d %s tool loop failed: %s", attempt.tier, attempt.provider, exc
+                )
                 last = exc
                 self._breaker.record_failure(attempt.provider)
                 continue
@@ -610,8 +619,11 @@ class ModelRouter:
             )
             if not calls:
                 return ToolLoopResult(
-                    text=text, provider=attempt.provider, model=attempt.model,
-                    tier=attempt.tier, rounds=round_num,
+                    text=text,
+                    provider=attempt.provider,
+                    model=attempt.model,
+                    tier=attempt.tier,
+                    rounds=round_num,
                 )
             # Echo the model's tool-call message, then append each tool result.
             convo.append(
@@ -651,8 +663,11 @@ class ModelRouter:
             attempt.model, convo, tools=tools, tool_choice="none", max_tokens=max_tokens
         )
         return ToolLoopResult(
-            text=text, provider=attempt.provider, model=attempt.model,
-            tier=attempt.tier, rounds=max_rounds,
+            text=text,
+            provider=attempt.provider,
+            model=attempt.model,
+            tier=attempt.tier,
+            rounds=max_rounds,
         )
 
 

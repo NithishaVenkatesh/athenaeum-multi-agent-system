@@ -100,7 +100,9 @@ def _src(ref: str) -> GroundingSource:
 
 
 def test_stream_grounded_keeps_a_valid_citation() -> None:
-    out = "".join(stream_grounded(["App Service ", "scales ", "[cb-c01-m02]"], [_src("cb-c01-m02")]))
+    out = "".join(
+        stream_grounded(["App Service ", "scales ", "[cb-c01-m02]"], [_src("cb-c01-m02")])
+    )
     assert out == "App Service scales [cb-c01-m02]"
 
 
@@ -112,7 +114,9 @@ def test_stream_grounded_drops_an_invented_citation() -> None:
 
 def test_stream_grounded_handles_a_citation_split_across_tokens() -> None:
     # The model emits the bracket across several tokens; it must still be recognized.
-    out = "".join(stream_grounded(["see ", "[cb-", "c01", "-m02", "]", " here"], [_src("cb-c01-m02")]))
+    out = "".join(
+        stream_grounded(["see ", "[cb-", "c01", "-m02", "]", " here"], [_src("cb-c01-m02")])
+    )
     assert out == "see [cb-c01-m02] here"
 
 
@@ -124,7 +128,9 @@ def test_stream_grounded_appends_disclaimer_for_uncited_substantial_answer() -> 
 
 
 def test_stream_grounded_no_disclaimer_when_cited() -> None:
-    long_claim = "Azure Functions scale automatically based on event triggers [cb-c01-m02] and demand."
+    long_claim = (
+        "Azure Functions scale automatically based on event triggers [cb-c01-m02] and demand."
+    )
     out = "".join(stream_grounded([long_claim], [_src("cb-c01-m02")]))
     assert "beyond the cited course material" not in out
 

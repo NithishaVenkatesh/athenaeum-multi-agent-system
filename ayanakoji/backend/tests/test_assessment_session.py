@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
+
 def _seed_banks(assessments_session: Any) -> None:
     """Insert minimal bank rows so the assessment API can sample questions."""
     from app.assessments.models import AssessmentBank, BankChoiceQuestion, BankLlmQuestion
@@ -92,9 +93,7 @@ def _make_course_with_plan(client: TestClient) -> tuple[str, str]:
 # ── start choices ─────────────────────────────────────────────────────────────
 
 
-def test_start_choices_returns_5_questions(
-    client: TestClient, assessments_session: Any
-) -> None:
+def test_start_choices_returns_5_questions(client: TestClient, assessments_session: Any) -> None:
     _seed_banks(assessments_session)
     course_id, module_id = _make_course_with_plan(client)
     resp = client.post(
@@ -110,9 +109,7 @@ def test_start_choices_returns_5_questions(
     assert body["passed"] is None
 
 
-def test_start_choices_random_sample_varies(
-    client: TestClient, assessments_session: Any
-) -> None:
+def test_start_choices_random_sample_varies(client: TestClient, assessments_session: Any) -> None:
     """Different attempts should (with overwhelmingly high probability) get different sets."""
     _seed_banks(assessments_session)
     course_id, module_id = _make_course_with_plan(client)
@@ -124,9 +121,7 @@ def test_start_choices_random_sample_varies(
     ).json()
     a1_id = r1["id"]
     # Submit without selecting → all wrong
-    sub1 = client.post(
-        f"/api/courses/{course_id}/assessments/{a1_id}/choices/submit"
-    )
+    sub1 = client.post(f"/api/courses/{course_id}/assessments/{a1_id}/choices/submit")
     assert sub1.json()["passed"] is False
 
     # Start attempt 2
@@ -144,9 +139,7 @@ def test_start_choices_random_sample_varies(
 
 def test_start_choices_blocks_before_plan(client: TestClient, assessments_session: Any) -> None:
     _seed_banks(assessments_session)
-    course = client.post(
-        "/api/courses", json={"persona_id": "EMP-001", "content": "hello"}
-    ).json()
+    course = client.post("/api/courses", json={"persona_id": "EMP-001", "content": "hello"}).json()
     resp = client.post(
         f"/api/courses/{course['id']}/modules/cb-c01-m01/assessments/start",
         params={"type": "choices"},
@@ -188,17 +181,13 @@ def test_select_and_submit_choices_all_correct(
             json={"selections": ["A"]},
         )
 
-    result = client.post(
-        f"/api/courses/{course_id}/assessments/{a_id}/choices/submit"
-    ).json()
+    result = client.post(f"/api/courses/{course_id}/assessments/{a_id}/choices/submit").json()
     assert result["score"] == 10.0
     assert result["passed"] is True
     assert all(q["is_correct"] for q in result["questions"])
 
 
-def test_submit_choices_all_wrong_score_0(
-    client: TestClient, assessments_session: Any
-) -> None:
+def test_submit_choices_all_wrong_score_0(client: TestClient, assessments_session: Any) -> None:
     _seed_banks(assessments_session)
     course_id, module_id = _make_course_with_plan(client)
     session_data = client.post(
@@ -207,16 +196,12 @@ def test_submit_choices_all_wrong_score_0(
     ).json()
     a_id = session_data["id"]
 
-    result = client.post(
-        f"/api/courses/{course_id}/assessments/{a_id}/choices/submit"
-    ).json()
+    result = client.post(f"/api/courses/{course_id}/assessments/{a_id}/choices/submit").json()
     assert result["score"] == 0.0
     assert result["passed"] is False
 
 
-def test_submit_choices_double_submit_409(
-    client: TestClient, assessments_session: Any
-) -> None:
+def test_submit_choices_double_submit_409(client: TestClient, assessments_session: Any) -> None:
     _seed_banks(assessments_session)
     course_id, module_id = _make_course_with_plan(client)
     a_id = client.post(
@@ -228,9 +213,7 @@ def test_submit_choices_double_submit_409(
     assert resp.status_code == 409
 
 
-def test_retake_blocked_after_pass(
-    client: TestClient, assessments_session: Any
-) -> None:
+def test_retake_blocked_after_pass(client: TestClient, assessments_session: Any) -> None:
     _seed_banks(assessments_session)
     course_id, module_id = _make_course_with_plan(client)
     a_id = client.post(
@@ -257,9 +240,7 @@ def test_retake_blocked_after_pass(
 # ── results ───────────────────────────────────────────────────────────────────
 
 
-def test_get_results_reveals_correct_answers(
-    client: TestClient, assessments_session: Any
-) -> None:
+def test_get_results_reveals_correct_answers(client: TestClient, assessments_session: Any) -> None:
     _seed_banks(assessments_session)
     course_id, module_id = _make_course_with_plan(client)
     a_id = client.post(
@@ -267,17 +248,13 @@ def test_get_results_reveals_correct_answers(
         params={"type": "choices"},
     ).json()["id"]
     client.post(f"/api/courses/{course_id}/assessments/{a_id}/choices/submit")
-    results = client.get(
-        f"/api/courses/{course_id}/assessments/{a_id}/results"
-    ).json()
+    results = client.get(f"/api/courses/{course_id}/assessments/{a_id}/results").json()
     # correct_answers are revealed in the results view
     for q in results["questions"]:
         assert q["correct_answers"] == ["A"]
 
 
-def test_get_results_before_submit_409(
-    client: TestClient, assessments_session: Any
-) -> None:
+def test_get_results_before_submit_409(client: TestClient, assessments_session: Any) -> None:
     _seed_banks(assessments_session)
     course_id, module_id = _make_course_with_plan(client)
     a_id = client.post(
@@ -291,9 +268,7 @@ def test_get_results_before_submit_409(
 # ── LLM round-robin ───────────────────────────────────────────────────────────
 
 
-def test_llm_round_robin_rotates_questions(
-    client: TestClient, assessments_session: Any
-) -> None:
+def test_llm_round_robin_rotates_questions(client: TestClient, assessments_session: Any) -> None:
     """Consecutive LLM attempts rotate through the 3 bank questions in order."""
     _seed_banks(assessments_session)
     course_id, module_id = _make_course_with_plan(client)
@@ -316,9 +291,7 @@ def test_llm_round_robin_rotates_questions(
             params={"type": "llm"},
         ).json()
         # Force-submit immediately (all questions score 0 → fail)
-        client.post(
-            f"/api/courses/{course_id}/assessments/{s['id']}/llm/submit"
-        )
+        client.post(f"/api/courses/{course_id}/assessments/{s['id']}/llm/submit")
         return s["llm_questions"][0]["bank_question_id"]
 
     bqid1 = _start_llm_and_fail()  # attempt 1 → bank question index 0 (l01)
@@ -368,9 +341,9 @@ def test_module_marked_complete_when_both_pass(
     a_id = a_l["id"]
     with session_scope() as s:
         qs_db = s.exec(
-            __import__("sqlmodel", fromlist=["select"]).select(LlmQuestion).where(
-                LlmQuestion.assessment_id == a_id
-            )
+            __import__("sqlmodel", fromlist=["select"])
+            .select(LlmQuestion)
+            .where(LlmQuestion.assessment_id == a_id)
         ).all()
         for q in qs_db:
             q.score = 8
@@ -382,9 +355,7 @@ def test_module_marked_complete_when_both_pass(
         s.commit()
 
     # Now call submit_llm — it will see all graded and compute avg.
-    result = client.post(
-        f"/api/courses/{course_id}/assessments/{a_id}/llm/submit"
-    ).json()
+    result = client.post(f"/api/courses/{course_id}/assessments/{a_id}/llm/submit").json()
     assert result["passed"] is True
 
     # Module must now be complete.
@@ -395,9 +366,7 @@ def test_module_marked_complete_when_both_pass(
 # ── LLM start + turn ─────────────────────────────────────────────────────────
 
 
-def test_llm_start_returns_opening_message(
-    client: TestClient, assessments_session: Any
-) -> None:
+def test_llm_start_returns_opening_message(client: TestClient, assessments_session: Any) -> None:
     _seed_banks(assessments_session)
     course_id, module_id = _make_course_with_plan(client)
 
@@ -417,18 +386,14 @@ def test_llm_start_returns_opening_message(
         f"/api/courses/{course_id}/modules/{module_id}/assessments/start",
         params={"type": "llm"},
     ).json()
-    q_state = client.post(
-        f"/api/courses/{course_id}/assessments/{a_l['id']}/llm/start"
-    ).json()
+    q_state = client.post(f"/api/courses/{course_id}/assessments/{a_l['id']}/llm/start").json()
     assert len(q_state["messages"]) == 1
     assert q_state["messages"][0]["role"] == "assistant"
     # Opening message includes the question prompt.
     assert "Explain" in q_state["messages"][0]["content"]
 
 
-def test_llm_turn_offline_grade_at_ceiling(
-    client: TestClient, assessments_session: Any
-) -> None:
+def test_llm_turn_offline_grade_at_ceiling(client: TestClient, assessments_session: Any) -> None:
     """After ceiling turns the offline grader returns a grade."""
     _seed_banks(assessments_session)
     course_id, module_id = _make_course_with_plan(client)
@@ -456,13 +421,14 @@ def test_llm_turn_offline_grade_at_ceiling(
     for i in range(9):  # go past ceiling
         raw = client.post(
             f"/api/courses/{course_id}/assessments/{a_l['id']}/llm/{q_id}/turn",
-            json={"content": f"My answer attempt {i+1}"},
+            json={"content": f"My answer attempt {i + 1}"},
         )
         # Parse SSE
         for line in raw.text.split("\n\n"):
             line = line.strip()
             if line.startswith("data:"):
                 import json
+
                 event = json.loads(line[5:])
                 if event.get("type") == "grade":
                     graded = True

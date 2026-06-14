@@ -71,7 +71,9 @@ class TraceStep(BaseModel):
     final verdict.
     """
 
-    label: str = Field(description="Layer name: Regex pre-filter | Azure LLM classifier | Groq Prompt Guard 2 | …")
+    label: str = Field(
+        description="Layer name: Regex pre-filter | Azure LLM classifier | Groq Prompt Guard 2 | …"
+    )
     passed: bool | None = Field(
         default=None,
         description="True=passed, False=blocked, None=informational (unavailable/skipped)",

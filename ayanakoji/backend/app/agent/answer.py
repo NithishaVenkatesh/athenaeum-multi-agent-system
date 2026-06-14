@@ -148,7 +148,11 @@ def answer_general(
     settings = settings or get_settings()
     reasoning = f"General assistance; off-topic≈{decision.off_topic:.1f} → scaled nudge."
     nudge_strength = (
-        "strong" if decision.off_topic >= 0.7 else "medium" if decision.off_topic >= 0.3 else "light"
+        "strong"
+        if decision.off_topic >= 0.7
+        else "medium"
+        if decision.off_topic >= 0.3
+        else "light"
     )
     steps: list[TraceStep] = [
         TraceStep(
@@ -160,7 +164,9 @@ def answer_general(
 
     if settings.llm_offline:
         reply = _general_offline(decision.off_topic)
-        steps.append(TraceStep(label="LLM generation", passed=True, detail="offline mode", model="offline"))
+        steps.append(
+            TraceStep(label="LLM generation", passed=True, detail="offline mode", model="offline")
+        )
         return AgentReply(
             telemetry=_answer_telemetry(
                 summary="Answered generally with a platform nudge",
@@ -185,12 +191,14 @@ def answer_general(
         [{"role": "system", "content": system}, {"role": "user", "content": text}],
         max_tokens=600,
     )
-    steps.append(TraceStep(
-        label="LLM generation",
-        passed=True,
-        detail="WORKHORSE capability · max 600 tokens",
-        model=handle.model,
-    ))
+    steps.append(
+        TraceStep(
+            label="LLM generation",
+            passed=True,
+            detail="WORKHORSE capability · max 600 tokens",
+            model=handle.model,
+        )
+    )
     return AgentReply(
         telemetry=_answer_telemetry(
             summary="Answered generally with a platform nudge",
@@ -304,7 +312,9 @@ def answer_foundry(
 
     if settings.llm_offline:
         reply = _foundry_offline(sources, mode)
-        steps.append(TraceStep(label="LLM generation", passed=True, detail="offline mode", model="offline"))
+        steps.append(
+            TraceStep(label="LLM generation", passed=True, detail="offline mode", model="offline")
+        )
         return AgentReply(
             telemetry=_answer_telemetry(
                 summary="Answered from approved course content",
@@ -352,20 +362,24 @@ def answer_foundry(
         [{"role": "system", "content": system}, {"role": "user", "content": text}],
         max_tokens=800,
     )
-    steps.append(TraceStep(
-        label="LLM generation",
-        passed=True,
-        detail="WORKHORSE capability · max 800 tokens · streamed live · citations required",
-        model=handle.model,
-    ))
+    steps.append(
+        TraceStep(
+            label="LLM generation",
+            passed=True,
+            detail="WORKHORSE capability · max 800 tokens · streamed live · citations required",
+            model=handle.model,
+        )
+    )
     # Stream live through the grounding guard: invented [module-id] citations are
     # dropped inline (no buffer-then-restream, M5), and an answer that makes claims
     # without citing any approved source gets an honesty disclaimer (H5).
-    steps.append(TraceStep(
-        label="Citation guard",
-        passed=True,
-        detail="Streaming: invented citations dropped inline; uncited claims flagged",
-    ))
+    steps.append(
+        TraceStep(
+            label="Citation guard",
+            passed=True,
+            detail="Streaming: invented citations dropped inline; uncited claims flagged",
+        )
+    )
     return AgentReply(
         telemetry=_answer_telemetry(
             summary="Answered from approved course content",
@@ -458,11 +472,13 @@ def answer_work(
                 sources=[],
                 model="offline" if settings.llm_offline else None,
                 tier=None,
-                steps=[TraceStep(
-                    label="Work IQ lookup",
-                    passed=False,
-                    detail=f"No persona '{persona_id}' found in Work IQ source",
-                )],
+                steps=[
+                    TraceStep(
+                        label="Work IQ lookup",
+                        passed=False,
+                        detail=f"No persona '{persona_id}' found in Work IQ source",
+                    )
+                ],
             ),
             tokens=_offline_stream(reply),
         )
@@ -482,7 +498,9 @@ def answer_work(
     ]
 
     if settings.llm_offline:
-        steps.append(TraceStep(label="LLM generation", passed=True, detail="offline mode", model="offline"))
+        steps.append(
+            TraceStep(label="LLM generation", passed=True, detail="offline mode", model="offline")
+        )
         return AgentReply(
             telemetry=_answer_telemetry(
                 summary="Answered from your Work IQ signals",
@@ -509,12 +527,14 @@ def answer_work(
         [{"role": "system", "content": system}, {"role": "user", "content": text}],
         max_tokens=600,
     )
-    steps.append(TraceStep(
-        label="LLM generation",
-        passed=True,
-        detail="WORKHORSE capability · max 600 tokens · grounded in Work IQ signals",
-        model=handle.model,
-    ))
+    steps.append(
+        TraceStep(
+            label="LLM generation",
+            passed=True,
+            detail="WORKHORSE capability · max 600 tokens · grounded in Work IQ signals",
+            model=handle.model,
+        )
+    )
     return AgentReply(
         telemetry=_answer_telemetry(
             summary="Answered from your Work IQ signals",
@@ -607,16 +627,22 @@ def answer_greeting(
         TraceStep(
             label="Persona lookup",
             passed=persona is not None,
-            detail=f"Loaded: {persona.codename}" if persona else "No persona found — generic greeting",
+            detail=f"Loaded: {persona.codename}"
+            if persona
+            else "No persona found — generic greeting",
         ),
     ]
 
     locked_title = _locked_title(catalog_id)
-    steps.append(TraceStep(
-        label="Course-lock check",
-        passed=True,
-        detail=f"Chat locked to: {locked_title}" if locked_title else "Open chat — will offer profile options",
-    ))
+    steps.append(
+        TraceStep(
+            label="Course-lock check",
+            passed=True,
+            detail=f"Chat locked to: {locked_title}"
+            if locked_title
+            else "Open chat — will offer profile options",
+        )
+    )
 
     if locked_title is not None:
         greeting = (
@@ -638,15 +664,19 @@ def answer_greeting(
         )
 
     options = _recommend_for(persona, taken)
-    steps.append(TraceStep(
-        label="Option selection",
-        passed=bool(options),
-        detail=f"{len(options)} profile-based course(s) prepared" if options else "No eligible options found",
-    ))
+    steps.append(
+        TraceStep(
+            label="Option selection",
+            passed=bool(options),
+            detail=f"{len(options)} profile-based course(s) prepared"
+            if options
+            else "No eligible options found",
+        )
+    )
     greeting = (
         f"Hi{who}, welcome to Athenaeum. I help you choose and prepare for an Azure "
         "certification course. Tell me a topic or cert you're aiming for, or say "
-        "\"suggest a course\" and I'll recommend one that fits your role."
+        '"suggest a course" and I\'ll recommend one that fits your role.'
     )
     suggestion = (
         SuggestionEvent(prompt="Or jump straight in, here's a fit for your path:", options=options)
@@ -824,7 +854,8 @@ def answer_recommend(
             label="Course selection",
             passed=bool(options),
             detail=(
-                f"{len(options)} course(s) selected for {scope}: {', '.join(o.catalog_id for o in options)}"
+                f"{len(options)} course(s) selected for {scope}: "
+                f"{', '.join(o.catalog_id for o in options)}"
                 if options
                 else "No eligible courses found"
             ),
@@ -860,7 +891,9 @@ def answer_recommend(
     )
 
     if settings.llm_offline:
-        steps.append(TraceStep(label="LLM narration", passed=True, detail="offline mode", model="offline"))
+        steps.append(
+            TraceStep(label="LLM narration", passed=True, detail="offline mode", model="offline")
+        )
         return AgentReply(
             telemetry=_answer_telemetry(
                 summary="Recommended courses to choose from",
@@ -899,12 +932,14 @@ def answer_recommend(
         [{"role": "system", "content": system}, {"role": "user", "content": text}],
         max_tokens=400,
     )
-    steps.append(TraceStep(
-        label="LLM narration",
-        passed=True,
-        detail="WORKHORSE capability · max 400 tokens",
-        model=handle.model,
-    ))
+    steps.append(
+        TraceStep(
+            label="LLM narration",
+            passed=True,
+            detail="WORKHORSE capability · max 400 tokens",
+            model=handle.model,
+        )
+    )
     return AgentReply(
         telemetry=_answer_telemetry(
             summary="Recommended courses to choose from",
@@ -1065,11 +1100,13 @@ def answer_study_plan(
 
     # HITL gate: ask the pace before planning.
     if pace is None:
-        steps.append(TraceStep(
-            label="Pace gate",
-            passed=False,
-            detail="No pace set — asking the learner before building the plan",
-        ))
+        steps.append(
+            TraceStep(
+                label="Pace gate",
+                passed=False,
+                detail="No pace set — asking the learner before building the plan",
+            )
+        )
         return AgentReply(
             telemetry=_answer_telemetry(
                 summary="Asked the learner's pace before planning",
@@ -1088,11 +1125,13 @@ def answer_study_plan(
             ),
         )
 
-    steps.append(TraceStep(
-        label="Pace gate",
-        passed=True,
-        detail=f"Pace: {pace.value}",
-    ))
+    steps.append(
+        TraceStep(
+            label="Pace gate",
+            passed=True,
+            detail=f"Pace: {pace.value}",
+        )
+    )
 
     plan = build_study_plan(
         catalog_id=course.id,
@@ -1110,11 +1149,13 @@ def answer_study_plan(
 
     # A schedule edit can remove every study slot; say so instead of an empty plan.
     if plan is not None and not plan.sessions:
-        steps.append(TraceStep(
-            label="Plan builder",
-            passed=False,
-            detail=f"No study time after schedule edit: exclude_days={sorted(exclude_days)}",
-        ))
+        steps.append(
+            TraceStep(
+                label="Plan builder",
+                passed=False,
+                detail=f"No study time after schedule edit: exclude_days={sorted(exclude_days)}",
+            )
+        )
         return AgentReply(
             telemetry=_answer_telemetry(
                 summary="No study time left after the schedule edit",
@@ -1131,11 +1172,13 @@ def answer_study_plan(
             ),
         )
     if plan is None:  # course has no modules, should not happen for catalog courses
-        steps.append(TraceStep(
-            label="Plan builder",
-            passed=False,
-            detail=f"No modules found for course '{course.id}'",
-        ))
+        steps.append(
+            TraceStep(
+                label="Plan builder",
+                passed=False,
+                detail=f"No modules found for course '{course.id}'",
+            )
+        )
         return AgentReply(
             telemetry=_answer_telemetry(
                 summary="Could not build a plan",
@@ -1151,14 +1194,16 @@ def answer_study_plan(
             ),
         )
 
-    steps.append(TraceStep(
-        label="Plan builder",
-        passed=True,
-        detail=(
-            f"{plan.weeks} weeks, {plan.weekly_study_hours}h/wk ({plan.pace.value} pace), "
-            f"{len(plan.modules)} modules — {plan.capacity_reason}"
-        ),
-    ))
+    steps.append(
+        TraceStep(
+            label="Plan builder",
+            passed=True,
+            detail=(
+                f"{plan.weeks} weeks, {plan.weekly_study_hours}h/wk ({plan.pace.value} pace), "
+                f"{len(plan.modules)} modules — {plan.capacity_reason}"
+            ),
+        )
+    )
 
     reasoning = (
         f"Calendar-grounded plan for {course.title}: {plan.weeks} weeks @ "
@@ -1166,7 +1211,9 @@ def answer_study_plan(
     )
 
     if settings.llm_offline:
-        steps.append(TraceStep(label="LLM narration", passed=True, detail="offline mode", model="offline"))
+        steps.append(
+            TraceStep(label="LLM narration", passed=True, detail="offline mode", model="offline")
+        )
         return AgentReply(
             telemetry=_answer_telemetry(
                 summary="Built a calendar-grounded study plan",
@@ -1210,26 +1257,30 @@ def answer_study_plan(
     # The agent's plan (built from the constraints it inferred) is authoritative;
     # fall back to the baseline plan if the agent never produced one.
     final_plan = agent.plan or plan
-    steps.append(TraceStep(
-        label="Scheduling agent",
-        passed=agent.plan is not None,
-        detail=f"Tool-driven plan; constraints={agent.constraints}",
-        model=agent.model,
-    ))
+    steps.append(
+        TraceStep(
+            label="Scheduling agent",
+            passed=agent.plan is not None,
+            detail=f"Tool-driven plan; constraints={agent.constraints}",
+            model=agent.model,
+        )
+    )
     # Number-guard the narration against the plan the agent actually built.
     narration = agent.narration
     is_grounded = bool(narration) and plan_narration_is_grounded(narration, final_plan)
     if not is_grounded:
         narration = _plan_offline_narration(final_plan)
-    steps.append(TraceStep(
-        label="Number guard",
-        passed=is_grounded,
-        detail=(
-            "All figures verified against the agent's plan"
-            if is_grounded
-            else "Ungrounded figures — fell back to the provably-grounded narration"
-        ),
-    ))
+    steps.append(
+        TraceStep(
+            label="Number guard",
+            passed=is_grounded,
+            detail=(
+                "All figures verified against the agent's plan"
+                if is_grounded
+                else "Ungrounded figures — fell back to the provably-grounded narration"
+            ),
+        )
+    )
     return AgentReply(
         telemetry=_answer_telemetry(
             summary="Built a calendar-grounded study plan",

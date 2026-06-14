@@ -8,7 +8,6 @@ from app.agent.contracts import Pace
 from app.agent.study_plan import (
     ModuleInfo,
     WeeklySlot,
-    _BALLOON_WEEKS_THRESHOLD,
     build_study_plan,
     course_modules,
     estimate_module_minutes,
@@ -153,8 +152,8 @@ def test_build_plan_unknown_course_is_none() -> None:
 # ── Reservation-aware scheduling ───────────────────────────────────────────────
 
 
-from app.agent.study_plan import block_date, occupied_intervals  # noqa: E402
 from app.agent.contracts import ScheduledBlock  # noqa: E402
+from app.agent.study_plan import block_date, occupied_intervals  # noqa: E402
 
 
 def test_block_date_week1_same_day() -> None:
@@ -236,9 +235,7 @@ def test_build_study_plan_skips_pto_days() -> None:
     assert vega is not None
     # Inject a PTO day that falls in week 1 (first Tuesday, 2026-06-16)
     vega = vega.model_copy(
-        update={"work_context": vega.work_context.model_copy(
-            update={"pto_days": ["2026-06-16"]}
-        )}
+        update={"work_context": vega.work_context.model_copy(update={"pto_days": ["2026-06-16"]})}
     )
     plan = build_study_plan(
         catalog_id="cb-c01",
@@ -250,6 +247,7 @@ def test_build_study_plan_skips_pto_days() -> None:
     assert plan is not None
     # No block should land on 2026-06-16
     from app.agent.study_plan import block_date
+
     for mod in plan.modules:
         for b in mod.scheduled:
             bd = block_date(date(2026, 6, 15), b.week, b.day)
@@ -303,7 +301,7 @@ def test_time_window_clips_slots_to_part_of_day() -> None:
     full = weekly_study_slots(vega)
     windowed = weekly_study_slots(vega, time_window=(13 * 60, 17 * 60))
     # Every windowed slot sits strictly inside the afternoon window...
-    assert all(13 * 60 <= s.start and s.end <= 17 * 60 for s in windowed)
+    assert all(s.start >= 13 * 60 and s.end <= 17 * 60 for s in windowed)
     # ...and the window can only remove time, never add it.
     assert sum(s.minutes for s in windowed) <= sum(s.minutes for s in full)
 

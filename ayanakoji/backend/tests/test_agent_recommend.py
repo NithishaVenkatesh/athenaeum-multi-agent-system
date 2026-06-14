@@ -56,7 +56,7 @@ def test_unknown_vertical_falls_back_to_whole_catalog() -> None:
 # ── recommend_overview: registered-course filter ───────────────────────────────
 
 
-from app.agent.recommend import recommend_overview, course_from_text  # noqa: E402
+from app.agent.recommend import course_from_text, recommend_overview  # noqa: E402
 
 
 def test_overview_omits_registered_courses() -> None:

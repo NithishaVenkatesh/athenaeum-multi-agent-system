@@ -74,7 +74,7 @@ GRADE_ANSWER_TOOL: dict[str, Any] = {
 class GradeResult:
     """The grader's definitive verdict on one question."""
 
-    score: int       # 0–10
+    score: int  # 0–10
     reasoning: str
     confidence: str  # "high" | "medium"
 
@@ -122,9 +122,7 @@ do not ask unnecessary follow-up questions.
 
 # ── Offline stubs (CI / no-provider lane) ────────────────────────────────────
 
-_OFFLINE_OPENING = (
-    "**Question:** {prompt}\n\nPlease share your understanding of this concept."
-)
+_OFFLINE_OPENING = "**Question:** {prompt}\n\nPlease share your understanding of this concept."
 _OFFLINE_REPLY = "Thank you for your response. Can you elaborate on the key mechanism involved?"
 _OFFLINE_GRADE = GradeResult(
     score=7, reasoning="Offline mode — deterministic stub.", confidence="high"
@@ -196,9 +194,7 @@ def run_turn(
     ceiling = settings.assessment_grader_ceiling
     is_final = (turn_count + 1) >= ceiling
 
-    system_content = _SYSTEM_TEMPLATE.format(
-        prompt=prompt, reference_answer=reference_answer
-    )
+    system_content = _SYSTEM_TEMPLATE.format(prompt=prompt, reference_answer=reference_answer)
     if is_final:
         system_content += (
             "\n\nIMPORTANT: This is the final exchange. "
@@ -258,36 +254,31 @@ def _call_with_tools(
     If the model replies normally → reply_text=text and GradeResult=None.
     """
     # Build the provider directly (ModelRouter doesn't expose tool-calling yet).
+    # AzureOpenAI and OpenAI share the chat.completions.create surface; typing the
+    # client as Any avoids the SDK's strict param overloads on dict messages/tools.
     settings = get_settings()
     provider, model = _best_provider_and_model(router, settings)
 
+    client: Any
     if provider == "azure":
         from app.foundry import build_openai_client
 
         client = build_openai_client(settings.require_foundry())
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages,  # type: ignore[arg-type]
-            tools=[GRADE_ANSWER_TOOL],  # type: ignore[arg-type]
-            tool_choice="auto",
-            max_tokens=600,
-            temperature=0.2,
-            timeout=settings.llm_timeout_seconds,
-        )
     else:  # groq
         from openai import OpenAI
 
         cfg = settings.require_groq()
         client = OpenAI(api_key=cfg.api_key, base_url=cfg.base_url)
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages,  # type: ignore[arg-type]
-            tools=[GRADE_ANSWER_TOOL],  # type: ignore[arg-type]
-            tool_choice="auto",
-            max_tokens=600,
-            temperature=0.2,
-            timeout=settings.llm_timeout_seconds,
-        )
+
+    response = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        tools=[GRADE_ANSWER_TOOL],
+        tool_choice="auto",
+        max_tokens=600,
+        temperature=0.2,
+        timeout=settings.llm_timeout_seconds,
+    )
 
     choice = response.choices[0]
     msg = choice.message
@@ -313,9 +304,7 @@ def _call_with_tools(
 
 def _best_provider_and_model(router: Any, settings: Any) -> tuple[str, str]:
     """Return ('azure'|'groq', model_name) from the router's chain."""
-    chain = router.chain(
-        __import__("app.agent.llm", fromlist=["Capability"]).Capability.WORKHORSE
-    )
+    chain = router.chain(__import__("app.agent.llm", fromlist=["Capability"]).Capability.WORKHORSE)
     for _provider, attempt in chain:
         if not router._breaker.is_open(attempt.provider):
             return (attempt.provider.value, attempt.model)

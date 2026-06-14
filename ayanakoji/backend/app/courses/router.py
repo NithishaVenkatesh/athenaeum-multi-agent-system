@@ -24,11 +24,10 @@ from app.agent.orchestrator import run_pipeline
 from app.agent.schedule_edit import parse_adjustment, parse_pace
 from app.agent.state import derive_course_state
 from app.agent.study_plan import occupied_intervals
-from app.config import get_settings
-from app.workiq.repository import get_repository
 from app.catalog.content import get_module_content
 from app.catalog.loader import get_course as get_catalog_course
 from app.catalog.loader import is_valid_course_id
+from app.config import get_settings
 from app.courses.models import Course, CourseModule
 from app.courses.repository import CourseRepository
 from app.courses.schemas import (
@@ -45,6 +44,7 @@ from app.courses.schemas import (
 )
 from app.courses.service import generate_title
 from app.db import get_session, session_scope
+from app.workiq.repository import get_repository
 
 router = APIRouter(prefix="/api/courses", tags=["courses"])
 
@@ -337,9 +337,7 @@ def _reserved_intervals(
     for course in repo.list_for_persona(persona_id):
         if course.id == exclude_id or not course.catalog_id:
             continue
-        course_start = (
-            date.fromisoformat(course.plan_start) if course.plan_start else today
-        )
+        course_start = date.fromisoformat(course.plan_start) if course.plan_start else today
         blocks = [
             ScheduledBlock(
                 week=int(b["week"]),
@@ -426,14 +424,10 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
                 stream_repo.save(current)
             current = _apply_schedule_edit(stream_repo, current, content, today=today)
         pace = Pace(current.pace) if current.pace else None
-        start_date = (
-            date.fromisoformat(current.plan_start) if current.plan_start else today
-        )
+        start_date = date.fromisoformat(current.plan_start) if current.plan_start else today
         exclude_days = frozenset(current.plan_excludes)
         skip_weeks = frozenset(current.plan_skip_weeks)
-        exam_date = (
-            date.fromisoformat(current.plan_exam_date) if current.plan_exam_date else None
-        )
+        exam_date = date.fromisoformat(current.plan_exam_date) if current.plan_exam_date else None
         # Recent turns + the pending action (e.g. a pace question) for follow-ups
         # like a bare "yes". The trailing turn is the current message itself.
         history, pending = _conversation_context(current)

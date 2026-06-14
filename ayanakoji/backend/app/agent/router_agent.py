@@ -12,7 +12,14 @@ import json
 import re
 from datetime import date
 
-from app.agent.contracts import PhaseName, PhaseStatus, PhaseTelemetry, Route, RouteDecision, TraceStep
+from app.agent.contracts import (
+    PhaseName,
+    PhaseStatus,
+    PhaseTelemetry,
+    Route,
+    RouteDecision,
+    TraceStep,
+)
 from app.agent.grounding import CourseGrounding, get_grounding
 from app.agent.llm import AllProvidersDown, Capability, ModelRouter
 from app.agent.recommend import vertical_from_text
@@ -111,7 +118,8 @@ _ROUTE_SYSTEM = (
     "- foundry_iq: asks about the CONTENT of a specific course/cert/Azure topic.\n"
     "- work_iq: asks about THEIR OWN schedule, workload, meetings, capacity, or study timing.\n"
     "- general: only genuinely off-platform topics.\n"
-    'Reply ONLY with JSON: {"route":"greeting|recommend|upcoming|study_plan|foundry_iq|work_iq|general",'
+    'Reply ONLY with JSON: {"route":'
+    '"greeting|recommend|upcoming|study_plan|foundry_iq|work_iq|general",'
     '"reasoning":"<short>","off_topic":0..1,"confidence":0..1}.'
 )
 

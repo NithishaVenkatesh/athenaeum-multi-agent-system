@@ -13,7 +13,14 @@ from typing import Any
 
 from sqlmodel import Session, col, delete, select
 
-from app.courses.models import Assessment, ChoiceQuestion, Course, CourseModule, LlmQuestion, make_message
+from app.courses.models import (
+    Assessment,
+    ChoiceQuestion,
+    Course,
+    CourseModule,
+    LlmQuestion,
+    make_message,
+)
 
 
 class CourseRepository:
