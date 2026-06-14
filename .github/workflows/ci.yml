@@ -49,6 +49,9 @@ jobs:
           uv run python scripts/generate_work_iq.py
           git diff --exit-code app/data/work_iq.json
 
+      - name: Validate assessment question banks (schema + semantics)
+        run: uv run python scripts/validate_banks.py
+
   frontend:
     name: Frontend (eslint · tsc · vitest · build)
     runs-on: ubuntu-latest
