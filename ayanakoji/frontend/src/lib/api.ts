@@ -22,9 +22,7 @@ export interface HealthResponse {
 }
 
 /** Call the backend connectivity endpoint. Throws on non-2xx or network failure. */
-export async function pingBackend(
-  signal?: AbortSignal,
-): Promise<PingResponse> {
+export async function pingBackend(signal?: AbortSignal): Promise<PingResponse> {
   const response = await fetch(`${API_BASE_URL}/api/ping`, {
     signal,
     headers: { Accept: "application/json" },
@@ -166,7 +164,10 @@ export function createCourse(
   });
 }
 
-export function getCourse(courseId: string, signal?: AbortSignal): Promise<Course> {
+export function getCourse(
+  courseId: string,
+  signal?: AbortSignal,
+): Promise<Course> {
   return requestJson<Course>(`/api/courses/${courseId}`, { signal });
 }
 
@@ -176,7 +177,10 @@ export interface CoursePatch {
 }
 
 /** Rename a chat and/or (un)link its Athenaeum course. */
-export function patchCourse(courseId: string, patch: CoursePatch): Promise<Course> {
+export function patchCourse(
+  courseId: string,
+  patch: CoursePatch,
+): Promise<Course> {
   return requestJson<Course>(`/api/courses/${courseId}`, {
     method: "PATCH",
     body: JSON.stringify(patch),
@@ -309,7 +313,13 @@ export type PipelineEvent =
   | { type: "token"; token: string }
   | { type: "suggestion"; prompt: string; options: CourseSuggestion[] }
   | { type: "plan"; plan: StudyPlan }
-  | { type: "pace_request"; catalog_id: string; title: string; prompt: string; options: Pace[] }
+  | {
+      type: "pace_request";
+      catalog_id: string;
+      title: string;
+      prompt: string;
+      options: Pace[];
+    }
   | {
       type: "new_chat";
       prompt: string;
@@ -350,7 +360,10 @@ export async function streamMessage(
     `${API_BASE_URL}/api/courses/${courseId}/messages`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+      },
       body: JSON.stringify({ content }),
       signal,
     },
@@ -423,7 +436,10 @@ function dispatchEvent(event: PipelineEvent, handlers: StreamHandlers): void {
 }
 
 /** Accept a suggested course: link it to this chat and start attempt 1. */
-export function acceptCourse(courseId: string, catalogId: string): Promise<Course> {
+export function acceptCourse(
+  courseId: string,
+  catalogId: string,
+): Promise<Course> {
   return requestJson<Course>(`/api/courses/${courseId}/accept`, {
     method: "POST",
     body: JSON.stringify({ catalog_id: catalogId }),
@@ -462,7 +478,10 @@ export function listModules(
   courseId: string,
   signal?: AbortSignal,
 ): Promise<CourseModuleProgress[]> {
-  return requestJson<CourseModuleProgress[]>(`/api/courses/${courseId}/modules`, { signal });
+  return requestJson<CourseModuleProgress[]>(
+    `/api/courses/${courseId}/modules`,
+    { signal },
+  );
 }
 
 /** A module's markdown content for the Modules tab. */
@@ -689,7 +708,10 @@ export async function sendLlmTurn(
     `${API_BASE_URL}/api/courses/${courseId}/assessments/${assessmentId}/llm/${questionId}/turn`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+      },
       body: JSON.stringify({ content }),
       signal,
     },
@@ -717,7 +739,10 @@ export async function sendLlmTurn(
   }
 }
 
-function dispatchGraderEvent(event: LlmGraderEvent, handlers: LlmGraderHandlers): void {
+function dispatchGraderEvent(
+  event: LlmGraderEvent,
+  handlers: LlmGraderHandlers,
+): void {
   switch (event.type) {
     case "token":
       handlers.onToken?.(event.token);
@@ -743,4 +768,83 @@ export function submitLlm(
     `/api/courses/${courseId}/assessments/${assessmentId}/llm/submit`,
     { method: "POST" },
   );
+}
+
+// ── Notifications + streak (mirror app/notifications/schemas.py) ──────────────
+
+export type NotificationKind =
+  | "next_module"
+  | "course_complete"
+  | "deadline_soon"
+  | "deadline_missed";
+
+/** One notification as rendered in the panel and as a live toast. */
+export interface NotificationItem {
+  id: string;
+  course_id: string;
+  module_id: string | null;
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  /** Frontend deep link, e.g. "/chat/<course>/modules/<module>". */
+  link: string;
+  read: boolean;
+  toasted: boolean;
+  created_at: string;
+}
+
+/** The persona's gamification score behind the fire button. */
+export interface StreakSummary {
+  persona_id: string;
+  points: number;
+  on_time_streak: number;
+  miss_streak: number;
+}
+
+/** The single poll payload: notifications + unread badge count + streak. */
+export interface NotificationFeed {
+  notifications: NotificationItem[];
+  unread_count: number;
+  streak: StreakSummary;
+}
+
+/** Poll a persona's notifications + streak (the backend ticks lazily on read). */
+export function fetchNotifications(
+  personaId: string,
+  signal?: AbortSignal,
+): Promise<NotificationFeed> {
+  return requestJson<NotificationFeed>(
+    `/api/notifications?persona_id=${encodeURIComponent(personaId)}`,
+    { signal },
+  );
+}
+
+/** Acknowledge one notification (clears it from the unread badge). */
+export function markNotificationRead(
+  notificationId: string,
+): Promise<NotificationItem> {
+  return requestJson<NotificationItem>(
+    `/api/notifications/${notificationId}/read`,
+    { method: "POST" },
+  );
+}
+
+/** Mark every notification for a persona as read. */
+export function markAllNotificationsRead(
+  personaId: string,
+): Promise<{ changed: number }> {
+  return requestJson<{ changed: number }>(
+    `/api/notifications/read-all?persona_id=${encodeURIComponent(personaId)}`,
+    { method: "POST" },
+  );
+}
+
+/** Flag notifications already surfaced as live toasts (so polling won't re-toast). */
+export function markNotificationsToasted(
+  ids: string[],
+): Promise<{ changed: number }> {
+  return requestJson<{ changed: number }>("/api/notifications/toasted", {
+    method: "POST",
+    body: JSON.stringify({ ids }),
+  });
 }
