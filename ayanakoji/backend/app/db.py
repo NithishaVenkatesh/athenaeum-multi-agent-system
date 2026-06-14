@@ -88,12 +88,15 @@ def reset_engine() -> None:
 def init_db() -> None:
     """Create the learner-workspace tables on the current engine.
 
-    Scoped to ``COURSE_TABLES`` so the separate assessments database's tables
-    (which share ``SQLModel.metadata``) are never created in ``athenaeum.db``.
+    Scoped to ``COURSE_TABLES`` (plus the notification/streak tables, which also
+    live in the learner-workspace DB) so the separate assessments database's
+    tables (which share ``SQLModel.metadata``) are never created in ``athenaeum.db``.
     """
     from app.courses.models import COURSE_TABLE_NAMES
+    from app.notifications.models import NOTIFICATION_TABLE_NAMES
 
-    tables = [SQLModel.metadata.tables[name] for name in COURSE_TABLE_NAMES]
+    names = (*COURSE_TABLE_NAMES, *NOTIFICATION_TABLE_NAMES)
+    tables = [SQLModel.metadata.tables[name] for name in names]
     SQLModel.metadata.create_all(get_engine(), tables=tables)
 
 
