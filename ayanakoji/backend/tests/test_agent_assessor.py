@@ -358,3 +358,33 @@ def test_answer_assessor_all_complete_is_graceful_no_card() -> None:
     reply = assessor.answer_assessor("quiz me", Route.PRACTISE_MODULE, modules=modules)
     assert reply.practice is None and reply.actions is None
     assert "completed every module" in _drain(reply).lower()
+
+
+# ---------------------------------------------------------------------------
+# Task 5: Router — recognise the three intents
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text,route",
+    [
+        ("quiz me on this module", Route.PRACTISE_MODULE),
+        ("let me practise this module", Route.PRACTISE_MODULE),
+        ("give me some practice questions", Route.PRACTISE_MODULE),
+        ("I'm ready for the test", Route.TAKE_EVALUATION),
+        ("take the evaluation", Route.TAKE_EVALUATION),
+        ("take me to the module", Route.GO_TO_MODULE),
+        ("open the module so I can study", Route.GO_TO_MODULE),
+    ],
+)
+def test_classify_routes_assessor_intents(text: str, route: Route) -> None:
+    from app.agent.router_agent import classify
+
+    assert classify(text).route is route
+
+
+def test_classify_does_not_hijack_progress_or_upcoming() -> None:
+    from app.agent.router_agent import classify
+
+    assert classify("how many modules have I completed").route is Route.PROGRESS
+    assert classify("what is my next module").route is Route.UPCOMING

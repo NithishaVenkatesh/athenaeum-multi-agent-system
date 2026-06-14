@@ -168,6 +168,27 @@ _WORK_TIMING_RE = re.compile(
     r"|this\s+week\b",
     re.IGNORECASE,
 )
+# "Practise / quiz me on this module" → the assessor practice round.
+_PRACTISE_RE = re.compile(
+    r"\b(practi[sc]e|quiz|drill|warm\s*up|test\s+me|test\s+myself|check\s+my\s+understanding)\b"
+    r"|\bgive\s+me\s+(some\s+)?(practice|quiz)\b"
+    r"|\b(practice|quiz)\s+(questions?|me)\b",
+    re.IGNORECASE,
+)
+# "I'm ready to take the test / evaluation" → CTA to the module evaluation.
+_TAKE_EVAL_RE = re.compile(
+    r"\b(ready|prepared)\s+(for|to\s+take)\s+(the\s+)?(test|exam|evaluation|assessment|quiz)\b"
+    r"|\b(take|start|do|begin|attempt)\s+(the\s+)?(test|exam|evaluation|assessment)\b"
+    r"|\bi'?m\s+ready\b.*\b(test|exam|evaluation|assessment)\b"
+    r"|\bevaluate\s+me\b",
+    re.IGNORECASE,
+)
+# "Open / go to / study the module" → CTA to the module page.
+_GO_MODULE_RE = re.compile(
+    r"\b(go\s+to|open|take\s+me\s+to|show\s+me|back\s+to|study)\s+(the\s+)?(module|lesson|content|material)\b"
+    r"|\bstudy\s+(the\s+)?module\b|\bopen\s+(the\s+)?module\b",
+    re.IGNORECASE,
+)
 # Clearly-not-our-domain topics → general with a stronger nudge.
 _OFF_DOMAIN_RE = re.compile(
     r"\b(weather|football|cricket|soccer|world\s+cup|movie|film|recipe|cook|sport|"
@@ -258,9 +279,13 @@ _ROUTE_SYSTEM = (
     "- study_plan: asks to build/make a study plan or schedule, or how/when to study.\n"
     "- foundry_iq: asks about the CONTENT of a specific course/cert/Azure topic.\n"
     "- work_iq: asks about THEIR OWN schedule, workload, meetings, capacity, or study timing.\n"
+    "- practise_module: asks to practise / quiz / drill / test themselves on the CURRENT module.\n"
+    "- take_evaluation: says they are ready to take, or want to start, the module test / evaluation.\n"
+    "- go_to_module: asks to open / go to / study the current module.\n"
     "- general: only genuinely off-platform topics.\n"
     'Reply ONLY with JSON: {"route":'
-    '"greeting|recommend|upcoming|progress|study_plan|foundry_iq|work_iq|general",'
+    '"greeting|recommend|upcoming|progress|study_plan|foundry_iq|work_iq|practise_module|'
+    'take_evaluation|go_to_module|general",'
     '"reasoning":"<short>","off_topic":0..1,"confidence":0..1}.'
 )
 
@@ -312,6 +337,33 @@ def _progress_decision() -> RouteDecision:
     )
 
 
+def _practise_decision() -> RouteDecision:
+    return RouteDecision(
+        route=Route.PRACTISE_MODULE,
+        reasoning="Wants to practise the current module with questions.",
+        off_topic=0.0,
+        confidence=0.85,
+    )
+
+
+def _take_eval_decision() -> RouteDecision:
+    return RouteDecision(
+        route=Route.TAKE_EVALUATION,
+        reasoning="Wants to take the module evaluation.",
+        off_topic=0.0,
+        confidence=0.85,
+    )
+
+
+def _go_module_decision() -> RouteDecision:
+    return RouteDecision(
+        route=Route.GO_TO_MODULE,
+        reasoning="Wants to open the current module to study.",
+        off_topic=0.0,
+        confidence=0.85,
+    )
+
+
 def classify(
     text: str,
     *,
@@ -354,6 +406,12 @@ def classify(
             off_topic=0.0,
             confidence=0.8,
         )
+    if _PRACTISE_RE.search(text):
+        return _practise_decision()
+    if _TAKE_EVAL_RE.search(text):
+        return _take_eval_decision()
+    if _GO_MODULE_RE.search(text):
+        return _go_module_decision()
     if _RECOMMEND_RE.search(text):
         return RouteDecision(
             route=Route.RECOMMEND,
@@ -492,6 +550,12 @@ def _parse_decision(
         return _study_plan_decision()
     if is_progress_intent(text):
         return _progress_decision()
+    if _PRACTISE_RE.search(text):
+        return _practise_decision()
+    if _TAKE_EVAL_RE.search(text):
+        return _take_eval_decision()
+    if _GO_MODULE_RE.search(text):
+        return _go_module_decision()
 
     try:
         data = json.loads(raw)
