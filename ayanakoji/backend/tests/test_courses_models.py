@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from app.courses.models import (
     ASSESSMENT_TYPES,
-    STATUS_NEW,
     Assessment,
     ChoiceQuestion,
     Course,
@@ -21,7 +20,6 @@ def test_course_defaults_round_trip(session: Session) -> None:
     session.refresh(course)
 
     assert course.id  # uuid hex assigned
-    assert course.status == STATUS_NEW == 0
     assert course.catalog_id is None
     assert course.messages == []
     assert course.created_at is not None
@@ -45,17 +43,22 @@ def test_course_messages_persist_as_inline_array(session: Session) -> None:
     assert "created_at" in stored.messages[0]
 
 
-def test_status_encoding_supports_signed_attempts(session: Session) -> None:
-    passed = Course(persona_id="EMP-001", chat_name="Done", status=-2)
-    attempting = Course(persona_id="EMP-001", chat_name="Trying", status=3)
-    session.add(passed)
-    session.add(attempting)
+def test_assessment_success_record_round_trips(session: Session) -> None:
+    """The permanent success record (attempts_to_pass) persists; defaults to None."""
+    course = Course(persona_id="EMP-001", chat_name="Done")
+    session.add(course)
     session.commit()
 
-    stored_passed = session.get(Course, passed.id)
-    stored_attempting = session.get(Course, attempting.id)
-    assert stored_passed is not None and stored_passed.status == -2  # passed on attempt 2
-    assert stored_attempting is not None and stored_attempting.status == 3  # on attempt 3
+    fresh = Assessment(course_id=course.id, type="choices", attempt_number=1)
+    passed = Assessment(
+        course_id=course.id, type="choices", attempt_number=2, attempts_to_pass=2
+    )
+    session.add(fresh)
+    session.add(passed)
+    session.commit()
+
+    assert session.get(Assessment, fresh.id).attempts_to_pass is None
+    assert session.get(Assessment, passed.id).attempts_to_pass == 2  # passed on attempt 2
 
 
 def test_assessment_practice_flag_and_question_records(session: Session) -> None:

@@ -124,7 +124,10 @@ class TakenCourse(BaseModel):
     """A course the learner has already linked to a chat (their progress so far)."""
 
     catalog_id: str
-    status: int = Field(description="Course.status encoding: 0 new, +N attempt N, -N passed on N")
+    passed: bool = Field(
+        default=False,
+        description="True once every module's tests are passed (derived from test results)",
+    )
 
 
 # ── Study plan (calendar-grounded, module-level completion plan) ────────────────

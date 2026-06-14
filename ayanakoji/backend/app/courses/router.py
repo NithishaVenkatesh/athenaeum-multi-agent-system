@@ -31,7 +31,7 @@ from app.agent.contracts import (
     TokenEvent,
 )
 from app.agent.orchestrator import run_pipeline
-from app.agent.router_agent import is_acceptance
+from app.agent.router_agent import is_acceptance, is_refusal
 from app.agent.schedule_edit import parse_adjustment, parse_pace
 from app.agent.state import derive_course_state
 from app.agent.study_plan import occupied_intervals
@@ -62,9 +62,6 @@ router = APIRouter(prefix="/api/courses", tags=["courses"])
 
 SessionDep = Annotated[Session, Depends(get_session)]
 
-# Course.status when a learner accepts a course: attempt 1 (encoding in models.py).
-STATUS_FIRST_ATTEMPT = 1
-
 
 def _require(course: Course | None, course_id: str) -> Course:
     if course is None:
@@ -80,7 +77,6 @@ def _to_read(course: Course, repo: CourseRepository) -> CourseRead:
         chat_name=course.chat_name,
         catalog_id=course.catalog_id,
         catalog_title=linked.title if linked else None,
-        status=course.status,
         messages=course.messages,
         assessment_ids=repo.assessment_ids(course.id),
         skill_check_active=course.skill_check_active or None,
@@ -109,7 +105,6 @@ def list_courses(
             persona_id=c.persona_id,
             chat_name=c.chat_name,
             catalog_id=c.catalog_id,
-            status=c.status,
             updated_at=c.updated_at,
         )
         for c in repo.list_for_persona(persona_id)
@@ -169,8 +164,8 @@ def list_evaluations(course_id: str, session: SessionDep) -> list[EvaluationRead
 
     Lock state mirrors ``start_assessment``: a module's evaluations open only once the
     prior module is complete (sequential), and the oral exam additionally waits on that
-    module's quiz being passed. Score/review fields reflect the latest *completed*
-    attempt of each, so the Evaluations tab can show progress and a review link.
+    module's quiz being cleared. ``completed`` means cleared (passed at least once);
+    score/passed reflect the latest attempt, ``attempts_to_pass`` the success record.
     """
     repo = CourseRepository(session)
     _require(repo.get(course_id), course_id)
@@ -178,13 +173,11 @@ def list_evaluations(course_id: str, session: SessionDep) -> list[EvaluationRead
     prev_done = True  # the first module's evaluations are reachable with the module
     for m in repo.list_modules(course_id):
         module_unlocked = prev_done
-        attempts = repo.list_module_assessments(m.id)
-        choices_passed = repo.latest_passed(m.id, "choices")
+        choices_cleared = repo.cleared(course_id, m.module_id, "choices")
         for etype in ("choices", "llm"):
-            type_attempts = [a for a in attempts if a.type == etype]
-            # The latest attempt that was actually graded (passed is set) backs the review.
-            completed = next((a for a in reversed(type_attempts) if a.passed is not None), None)
-            locked = not module_unlocked or (etype == "llm" and not choices_passed)
+            latest = repo.latest_assessment(course_id, m.module_id, etype)
+            cleared = latest is not None and latest.attempts_to_pass is not None
+            locked = not module_unlocked or (etype == "llm" and not choices_cleared)
             out.append(
                 EvaluationRead(
                     module_id=m.module_id,
@@ -192,28 +185,36 @@ def list_evaluations(course_id: str, session: SessionDep) -> list[EvaluationRead
                     sequence=m.sequence,
                     type=etype,
                     locked=locked,
-                    completed=completed is not None and completed.passed is True,
-                    attempted=bool(type_attempts),
-                    score=completed.score if completed else None,
-                    passed=completed.passed if completed else None,
-                    review_assessment_id=completed.id if completed else None,
-                    attempts=len(type_attempts),
+                    completed=cleared,
+                    attempted=latest is not None,
+                    score=latest.score if latest else None,
+                    passed=latest.passed if latest else None,
+                    attempts_to_pass=latest.attempts_to_pass if latest else None,
+                    # The latest attempt's questions back the review (latest-only model).
+                    review_assessment_id=(
+                        latest.id
+                        if latest is not None and latest.completed_at is not None
+                        else None
+                    ),
+                    attempts=latest.attempt_number if latest else 0,
                 )
             )
-        prev_done = m.completed
+        prev_done = repo.module_completed(course_id, m.module_id)
     return out
 
 
 @router.post(
     "/{course_id}/accept",
     response_model=CourseRead,
-    summary="Accept the suggested course: link it and start attempt 1",
+    summary="Accept the suggested course: link it to this chat",
 )
 def accept_course(course_id: str, body: AcceptCourse, session: SessionDep) -> CourseRead:
-    """Enroll the learner: set the chat's ``catalog_id`` and bump status to attempt 1.
+    """Enroll the learner by linking the chat's ``catalog_id``.
 
-    Per-learner enrollment is just ``courses WHERE persona_id``, the accepted
-    course lives in the same row the chat is in, so no separate table is needed.
+    Per-learner enrollment is just ``courses WHERE persona_id``; the accepted course
+    lives in the same row the chat is in, so no separate table is needed. There is no
+    stored status: a course is "in progress" once linked and "passed" once every
+    module's tests are cleared (all derived from the assessments).
     """
     repo = CourseRepository(session)
     course = _require(repo.get(course_id), course_id)
@@ -228,7 +229,6 @@ def accept_course(course_id: str, body: AcceptCourse, session: SessionDep) -> Co
         chat_name=linked.title if linked else None,
         catalog_id=body.catalog_id,
         set_catalog=True,
-        status=STATUS_FIRST_ATTEMPT,
     )
     return _to_read(course, repo)
 
@@ -330,7 +330,16 @@ def _resolve_suggestion_choice(course: Course, content: str) -> str | None:
     options = _last_suggestion_options(course)
     if not options:
         return None
+    # A refusal ("absolutely not", "please don't") selects nothing — never enroll on it.
+    if is_refusal(content):
+        return None
     low = content.lower()
+    offered = {str(o.get("catalog_id") or "").lower() for o in options}
+    # If the learner names a DIFFERENT course id not in the offer ("start as-c03 instead"),
+    # don't force-enroll the offered one; let the turn handle the newly-named course.
+    for m in re.finditer(r"\b[a-z]{2}-c\d+\b", low):
+        if m.group(0) not in offered:
+            return None
 
     def _cid(index: int) -> str | None:
         try:
@@ -403,22 +412,29 @@ def _course_lock(course_id: str) -> threading.Lock:
         return lock
 
 
+def _course_passed(repo: CourseRepository, course: Course) -> bool:
+    """A course is passed once it has modules and every one of them is complete."""
+    modules = repo.list_modules(course.id)
+    return bool(modules) and all(
+        repo.module_completed(course.id, m.module_id) for m in modules
+    )
+
+
 def _taken_courses(
     repo: CourseRepository, persona_id: str, *, exclude_id: str
 ) -> list[TakenCourse]:
     """The learner's linked courses (their progress so far), for the recommender.
 
-    Dedupe by catalog course, keeping the most-progressed status (negative = passed,
-    which sorts lowest), so a course is counted once at its best state.
+    Dedupe by catalog course, keeping it passed if it's passed in any chat, so a
+    course counts once at its best state. ``passed`` is derived from the tests now.
     """
-    best: dict[str, int] = {}
+    best: dict[str, bool] = {}
     for course in repo.list_for_persona(persona_id):
         if course.id == exclude_id or not course.catalog_id:
             continue
-        prior = best.get(course.catalog_id)
-        if prior is None or course.status < prior:
-            best[course.catalog_id] = course.status
-    return [TakenCourse(catalog_id=cid, status=status) for cid, status in best.items()]
+        passed = _course_passed(repo, course)
+        best[course.catalog_id] = best.get(course.catalog_id, False) or passed
+    return [TakenCourse(catalog_id=cid, passed=passed) for cid, passed in best.items()]
 
 
 def _registered_courses(
@@ -453,6 +469,7 @@ def _reserved_intervals(
         if course.id == exclude_id or not course.catalog_id:
             continue
         course_start = date.fromisoformat(course.plan_start) if course.plan_start else today
+        done = repo.completed_module_ids(course.id)  # completed modules free their hours
         blocks = [
             ScheduledBlock(
                 week=int(b["week"]),
@@ -462,7 +479,7 @@ def _reserved_intervals(
                 minutes=int(b.get("minutes", 0)),
             )
             for module in repo.list_modules(course.id)
-            if not module.completed  # completed modules free up their reserved hours
+            if module.module_id not in done
             for b in module.scheduled
         ]
         intervals |= occupied_intervals(course_start, blocks)
@@ -556,17 +573,17 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
             if suggested and is_valid_course_id(suggested):
                 linked = get_catalog_course(suggested)
                 current.catalog_id = suggested
-                current.status = STATUS_FIRST_ATTEMPT
                 if linked is not None:
                     current.chat_name = linked.title
                 stream_repo.save(current)
         existing_modules = stream_repo.list_modules(current.id)
+        completed_ids = stream_repo.completed_module_ids(current.id)  # derived from tests
         course_state = derive_course_state(
             catalog_id=current.catalog_id,
             pace=pace,
             skill_source=skill_source,
             module_count=len(existing_modules),
-            completed_count=sum(1 for m in existing_modules if m.completed),
+            completed_count=len(completed_ids),
         )
         answer_parts: list[str] = []
         final_text = ""  # what gets persisted as the assistant turn
@@ -586,7 +603,7 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
                 "sequence": m.sequence,
                 "complete_before": m.complete_before,
                 "scheduled": m.scheduled,
-                "completed": m.completed,
+                "completed": m.module_id in completed_ids,
             }
             for m in existing_modules
         ]
@@ -740,16 +757,10 @@ def _stream_feedback(course_id: str, module_id: str, type: str) -> Iterator[str]
         score: float | None = None
         passed: bool | None = None
         performance = ""
-        if mod is not None:
-            graded = [
-                a
-                for a in repo.list_module_assessments(mod.id)
-                if a.type == type and a.passed is not None
-            ]
-            latest = graded[-1] if graded else None
-            if latest is not None:
-                score, passed = latest.score, latest.passed
-                performance = _feedback_performance(repo, latest, type)
+        latest = repo.latest_assessment(course_id, module_id, type)
+        if latest is not None and latest.completed_at is not None:
+            score, passed = latest.score, latest.passed
+            performance = _feedback_performance(repo, latest, type)
 
         reply = answer_feedback(
             module_id=module_id,
@@ -813,14 +824,22 @@ def approve_plan(course_id: str, session: SessionDep) -> list[ModuleRead]:
     repo.replace_modules(course_id, pending)
     course.pending_modules = []
     repo.save(course)
-    return _to_module_read(repo.list_modules(course_id))
+    return _to_module_read(repo, course_id, repo.list_modules(course_id))
 
 
-def _to_module_read(modules: list[CourseModule]) -> list[ModuleRead]:
-    """Project module rows to the API shape, computing the sequential lock state."""
+def _to_module_read(
+    repo: CourseRepository, course_id: str, modules: list[CourseModule]
+) -> list[ModuleRead]:
+    """Project module rows to the API shape, deriving completion + the sequential lock.
+
+    ``completed`` is no longer stored: a module is complete once both its quiz and
+    oral are cleared. The lock is still sequential — a module opens once the prior
+    one is complete.
+    """
     out: list[ModuleRead] = []
     prev_done = True  # the first module is always available
     for m in modules:
+        completed = repo.module_completed(course_id, m.module_id)
         out.append(
             ModuleRead(
                 module_id=m.module_id,
@@ -828,12 +847,12 @@ def _to_module_read(modules: list[CourseModule]) -> list[ModuleRead]:
                 sequence=m.sequence,
                 estimated_minutes=m.estimated_minutes,
                 complete_before=m.complete_before,
-                completed=m.completed,
+                completed=completed,
                 locked=not prev_done,
                 scheduled=m.scheduled,
             )
         )
-        prev_done = m.completed
+        prev_done = completed
     return out
 
 
@@ -845,7 +864,7 @@ def _to_module_read(modules: list[CourseModule]) -> list[ModuleRead]:
 def list_modules(course_id: str, session: SessionDep) -> list[ModuleRead]:
     repo = CourseRepository(session)
     _require(repo.get(course_id), course_id)
-    return _to_module_read(repo.list_modules(course_id))
+    return _to_module_read(repo, course_id, repo.list_modules(course_id))
 
 
 @router.get(
@@ -860,26 +879,3 @@ def module_content(course_id: str, module_id: str, session: SessionDep) -> Modul
     if content is None:
         raise HTTPException(status_code=404, detail=f"no content for module '{module_id}'")
     return ModuleContentRead(module_id=content.module_id, title=content.title, content=content.body)
-
-
-@router.post(
-    "/{course_id}/modules/{module_id}/complete",
-    response_model=list[ModuleRead],
-    summary="Mark a module complete (sequential, only the active module)",
-)
-def complete_module(course_id: str, module_id: str, session: SessionDep) -> list[ModuleRead]:
-    """Mark the *currently available* module complete; returns the updated list.
-
-    Sequential rule: a module can only be completed if every earlier module is
-    already done (completion is by a test later; this is the manual gate for now).
-    """
-    repo = CourseRepository(session)
-    _require(repo.get(course_id), course_id)
-    modules = repo.list_modules(course_id)
-    target = next((m for m in modules if m.module_id == module_id), None)
-    if target is None:
-        raise HTTPException(status_code=404, detail=f"module '{module_id}' not in this plan")
-    if any(not m.completed for m in modules if m.sequence < target.sequence):
-        raise HTTPException(status_code=409, detail="complete the earlier modules first")
-    repo.set_module_completed(target, completed=True)
-    return _to_module_read(repo.list_modules(course_id))

@@ -41,7 +41,7 @@ from app.courses.schemas import (
     SessionChoiceQuestionRead,
     SessionLlmQuestionRead,
 )
-from app.db import get_session, session_scope
+from app.db import get_session
 
 router = APIRouter(prefix="/api/courses", tags=["assessments"])
 
@@ -119,6 +119,32 @@ def _choice_kind(q: ChoiceQuestion) -> str:
     return "mcq" if len(q.correct_answers) == 1 else "msq"
 
 
+def _choice_credit(learner_choice: list[str], correct_answers: list[str]) -> float:
+    """Proportional credit in [0, 1]: (right picks − wrong picks) / #correct, floored at 0.
+
+    A single-answer (MCQ) question reduces to all-or-nothing. A multi-select (MSQ)
+    rewards partial correctness while penalising over-selection, so 3-of-4 right with
+    no wrong picks earns 0.75 of the question instead of a flat 0.
+    """
+    correct = set(correct_answers)
+    if not correct:
+        return 0.0
+    chosen = set(learner_choice)
+    right = len(chosen & correct)
+    wrong = len(chosen - correct)
+    return max(0.0, (right - wrong) / len(correct))
+
+
+def _record_pass(a: Assessment) -> None:
+    """Stamp the permanent success record the first time this test is passed.
+
+    ``attempts_to_pass`` / ``passed_at`` are set once and never cleared, so a later
+    failed retake cannot un-complete the module (progress is derived from these)."""
+    if a.passed and a.attempts_to_pass is None:
+        a.attempts_to_pass = a.attempt_number
+        a.passed_at = a.completed_at or datetime.now(UTC)
+
+
 def _sse(payload: dict) -> str:  # type: ignore[type-arg]
     return f"data: {json.dumps(payload)}\n\n"
 
@@ -156,28 +182,36 @@ def start_assessment(
     if mod is None:
         raise HTTPException(status_code=404, detail=f"module '{module_id}' not in plan")
 
-    # Sequential lock: check by counting prior completed modules.
+    # Sequential lock: every earlier module must be complete (derived from tests).
     modules = repo.list_modules(course_id)
     target = next((m for m in modules if m.module_id == module_id), None)
-    if target and any(not m.completed for m in modules if m.sequence < target.sequence):
+    completed_ids = repo.completed_module_ids(course_id)
+    if target and any(
+        m.module_id not in completed_ids for m in modules if m.sequence < target.sequence
+    ):
         raise HTTPException(status_code=409, detail="complete earlier modules first")
 
-    # Block retake if already passed — unless an explicit retake (force) is requested,
+    # Block retake if already cleared — unless an explicit retake (force) is requested,
     # in which case we fall through and sample a fresh question set below.
-    if not force and repo.latest_passed(mod.id, type):
+    if not force and repo.cleared(course_id, module_id, type):
         raise HTTPException(
             status_code=409,
             detail=f"{type} assessment already passed for this module",
         )
 
-    # --- LLM ordering constraint: choices must be passed before LLM starts ---
-    if type == "llm" and not repo.latest_passed(mod.id, "choices"):
+    # --- LLM ordering constraint: choices must be cleared before LLM starts ---
+    if type == "llm" and not repo.cleared(course_id, module_id, "choices"):
         raise HTTPException(
             status_code=409,
             detail="complete the choices assessment first",
         )
 
-    attempt_number = repo.count_attempts(mod.id, type) + 1
+    # Latest-only model: drop the prior attempt's records and carry forward the
+    # running count + the permanent success record (so a retake never loses it).
+    prior_count, attempts_to_pass, passed_at = repo.reset_for_new_attempt(
+        course_id, module_id, type
+    )
+    attempt_number = prior_count + 1
 
     # Look up the authored bank.
     a_repo = AssessmentRepository(asmtsession)
@@ -196,13 +230,15 @@ def start_assessment(
             detail=f"no {type} bank found for module '{module_id}'",
         )
 
-    # Create the session record.
+    # Create the session record (carrying the permanent success record forward).
     assessment = repo.create_assessment(
         course_id=course_id,
         module_id=module_id,
         course_module_id=mod.id,
         type=type,
         attempt_number=attempt_number,
+        attempts_to_pass=attempts_to_pass,
+        passed_at=passed_at,
     )
 
     choice_qs: list[ChoiceQuestion] = []
@@ -257,7 +293,7 @@ def list_module_assessments(
     mod = repo.get_module(course_id, module_id)
     if mod is None:
         return []
-    attempts = repo.list_module_assessments(mod.id)
+    attempts = repo.list_module_assessments(course_id, module_id)
     return [
         ModuleAssessmentSummary(
             id=a.id,
@@ -265,6 +301,7 @@ def list_module_assessments(
             attempt_number=a.attempt_number,
             score=a.score,
             passed=a.passed,
+            attempts_to_pass=a.attempts_to_pass,
             completed_at=a.completed_at,
             created_at=a.created_at,
         )
@@ -353,17 +390,14 @@ def submit_choices(
         raise HTTPException(status_code=409, detail="already submitted")
 
     questions = repo.list_choice_questions(assessment_id)
-    correct_count = 0
+    total_credit = 0.0
     results: list[ChoiceQuestionResult] = []
 
     for q in questions:
-        learner = set(q.learner_choice or [])
-        correct = set(q.correct_answers)
-        is_correct = learner == correct
-        if is_correct:
-            correct_count += 1
+        credit = _choice_credit(q.learner_choice or [], q.correct_answers)
+        total_credit += credit
         q.submitted = True
-        q.is_correct = is_correct
+        q.is_correct = credit >= 1.0  # full credit only; partial counts toward score
         repo.save_choice_question(q)
         results.append(
             ChoiceQuestionResult(
@@ -374,19 +408,20 @@ def submit_choices(
                 choices=q.choices,
                 correct_answers=q.correct_answers,
                 learner_choice=q.learner_choice,
-                is_correct=is_correct,
+                is_correct=q.is_correct,
             )
         )
 
-    score = round((correct_count / max(len(questions), 1)) * 10, 2)
+    score = round((total_credit / max(len(questions), 1)) * 10, 2)
     passed = score >= PASS_THRESHOLD
     a.score = score
     a.passed = passed
     a.completed_at = datetime.now(UTC)
+    _record_pass(a)
     repo.save_assessment(a)
 
-    # Check if module can now be marked complete.
-    if passed and a.course_module_id:
+    # A pass may complete the module (celebration only — completion is derived).
+    if passed:
         _check_and_complete_module(repo, a)
 
     return ChoiceSubmitResult(
@@ -460,26 +495,20 @@ def get_results(
 
 
 def _check_and_complete_module(repo: CourseRepository, a: Assessment) -> None:
-    """Mark the CourseModule complete when BOTH assessment types are passed."""
-    if not a.course_module_id or not a.module_id:
-        return
-    choices_ok = repo.latest_passed(a.course_module_id, "choices")
-    llm_ok = repo.latest_passed(a.course_module_id, "llm")
-    if not (choices_ok and llm_ok):
-        return
+    """A pass may complete a module, and the last one completes the course.
 
-    with session_scope() as s:
-        s2 = CourseRepository(s)
-        mod = s.get(CourseModule, a.course_module_id)
-        if mod and not mod.completed:
-            s2.set_module_completed(mod, completed=True)
-            _maybe_celebrate(s2, a.course_id)
+    Completion is derived from the tests, so there is no flag to set here — the only
+    side effect is the one-time course-completion celebration message.
+    """
+    if a.module_id and repo.module_completed(a.course_id, a.module_id):
+        _maybe_celebrate(repo, a.course_id)
 
 
 def _maybe_celebrate(repo: CourseRepository, course_id: str) -> None:
     """Append a celebration message when every module in the course is complete."""
     modules = repo.list_modules(course_id)
-    if not modules or not all(m.completed for m in modules):
+    completed = repo.completed_module_ids(course_id)
+    if not modules or len(completed) < len(modules):
         return
     course = repo.get(course_id)
     if course is None:
@@ -619,8 +648,9 @@ def _auto_submit_llm_if_complete(repo: CourseRepository, a: Assessment) -> None:
     a.score = avg
     a.passed = passed
     a.completed_at = datetime.now(UTC)
+    _record_pass(a)
     repo.save_assessment(a)
-    if passed and a.course_module_id:
+    if passed:
         _check_and_complete_module(repo, a)
 
 
@@ -661,9 +691,10 @@ def submit_llm(
     a.score = avg
     a.passed = passed
     a.completed_at = datetime.now(UTC)
+    _record_pass(a)
     repo.save_assessment(a)
 
-    if passed and a.course_module_id:
+    if passed:
         _check_and_complete_module(repo, a)
 
     return LlmSubmitResult(

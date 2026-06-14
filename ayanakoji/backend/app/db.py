@@ -33,6 +33,21 @@ _COURSE_ADDED_COLUMNS: dict[str, str] = {
     "skill_check_active": "JSON",
 }
 
+# Columns added to ``assessment`` so progress (module/course completion) can be
+# derived from test results: the attempt number at first pass + when it passed.
+_ASSESSMENT_ADDED_COLUMNS: dict[str, str] = {
+    "attempts_to_pass": "INTEGER",
+    "passed_at": "DATETIME",
+}
+
+# Columns removed when status became fully derived from tests: the stored course
+# status int and the stored module-completion flags. Left in place they would be
+# dead NOT-NULL columns that break inserts, so an existing dev DB drops them here.
+_REMOVED_COLUMNS: dict[str, tuple[str, ...]] = {
+    "course": ("status",),
+    "coursemodule": ("completed", "completed_at"),
+}
+
 # SQLite busy timeout (ms): how long a writer waits on a locked DB before erroring.
 # Concurrent turns to *different* courses, plus the assessments DB, can briefly
 # contend; WAL + this timeout turn transient "database is locked" into a short
@@ -108,7 +123,11 @@ def init_db() -> None:
     tables = [SQLModel.metadata.tables[name] for name in names]
     engine = get_engine()
     SQLModel.metadata.create_all(engine, tables=tables)
-    ensure_course_columns(engine)
+    ensure_schema(engine)
+
+
+def _table_columns(conn: Any, table: str) -> set[str]:
+    return {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))}
 
 
 def ensure_course_columns(engine: Engine) -> None:
@@ -121,10 +140,34 @@ def ensure_course_columns(engine: Engine) -> None:
     if not engine.url.drivername.startswith("sqlite"):
         return
     with engine.begin() as conn:
-        existing = {row[1] for row in conn.execute(text("PRAGMA table_info(course)"))}
+        existing = _table_columns(conn, "course")
         for name, sql_type in _COURSE_ADDED_COLUMNS.items():
             if name not in existing:
                 conn.execute(text(f"ALTER TABLE course ADD COLUMN {name} {sql_type}"))
+
+
+def ensure_schema(engine: Engine) -> None:
+    """Reconcile an existing SQLite DB with the current model (idempotent).
+
+    ``create_all`` only ever CREATEs missing tables, never ALTERs existing ones,
+    so a dev DB that predates a model change is reconciled here instead of with a
+    full migration tool. Three steps: add the new ``course`` columns, add the new
+    ``assessment`` progress columns, and drop the now-removed status columns (dead
+    NOT-NULL columns would otherwise break inserts). Brand-new DBs are a no-op.
+    """
+    if not engine.url.drivername.startswith("sqlite"):
+        return
+    ensure_course_columns(engine)
+    with engine.begin() as conn:
+        existing = _table_columns(conn, "assessment")
+        for name, sql_type in _ASSESSMENT_ADDED_COLUMNS.items():
+            if name not in existing:
+                conn.execute(text(f"ALTER TABLE assessment ADD COLUMN {name} {sql_type}"))
+        for table, names in _REMOVED_COLUMNS.items():
+            present = _table_columns(conn, table)
+            for name in names:
+                if name in present:
+                    conn.execute(text(f"ALTER TABLE {table} DROP COLUMN {name}"))
 
 
 def get_session() -> Iterator[Session]:

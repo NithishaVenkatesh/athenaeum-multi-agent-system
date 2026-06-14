@@ -22,7 +22,6 @@ def test_create_course_titles_from_first_message(client: TestClient) -> None:
     body = _create(client, content="How do Azure Functions triggers work in production?")
     assert body["id"]
     assert body["persona_id"] == "EMP-001"
-    assert body["status"] == 0
     assert body["catalog_id"] is None
     assert body["catalog_title"] is None
     assert body["messages"] == []
@@ -127,7 +126,7 @@ def test_post_jailbreak_emits_blocked_event(client: TestClient) -> None:
     assert "token" not in types
 
 
-def test_skill_then_pace_then_approve_persists_modules_and_completion(client: TestClient) -> None:
+def test_skill_then_pace_then_approve_persists_modules_and_lock(client: TestClient) -> None:
     course_id = _create(client, content="How do Azure Functions work?")["id"]
     client.post(f"/api/courses/{course_id}/accept", json={"catalog_id": "cb-c01"})
 
@@ -160,20 +159,9 @@ def test_skill_then_pace_then_approve_persists_modules_and_completion(client: Te
     assert [m["sequence"] for m in modules] == [1, 2, 3, 4]
     assert modules[0]["locked"] is False and modules[1]["locked"] is True  # sequential
     assert all(m["complete_before"] for m in modules)
-
-    # Sequential completion: can't skip ahead.
-    assert (
-        client.post(
-            f"/api/courses/{course_id}/modules/{modules[1]['module_id']}/complete"
-        ).status_code
-        == 409
-    )
-    # Complete module 1 → module 2 unlocks.
-    after = client.post(
-        f"/api/courses/{course_id}/modules/{modules[0]['module_id']}/complete"
-    ).json()
-    assert after[0]["completed"] is True
-    assert after[1]["locked"] is False
+    # No module starts completed — completion is derived from passing both its tests,
+    # exercised end to end in test_assessment_session (test_module_marked_complete...).
+    assert all(m["completed"] is False for m in modules)
 
 
 def test_schedule_edit_shifts_plan_and_persists(client: TestClient) -> None:
@@ -241,7 +229,6 @@ def test_accept_course_links_and_sets_attempt(client: TestClient) -> None:
     body = resp.json()
     assert body["catalog_id"] == "cb-c01"
     assert body["catalog_title"] == "Azure Compute & Serverless Foundations"
-    assert body["status"] == 1  # attempt 1
 
     # invalid course id → 422; missing course → 404
     assert (

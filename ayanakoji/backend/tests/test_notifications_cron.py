@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
-from app.courses.models import Course, CourseModule
+from app.courses.models import Assessment, Course, CourseModule
 from app.courses.repository import CourseRepository
 from app.notifications.cron import evaluate_persona
 from app.notifications.models import (
@@ -50,12 +50,29 @@ def _add_module(
         sequence=sequence,
         estimated_minutes=60,
         complete_before=complete_before,
-        completed=completed,
-        completed_at=completed_at,
     )
     session.add(module)
     session.commit()
     session.refresh(module)
+    if completed:
+        # Completion is derived from the tests: a module is complete once both its
+        # quiz and oral are cleared (attempts_to_pass set), with a passed_at time.
+        for type in ("choices", "llm"):
+            session.add(
+                Assessment(
+                    course_id=course_id,
+                    module_id=module_id,
+                    course_module_id=module.id,
+                    type=type,
+                    attempt_number=1,
+                    score=10.0,
+                    passed=True,
+                    attempts_to_pass=1,
+                    completed_at=completed_at,
+                    passed_at=completed_at,
+                )
+            )
+        session.commit()
     return module
 
 

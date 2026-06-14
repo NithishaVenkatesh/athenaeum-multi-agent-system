@@ -24,7 +24,7 @@ def test_spans_current_and_target_cert_tracks() -> None:
 
 def test_natural_next_after_completing_a_course() -> None:
     recs = recommend_courses(
-        vertical="cloud-backend", taken=[TakenCourse(catalog_id="cb-c01", status=-1)]
+        vertical="cloud-backend", taken=[TakenCourse(catalog_id="cb-c01", passed=True)]
     )
     ids = [r.catalog_id for r in recs]
     assert "cb-c02" in ids  # prereq cb-c01 completed → unlocks cb-c02
@@ -32,9 +32,9 @@ def test_natural_next_after_completing_a_course() -> None:
 
 
 def test_in_progress_course_does_not_satisfy_prereq() -> None:
-    # status=1 (on attempt 1, not passed) must NOT unlock the next course.
+    # passed=False (in progress, not passed) must NOT unlock the next course.
     recs = recommend_courses(
-        vertical="cloud-backend", taken=[TakenCourse(catalog_id="cb-c01", status=1)]
+        vertical="cloud-backend", taken=[TakenCourse(catalog_id="cb-c01", passed=False)]
     )
     ids = [r.catalog_id for r in recs]
     # cb-c01 is taken (excluded); cb-c02 needs cb-c01 *completed*, which it isn't,
@@ -65,7 +65,7 @@ def test_overview_omits_registered_courses() -> None:
 
     # Mark the first suggestion as registered (taken).
     first_id = recs_all[0].catalog_id
-    recs_filtered = recommend_overview(taken=[TakenCourse(catalog_id=first_id, status=1)])
+    recs_filtered = recommend_overview(taken=[TakenCourse(catalog_id=first_id, passed=False)])
     ids_filtered = {r.catalog_id for r in recs_filtered}
     assert first_id not in ids_filtered
 
@@ -73,7 +73,7 @@ def test_overview_omits_registered_courses() -> None:
 def test_overview_drops_vertical_when_all_courses_registered() -> None:
     # Register every cloud-backend course so that whole vertical disappears.
     cloud_backend_ids = ["cb-c01", "cb-c02", "cb-c03"]
-    taken = [TakenCourse(catalog_id=cid, status=1) for cid in cloud_backend_ids]
+    taken = [TakenCourse(catalog_id=cid, passed=False) for cid in cloud_backend_ids]
     recs = recommend_overview(taken=taken)
     returned_ids = {r.catalog_id for r in recs}
     assert returned_ids.isdisjoint(cloud_backend_ids)

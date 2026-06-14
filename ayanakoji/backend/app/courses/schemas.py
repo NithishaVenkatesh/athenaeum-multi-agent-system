@@ -73,7 +73,6 @@ class CourseSummary(BaseModel):
     persona_id: str
     chat_name: str
     catalog_id: str | None
-    status: int
     updated_at: datetime
 
 
@@ -85,7 +84,6 @@ class CourseRead(BaseModel):
     chat_name: str
     catalog_id: str | None
     catalog_title: str | None
-    status: int
     messages: list[dict[str, Any]]
     assessment_ids: list[str]
     # The open skill-check quiz, if one is in progress (a SkillCheckRead payload);
@@ -119,14 +117,17 @@ class EvaluationRead(BaseModel):
     sequence: int
     type: str  # "choices" | "llm"
     locked: bool
-    completed: bool = Field(description="Latest completed attempt passed")
+    completed: bool = Field(description="Cleared (passed at least once)")
     attempted: bool = Field(description="Any attempt exists (including in-progress)")
-    score: float | None = Field(default=None, description="Latest completed attempt score (0–10)")
-    passed: bool | None = None
-    review_assessment_id: str | None = Field(
-        default=None, description="Latest completed attempt id, for the read-only review"
+    score: float | None = Field(default=None, description="Latest attempt score (0–10)")
+    passed: bool | None = Field(default=None, description="Latest attempt result")
+    attempts_to_pass: int | None = Field(
+        default=None, description="Attempt number at which it was first cleared"
     )
-    attempts: int = 0
+    review_assessment_id: str | None = Field(
+        default=None, description="Latest attempt id, for the read-only review"
+    )
+    attempts: int = Field(default=0, description="Total attempts taken so far")
 
 
 # ── Learner assessment session schemas (new evaluation pipeline) ──────────────
@@ -177,13 +178,16 @@ class AssessmentSessionRead(BaseModel):
 
 
 class ModuleAssessmentSummary(BaseModel):
-    """One attempt row returned by GET /modules/{mid}/assessments."""
+    """The latest attempt of one test for a module (GET /modules/{mid}/assessments)."""
 
     id: str
     type: str
     attempt_number: int
     score: float | None
     passed: bool | None
+    # Attempt number at which this test was first cleared (None until cleared); the
+    # permanent success record progress is derived from.
+    attempts_to_pass: int | None = None
     completed_at: datetime | None
     created_at: datetime
 

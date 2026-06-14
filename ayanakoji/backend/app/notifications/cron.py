@@ -105,14 +105,26 @@ def evaluate_persona(
     for course in course_repo.list_for_persona(persona_id):
         modules = course_repo.list_modules(course.id)
         by_seq = {m.sequence: m for m in modules}
-        all_complete = bool(modules) and all(m.completed for m in modules)
+        # Completion is derived from the tests now, not stored on the module row.
+        completed_ids = course_repo.completed_module_ids(course.id)
+        all_complete = bool(modules) and len(completed_ids) == len(modules)
         for module in modules:
+            next_module = by_seq.get(module.sequence + 1)
+            is_completed = module.module_id in completed_ids
             summary.notifications_created += _evaluate_module(
                 notif_repo,
                 persona_id=persona_id,
                 course=course,
                 module=module,
-                next_module=by_seq.get(module.sequence + 1),
+                next_module=next_module,
+                completed=is_completed,
+                completed_at=(
+                    course_repo.module_completed_at(course.id, module.module_id)
+                    if is_completed
+                    else None
+                ),
+                next_completed=next_module is not None
+                and next_module.module_id in completed_ids,
                 all_complete=all_complete,
                 today=today,
                 soon_days=soon_days,
@@ -130,23 +142,31 @@ def _evaluate_module(
     course: Course,
     module: CourseModule,
     next_module: CourseModule | None,
+    completed: bool,
+    completed_at: datetime | None,
+    next_completed: bool,
     all_complete: bool,
     today: date,
     soon_days: int,
     scoring: list[_ScoringEvent],
 ) -> int:
-    """Emit any notifications for one module and queue its scoring; return #created."""
+    """Emit any notifications for one module and queue its scoring; return #created.
+
+    ``completed`` / ``completed_at`` / ``next_completed`` are derived from the tests
+    by the caller (no longer stored on the module row)."""
     deadline = _parse_deadline(module.complete_before)
     if deadline is None:
         return 0
 
-    if module.completed:
+    if completed:
         return _evaluate_completed(
             notif_repo,
             persona_id=persona_id,
             course=course,
             module=module,
             next_module=next_module,
+            completed_at=completed_at,
+            next_completed=next_completed,
             all_complete=all_complete,
             deadline=deadline,
             scoring=scoring,
@@ -170,13 +190,14 @@ def _evaluate_completed(
     course: Course,
     module: CourseModule,
     next_module: CourseModule | None,
+    completed_at: datetime | None,
+    next_completed: bool,
     all_complete: bool,
     deadline: date,
     scoring: list[_ScoringEvent],
 ) -> int:
     created = 0
     # Award an on-time completion exactly once (ledger-deduped before queueing).
-    completed_at = module.completed_at
     if (
         completed_at is not None
         and completed_at.date() <= deadline
@@ -186,7 +207,7 @@ def _evaluate_completed(
             _ScoringEvent(SCORE_ON_TIME, course.id, module.module_id, _as_utc(completed_at))
         )
 
-    if next_module is not None and not next_module.completed:
+    if next_module is not None and not next_completed:
         created += _emit(
             notif_repo,
             persona_id=persona_id,

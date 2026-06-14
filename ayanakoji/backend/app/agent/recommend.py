@@ -303,9 +303,9 @@ def recommend_courses(
     graph = _load_graph(path)
 
     taken_ids = {t.catalog_id for t in taken}
-    completed_ids = {t.catalog_id for t in taken if t.status < 0}
-    # A prereq is "satisfied" once it's passed OR already enrolled in. Until the
-    # assessment/pass loop exists nothing is ever status<0, so keying eligibility
+    completed_ids = {t.catalog_id for t in taken if t.passed}
+    # A prereq is "satisfied" once it's passed OR already enrolled in. A course is
+    # only ``passed`` once every module's tests are cleared, so keying eligibility
     # only on "passed" would freeze the ladder; enrolled prereqs unlock the next.
     satisfied_ids = completed_ids | taken_ids
 

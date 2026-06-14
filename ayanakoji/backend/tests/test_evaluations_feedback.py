@@ -196,3 +196,88 @@ def test_feedback_rejects_bad_type(client: TestClient, assessments_session: Any)
         params={"type": "essay"},
     )
     assert resp.status_code == 422
+
+
+# ── Proportional MSQ scoring ──────────────────────────────────────────────────
+
+
+def test_choice_credit_proportional() -> None:
+    from app.courses.assessment_router import _choice_credit
+
+    # MCQ (single correct) stays all-or-nothing.
+    assert _choice_credit(["A"], ["A"]) == 1.0
+    assert _choice_credit(["B"], ["A"]) == 0.0
+    assert _choice_credit([], ["A"]) == 0.0
+
+    # MSQ correct = {A, B, C}: partial credit, penalising wrong picks.
+    abc = ["A", "B", "C"]
+    assert _choice_credit(["A", "B", "C"], abc) == 1.0
+    assert round(_choice_credit(["A", "B"], abc), 2) == 0.67  # one missed
+    assert round(_choice_credit(["A", "B", "C", "D"], abc), 2) == 0.67  # one wrong
+    assert round(_choice_credit(["A", "B", "D"], abc), 2) == 0.33  # 2 right − 1 wrong
+    assert _choice_credit(["D"], abc) == 0.0  # 0 right − 1 wrong → floored at 0
+
+
+# ── attempts-to-pass + latest-only retake ─────────────────────────────────────
+
+
+def _eval(client: TestClient, course_id: str, module_id: str, type: str) -> dict[str, Any]:
+    evals = client.get(f"/api/courses/{course_id}/evaluations").json()
+    return next(e for e in evals if e["module_id"] == module_id and e["type"] == type)
+
+
+def test_attempts_to_pass_and_latest_only_retake(
+    client: TestClient, assessments_session: Any
+) -> None:
+    _seed_banks(assessments_session)
+    course_id, module_id = _make_course_with_plan(client)
+
+    # Attempt 1: fail (submit nothing selected).
+    a1 = client.post(
+        f"/api/courses/{course_id}/modules/{module_id}/assessments/start",
+        params={"type": "choices"},
+    ).json()
+    client.post(f"/api/courses/{course_id}/assessments/{a1['id']}/choices/submit")
+
+    quiz = _eval(client, course_id, module_id, "choices")
+    assert quiz["attempted"] and not quiz["completed"]
+    assert quiz["attempts"] == 1 and quiz["attempts_to_pass"] is None
+
+    # Retake (no force needed — not yet cleared) and pass it (attempt 2).
+    a2 = client.post(
+        f"/api/courses/{course_id}/modules/{module_id}/assessments/start",
+        params={"type": "choices"},
+    ).json()
+    assert a2["attempt_number"] == 2
+    for q in a2["choice_questions"]:
+        client.post(
+            f"/api/courses/{course_id}/assessments/{a2['id']}/choices/{q['id']}/select",
+            json={"selections": ["A"]},
+        )
+    assert client.post(f"/api/courses/{course_id}/assessments/{a2['id']}/choices/submit").json()[
+        "passed"
+    ]
+
+    # Latest-only: the prior attempt's record is gone.
+    assert client.get(f"/api/courses/{course_id}/assessments/{a1['id']}").status_code == 404
+
+    quiz = _eval(client, course_id, module_id, "choices")
+    assert quiz["completed"] is True
+    assert quiz["attempts_to_pass"] == 2  # passed on the 2nd attempt
+    assert quiz["attempts"] == 2
+    assert quiz["review_assessment_id"] == a2["id"]
+
+    # Force-retake after passing and fail it: completion is permanent (derived from
+    # attempts_to_pass), so the module stays cleared even though the latest failed.
+    a3 = client.post(
+        f"/api/courses/{course_id}/modules/{module_id}/assessments/start",
+        params={"type": "choices", "force": "true"},
+    ).json()
+    assert a3["attempt_number"] == 3
+    client.post(f"/api/courses/{course_id}/assessments/{a3['id']}/choices/submit")
+
+    quiz = _eval(client, course_id, module_id, "choices")
+    assert quiz["completed"] is True  # stays cleared
+    assert quiz["passed"] is False  # latest attempt failed
+    assert quiz["attempts_to_pass"] == 2  # unchanged
+    assert quiz["attempts"] == 3

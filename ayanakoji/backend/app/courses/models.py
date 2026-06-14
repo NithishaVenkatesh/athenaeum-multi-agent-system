@@ -19,12 +19,6 @@ from sqlmodel import Field, SQLModel
 # Two kinds of assessment / question record.
 ASSESSMENT_TYPES = ("llm", "choices")
 
-# ``Course.status`` encoding:
-#   0   → just started, no attempt yet
-#  +N   → currently on attempt N (repeated attempts, not yet passed)
-#  -N   → passed on attempt N  (e.g. -2 = passed on the second attempt)
-STATUS_NEW = 0
-
 
 def _uuid() -> str:
     return uuid4().hex
@@ -56,7 +50,6 @@ class Course(SQLModel, table=True):
     # Athenaeum catalog course id this chat is about; nullable until linked, validated
     # against the catalog when set. Named ``catalog_id`` to avoid colliding with ``id``.
     catalog_id: str | None = Field(default=None)
-    status: int = Field(default=STATUS_NEW)
     # Chosen study pace (slower|normal|faster); set before a plan is built.
     pace: str | None = Field(default=None)
     # Natural-language schedule edits that persist across re-plans (§schedule_edit):
@@ -90,10 +83,12 @@ class Course(SQLModel, table=True):
 
 
 class CourseModule(SQLModel, table=True):
-    """A scheduled module in a course's study plan (the system of record for progress).
+    """A scheduled module in a course's study plan.
 
-    Written when a plan is built (one row per module). Modules are completed
-    sequentially: a module is *available* only once the prior one is completed.
+    Written when a plan is built (one row per module). Module *completion* is no
+    longer stored here: it is derived from the assessments (a module is complete
+    once both its quiz and its oral have been passed). This row only holds the
+    schedule and ordering; progress lives entirely in the test results.
     """
 
     id: str = Field(default_factory=_uuid, primary_key=True)
@@ -104,8 +99,6 @@ class CourseModule(SQLModel, table=True):
     estimated_minutes: int
     complete_before: str  # ISO date
     scheduled: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON)
-    completed: bool = Field(default=False)
-    completed_at: datetime | None = Field(default=None)
 
 
 class Assessment(SQLModel, table=True):
@@ -119,13 +112,21 @@ class Assessment(SQLModel, table=True):
     course_module_id: str | None = Field(default=None, index=True)
     type: str  # one of ASSESSMENT_TYPES; validated at the API boundary
     is_practice: bool = Field(default=False)
-    # Attempt number for this (course_module_id, type) pair; 1-based.
+    # Running attempt count for this (module, type); 1-based. Only the latest
+    # attempt's question records are kept (older ones are dropped on retake), so
+    # this is the count carried forward, not a row-per-attempt tally.
     attempt_number: int = Field(default=1)
-    # Score 0.0–10.0 (normalised regardless of question count).
+    # Score 0.0–10.0 of the latest attempt (normalised regardless of question count).
     score: float | None = Field(default=None)
-    # True ≥ 5.0, False < 5.0, None = not yet submitted.
+    # Latest attempt's result: True ≥ 5.0, False < 5.0, None = not yet submitted.
     passed: bool | None = Field(default=None)
     completed_at: datetime | None = Field(default=None)
+    # The permanent record of success: the attempt number at which this test was
+    # FIRST passed (None until passed), and when. Set once and carried across
+    # retakes, so a later failed retake never un-completes the module. This is the
+    # "number of times the test was attempted to success" the progress derives from.
+    attempts_to_pass: int | None = Field(default=None)
+    passed_at: datetime | None = Field(default=None)
     created_at: datetime = Field(default_factory=_now)
 
 

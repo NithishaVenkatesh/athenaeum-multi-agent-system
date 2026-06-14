@@ -72,17 +72,13 @@ class CourseRepository:
         chat_name: str | None = None,
         catalog_id: str | None = None,
         set_catalog: bool = False,
-        status: int | None = None,
     ) -> Course:
         """Apply a partial update. ``set_catalog`` distinguishes 'link to X' / 'unlink'
-        from 'field not provided' (since ``catalog_id=None`` means unlink). ``status``
-        is set only when provided (course-attempt encoding lives on ``Course.status``)."""
+        from 'field not provided' (since ``catalog_id=None`` means unlink)."""
         if chat_name is not None:
             course.chat_name = chat_name
         if set_catalog:
             course.catalog_id = catalog_id
-        if status is not None:
-            course.status = status
         course.updated_at = datetime.now(UTC)
         self._session.add(course)
         self._session.commit()
@@ -109,24 +105,22 @@ class CourseRepository:
     def replace_modules(self, course_id: str, modules: list[dict[str, Any]]) -> None:
         """Replace a course's scheduled modules (idempotent — a rebuild overwrites).
 
-        Preserves completion: a module already completed stays completed across a
-        re-plan, since progress is the learner's and shouldn't be wiped by a reschedule.
+        Progress is no longer stored on the module row: completion is derived from
+        the assessments, which key on (course_id, module_id). So a re-plan can wipe
+        and rewrite the schedule rows freely — a module's passed tests still resolve
+        it as complete because they reference the stable catalog ``module_id``.
         """
-        done = {m.module_id: m.completed_at for m in self.list_modules(course_id) if m.completed}
         self._session.exec(delete(CourseModule).where(col(CourseModule.course_id) == course_id))
         for data in modules:
-            mid = str(data["module_id"])
             self._session.add(
                 CourseModule(
                     course_id=course_id,
-                    module_id=mid,
+                    module_id=str(data["module_id"]),
                     title=str(data["title"]),
                     sequence=int(data["sequence"]),
                     estimated_minutes=int(data["estimated_minutes"]),
                     complete_before=str(data["complete_before"]),
                     scheduled=list(data.get("scheduled", [])),
-                    completed=mid in done,
-                    completed_at=done.get(mid),
                 )
             )
         self._session.commit()
@@ -145,15 +139,44 @@ class CourseRepository:
         )
         return self._session.exec(statement).first()
 
-    def set_module_completed(self, module: CourseModule, *, completed: bool) -> CourseModule:
-        module.completed = completed
-        module.completed_at = datetime.now(UTC) if completed else None
-        self._session.add(module)
-        self._session.commit()
-        self._session.refresh(module)
-        return module
+    # ── Derived module/course progress (from test results) ───────────────────
+    #
+    # Completion is no longer stored. A module is complete once both its tests have
+    # been *cleared* (passed at least once, recorded permanently as attempts_to_pass).
+    # All these key on the stable catalog ``module_id``, so a re-plan that rewrites
+    # CourseModule rows never loses progress.
 
-    # ── Assessment session (learner attempts) ────────────────────────────────
+    def cleared(self, course_id: str, module_id: str, type: str) -> bool:
+        """True if this module's test of ``type`` has been passed at least once."""
+        a = self.latest_assessment(course_id, module_id, type)
+        return a is not None and a.attempts_to_pass is not None
+
+    def module_completed(self, course_id: str, module_id: str) -> bool:
+        """A module is complete once both its quiz and oral have been cleared."""
+        return self.cleared(course_id, module_id, "choices") and self.cleared(
+            course_id, module_id, "llm"
+        )
+
+    def module_completed_at(self, course_id: str, module_id: str) -> datetime | None:
+        """When the module was completed: the later of its two tests' first-pass times."""
+        if not self.module_completed(course_id, module_id):
+            return None
+        times = [
+            a.passed_at
+            for type in ("choices", "llm")
+            if (a := self.latest_assessment(course_id, module_id, type)) and a.passed_at
+        ]
+        return max(times) if times else None
+
+    def completed_module_ids(self, course_id: str) -> set[str]:
+        """The catalog module ids of this course's completed modules."""
+        return {
+            m.module_id
+            for m in self.list_modules(course_id)
+            if self.module_completed(course_id, m.module_id)
+        }
+
+    # ── Assessment session (latest attempt only + carried attempt count) ──────
 
     def create_assessment(
         self,
@@ -163,6 +186,8 @@ class CourseRepository:
         course_module_id: str,
         type: str,
         attempt_number: int,
+        attempts_to_pass: int | None = None,
+        passed_at: datetime | None = None,
     ) -> Assessment:
         a = Assessment(
             course_id=course_id,
@@ -170,44 +195,74 @@ class CourseRepository:
             course_module_id=course_module_id,
             type=type,
             attempt_number=attempt_number,
+            attempts_to_pass=attempts_to_pass,
+            passed_at=passed_at,
         )
         self._session.add(a)
         self._session.commit()
         self._session.refresh(a)
         return a
 
-    def count_attempts(self, course_module_id: str, type: str) -> int:
-        statement = select(Assessment).where(
-            Assessment.course_module_id == course_module_id,
-            Assessment.type == type,
-        )
-        return len(list(self._session.exec(statement).all()))
+    def reset_for_new_attempt(
+        self, course_id: str, module_id: str, type: str
+    ) -> tuple[int, int | None, datetime | None]:
+        """Drop the prior attempt's records (only the latest is kept) and return the
+        facts to carry forward: (prior attempt count, attempts_to_pass, passed_at).
 
-    def latest_assessment(self, course_module_id: str, type: str) -> Assessment | None:
+        Keeping only the most recent attempt is the 'latest + count' model: each
+        retake replaces the stored questions/answers, while the permanent success
+        record (attempts_to_pass / passed_at) survives so completion never regresses.
+        """
         statement = (
             select(Assessment)
             .where(
-                Assessment.course_module_id == course_module_id,
+                Assessment.course_id == course_id,
+                Assessment.module_id == module_id,
+                Assessment.type == type,
+            )
+            .order_by(col(Assessment.attempt_number).desc())
+        )
+        rows = list(self._session.exec(statement).all())
+        prior = rows[0] if rows else None
+        prior_count = prior.attempt_number if prior else 0
+        attempts_to_pass = prior.attempts_to_pass if prior else None
+        passed_at = prior.passed_at if prior else None
+        ids = [a.id for a in rows]
+        if ids:
+            self._session.exec(
+                delete(ChoiceQuestion).where(col(ChoiceQuestion.assessment_id).in_(ids))
+            )
+            self._session.exec(delete(LlmQuestion).where(col(LlmQuestion.assessment_id).in_(ids)))
+            self._session.exec(delete(Assessment).where(col(Assessment.id).in_(ids)))
+            self._session.commit()
+        return prior_count, attempts_to_pass, passed_at
+
+    def latest_assessment(self, course_id: str, module_id: str, type: str) -> Assessment | None:
+        statement = (
+            select(Assessment)
+            .where(
+                Assessment.course_id == course_id,
+                Assessment.module_id == module_id,
                 Assessment.type == type,
             )
             .order_by(col(Assessment.attempt_number).desc())
         )
         return self._session.exec(statement).first()
 
-    def latest_passed(self, course_module_id: str, type: str) -> bool:
-        a = self.latest_assessment(course_module_id, type)
-        return a is not None and a.passed is True
-
     def get_assessment(self, assessment_id: str) -> Assessment | None:
         return self._session.get(Assessment, assessment_id)
 
-    def list_module_assessments(self, course_module_id: str) -> list[Assessment]:
+    def list_module_assessments(self, course_id: str, module_id: str) -> list[Assessment]:
+        """The latest attempt of each type for a module (≤ 2 rows: quiz + oral)."""
         statement = (
             select(Assessment)
-            .where(Assessment.course_module_id == course_module_id)
+            .where(Assessment.course_id == course_id, Assessment.module_id == module_id)
             .order_by(col(Assessment.type), col(Assessment.attempt_number))
         )
-        return list(self._session.exec(statement).all())
+        latest_by_type: dict[str, Assessment] = {}
+        for a in self._session.exec(statement).all():
+            latest_by_type[a.type] = a  # ascending attempt_number → last wins
+        return list(latest_by_type.values())
 
     def save_assessment(self, a: Assessment) -> Assessment:
         self._session.add(a)

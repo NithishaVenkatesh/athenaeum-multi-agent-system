@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from app.courses.models import Course, CourseModule
+from app.courses.models import Assessment, Course, CourseModule
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
@@ -12,23 +12,23 @@ PERSONA = "EMP1"
 
 
 def _seed_completed_then_pending(session: Session) -> Course:
-    """A course whose first module is done on time, with a second still pending."""
+    """A course whose first module is done on time, with a second still pending.
+
+    Module completion is derived from the tests, so 'done' means both tests for m1
+    are cleared (passed_at = the completion time)."""
     course = Course(persona_id=PERSONA, chat_name="Cloud Basics")
     session.add(course)
     session.commit()
     session.refresh(course)
-    session.add(
-        CourseModule(
-            course_id=course.id,
-            module_id="m1",
-            title="Intro",
-            sequence=1,
-            estimated_minutes=60,
-            complete_before="2026-12-20",
-            completed=True,
-            completed_at=datetime(2026, 6, 12, tzinfo=UTC),
-        )
+    m1 = CourseModule(
+        course_id=course.id,
+        module_id="m1",
+        title="Intro",
+        sequence=1,
+        estimated_minutes=60,
+        complete_before="2026-12-20",
     )
+    session.add(m1)
     session.add(
         CourseModule(
             course_id=course.id,
@@ -39,6 +39,24 @@ def _seed_completed_then_pending(session: Session) -> Course:
             complete_before="2026-12-27",
         )
     )
+    session.commit()
+    session.refresh(m1)
+    done_at = datetime(2026, 6, 12, tzinfo=UTC)
+    for type in ("choices", "llm"):
+        session.add(
+            Assessment(
+                course_id=course.id,
+                module_id="m1",
+                course_module_id=m1.id,
+                type=type,
+                attempt_number=1,
+                score=10.0,
+                passed=True,
+                attempts_to_pass=1,
+                completed_at=done_at,
+                passed_at=done_at,
+            )
+        )
     session.commit()
     return course
 
