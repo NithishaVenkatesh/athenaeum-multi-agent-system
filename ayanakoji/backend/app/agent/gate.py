@@ -2,16 +2,21 @@
 
 Tool scope: **none.** The gate only classifies the user's text; it never
 retrieves, plans, or calls a downstream tool. Defense in depth (master-plan §15),
-layered fastest→strongest:
+ordered so the *purpose-built* detector leads and the general LLM backs it up:
 
 1. **Regex pre-filter** — $0, offline, deterministic. Catches blatant overrides
    *and* social-engineering paraphrases a probability classifier underweights
    (e.g. "pretend the rules don't apply").
 2. **Prompt Guard 2** (Groq ``llama-prompt-guard-2``) — a model *trained* for
-   injection/jailbreak detection; returns a 0..1 score. Primary online gate.
-3. **General-LLM classifier** — only if the purpose-built guard is unavailable.
-4. **Fail open** — if every model is unreachable but the regex pre-filter passed,
-   a clean learner is not blocked just because the network is down.
+   injection/jailbreak detection; returns a 0..1 score. The **primary online
+   detector and authoritative on a block**: a confident jailbreak is caught by
+   the specialist immediately, short-circuiting before the general LLM runs (M2).
+3. **Azure LLM classifier** — the **secondary semantic net**, run only when the
+   guard clears the message. It catches intent-level attacks the guard's training
+   underweights (extract the system prompt, "act outside your purpose"), so a
+   clean turn is confirmed by *both* a specialist and a generalist.
+4. **Fail open** — only if *every* model is unreachable and the regex pre-filter
+   passed: a clean learner is not blocked just because the network is down.
 
 Any block stops the pipeline; the frontend shows a toast. A regex/guard hit
 short-circuits before reaching any planning agent.
@@ -186,7 +191,30 @@ def screen(
         verdict = InjectionVerdict(blocked=False, reason="Passed regex pre-filter (offline).")
         return verdict, _build_telemetry(verdict, model="regex-prefilter", tier=None, steps=steps)
 
-    # 3) Azure FIRST (provider-order directive): the Foundry/Azure classifier decides.
+    # 3) Prompt Guard 2 FIRST — the purpose-built specialist, authoritative on a
+    #    block. A confident jailbreak is caught here and short-circuits before the
+    #    general LLM is ever called (M2).
+    guard_verdict = _prompt_guard_verdict(text, settings, guard_fn)
+    if guard_verdict is not None:
+        steps.append(TraceStep(
+            label="Groq Prompt Guard 2",
+            passed=not guard_verdict.blocked,
+            detail=guard_verdict.reason,
+            model=settings.groq_model_guard,
+        ))
+        if guard_verdict.blocked:
+            return guard_verdict, _build_telemetry(
+                guard_verdict, model=settings.groq_model_guard, tier=None, steps=steps
+            )
+    else:
+        steps.append(TraceStep(
+            label="Groq Prompt Guard 2",
+            passed=None,
+            detail="Skipped — Groq not configured or unreachable.",
+        ))
+
+    # 4) Azure LLM classifier — the secondary semantic net (only when the guard
+    #    cleared the turn): catches intent-level attacks the guard underweights.
     router = router or ModelRouter(settings)
     try:
         result = router.complete(
@@ -206,54 +234,21 @@ def screen(
             detail=f"Confidence {verdict.confidence:.0%} — {verdict.reason}",
             model=result.model,
         ))
-        if verdict.blocked:
-            return verdict, _build_telemetry(
-                verdict, model=result.model, tier=result.tier, steps=steps
-            )
-        # Azure said clean → confirm with the purpose-built Prompt Guard as a net.
-        guard_verdict = _prompt_guard_verdict(text, settings, guard_fn)
-        if guard_verdict is not None:
-            steps.append(TraceStep(
-                label="Groq Prompt Guard 2",
-                passed=not guard_verdict.blocked,
-                detail=guard_verdict.reason,
-                model=settings.groq_model_guard,
-            ))
-            if guard_verdict.blocked:
-                return guard_verdict, _build_telemetry(
-                    guard_verdict, model=settings.groq_model_guard, tier=None, steps=steps
-                )
-        else:
-            steps.append(TraceStep(
-                label="Groq Prompt Guard 2",
-                passed=None,
-                detail="Skipped — Groq not configured.",
-            ))
-        return verdict, _build_telemetry(verdict, model=result.model, tier=result.tier, steps=steps)
+        return verdict, _build_telemetry(
+            verdict, model=result.model, tier=result.tier, steps=steps
+        )
     except AllProvidersDown:
-        # 4) Azure unreachable → fall back to Groq Prompt Guard 2 (the order's fallback).
         steps.append(TraceStep(
             label="Azure LLM classifier",
             passed=None,
             detail="Unavailable — Azure/LLM providers unreachable.",
         ))
-        guard_verdict = _prompt_guard_verdict(text, settings, guard_fn)
+        # The specialist already cleared this turn → that is a real clean signal.
         if guard_verdict is not None:
-            steps.append(TraceStep(
-                label="Groq Prompt Guard 2",
-                passed=not guard_verdict.blocked,
-                detail=guard_verdict.reason,
-                model=settings.groq_model_guard,
-            ))
             return guard_verdict, _build_telemetry(
                 guard_verdict, model=settings.groq_model_guard, tier=None, steps=steps
             )
-        # 5) Fail open: everything unreachable, but the regex pre-filter cleared it.
-        steps.append(TraceStep(
-            label="Groq Prompt Guard 2",
-            passed=None,
-            detail="Unavailable — Groq not configured or unreachable.",
-        ))
+        # 5) Fail open: every classifier unreachable, but the regex pre-filter cleared it.
         steps.append(TraceStep(
             label="Fail-open",
             passed=True,
@@ -268,7 +263,7 @@ def screen(
 def _prompt_guard_verdict(
     text: str, settings: Settings, guard_fn: GuardFn | None
 ) -> InjectionVerdict | None:
-    """Groq Prompt Guard 2 verdict (the fallback / secondary net), or None if down."""
+    """Groq Prompt Guard 2 verdict (the primary purpose-built detector), or None if down."""
     score = (guard_fn or (lambda t: _groq_guard_score(t, settings)))(text)
     if score is None:
         return None
