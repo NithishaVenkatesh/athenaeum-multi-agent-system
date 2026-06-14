@@ -1,0 +1,104 @@
+{
+  "course_id": "cb-c03",
+  "module_id": "cb-c03-m03",
+  "module_title": "Publishing APIs with Azure API Management",
+  "choices": [
+    {
+      "id": "cb-c03-m03-c01",
+      "module_id": "cb-c03-m03",
+      "prompt": "In an APIM instance, which logical part is the runtime data plane that proxies and processes every incoming request before forwarding it to the backend?",
+      "kind": "mcq",
+      "choices": [
+        "The gateway",
+        "The management plane",
+        "The developer portal",
+        "The product"
+      ],
+      "correct_answers": [
+        "The gateway"
+      ]
+    },
+    {
+      "id": "cb-c03-m03-c02",
+      "module_id": "cb-c03-m03",
+      "prompt": "Three freight partners must each be throttled independently so one partner's runaway polling script cannot consume the others' allowance. Which policy and counter key does the module prescribe?",
+      "kind": "mcq",
+      "choices": [
+        "rate-limit-by-key with counter-key set to context.Subscription.Id",
+        "rate-limit (per APIM instance) with no counter key",
+        "rate-limit-by-key with counter-key set to the trackingId query parameter",
+        "cache-store with a 30-second duration per subscription"
+      ],
+      "correct_answers": [
+        "rate-limit-by-key with counter-key set to context.Subscription.Id"
+      ]
+    },
+    {
+      "id": "cb-c03-m03-c03",
+      "module_id": "cb-c03-m03",
+      "prompt": "A consumer wants to call an API published through APIM. According to the module, how is access actually granted to that consumer?",
+      "kind": "mcq",
+      "choices": [
+        "The consumer takes out a subscription to a product that groups the API(s), and the subscription issues a subscription key sent in the Ocp-Apim-Subscription-Key header",
+        "The consumer is given raw, direct access to the backend API endpoint once registered in the developer portal",
+        "The consumer sends a validate-jwt policy token in place of any key to identify their product",
+        "The consumer's IP address is added to a per-API allowlist on the gateway runtime"
+      ],
+      "correct_answers": [
+        "The consumer takes out a subscription to a product that groups the API(s), and the subscription issues a subscription key sent in the Ocp-Apim-Subscription-Key header"
+      ]
+    },
+    {
+      "id": "cb-c03-m03-c04",
+      "module_id": "cb-c03-m03",
+      "prompt": "Select all statements the module makes about APIM policies and the request pipeline.",
+      "kind": "msq",
+      "choices": [
+        "A policy is an XML statement that runs at a defined stage such as inbound, backend, outbound, or on-error",
+        "Policies inherit and compose from broader scopes via the <base /> element",
+        "Policies can be set globally, per product, per API, or per operation",
+        "Policies must be written in C# and compiled before they run in the gateway"
+      ],
+      "correct_answers": [
+        "A policy is an XML statement that runs at a defined stage such as inbound, backend, outbound, or on-error",
+        "Policies inherit and compose from broader scopes via the <base /> element",
+        "Policies can be set globally, per product, per API, or per operation"
+      ]
+    },
+    {
+      "id": "cb-c03-m03-c05",
+      "module_id": "cb-c03-m03",
+      "prompt": "A partner intermittently receives shipment data for a different tracking number shortly after response caching was added. Based on the module, what is the most likely misconfiguration?",
+      "kind": "mcq",
+      "choices": [
+        "The cache key does not vary by trackingId, so different lookups collide on one cached entry",
+        "The cache-store duration of 30 seconds is too long for the lookups",
+        "The rate-limit-by-key counter key is set to context.Subscription.Id instead of trackingId",
+        "The <base /> element was omitted from the outbound policy, disabling caching"
+      ],
+      "correct_answers": [
+        "The cache key does not vary by trackingId, so different lookups collide on one cached entry"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "cb-c03-m03-l01",
+      "module_id": "cb-c03-m03",
+      "prompt": "Explain why requiring only a subscription key is insufficient for an operation that updates shipment status, and describe what you would add to secure it.",
+      "reference_answer": "A subscription key only identifies the calling application and which product it bought; it is an access-organizing tool, not strong end-user authentication, and a shared key can be replayed. For a state-changing operation like updating shipment status you need verifiable authorization of the actual caller, not just proof of which partner is calling. The module says to add a validate-jwt inbound policy that checks the bearer token issued by the Microsoft identity platform (Entra). In practice production partner APIs layer both: the subscription key answers 'which partner and what product,' and the validated JWT answers 'and is this caller authorized.'"
+    },
+    {
+      "id": "cb-c03-m03-l02",
+      "module_id": "cb-c03-m03",
+      "prompt": "Walk through how the inbound and outbound stages of the Northwind tracking-API policy work together to throttle partners and cache lookups, naming the specific policies and what each does.",
+      "reference_answer": "Reading the pipeline top to bottom, on the way in rate-limit-by-key counts calls against each partner's context.Subscription.Id and returns 429 Too Many Requests if a partner exceeds 600 calls per 60 seconds, giving each partner an independent quota. Still inbound, cache-lookup checks for an already-cached response keyed by the trackingId query parameter so repeat reads can skip the backend. On the way out, cache-store saves successful responses for 30 seconds so identical lookups are served from cache, and set-header with exists-action delete strips the internal X-Internal-Node diagnostic header so backend topology never leaks to partners. None of this lives in the tracking service; it is pure gateway configuration that applies identically to every new subscription."
+    },
+    {
+      "id": "cb-c03-m03-l03",
+      "module_id": "cb-c03-m03",
+      "prompt": "Compare the role of products/subscription keys versus policies in APIM, and explain why placing these cross-cutting concerns in the gateway is better than coding them into the backend service.",
+      "reference_answer": "Products and subscription keys organize and gate access per consumer: you group one or more APIs into a product, a consumer subscribes to it, and the issued key (sent in Ocp-Apim-Subscription-Key) lets you throttle, monitor, or revoke each partner independently. Policies are the programmable XML pipeline that implements cross-cutting behavior declaratively at the inbound, backend, outbound, and on-error stages, such as rate-limit-by-key, cache-lookup/cache-store, validate-jwt, and set-header/set-body. Putting these in the APIM facade is better than baking them into application code because it gives one place to enforce authentication, throttling, caching, transformation, and logging without touching the backends, and it avoids coupling business logic to gateway concerns. It also hides that 'the API' may really be several microservices, so the services stay focused on their actual work while the gateway handles security and governance uniformly."
+    }
+  ]
+}
