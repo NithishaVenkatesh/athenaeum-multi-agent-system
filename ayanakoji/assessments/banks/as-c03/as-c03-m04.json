@@ -1,0 +1,105 @@
+{
+  "course_id": "as-c03",
+  "module_id": "as-c03-m04",
+  "module_title": "Securing applications and data",
+  "choices": [
+    {
+      "id": "as-c03-m04-c01",
+      "module_id": "as-c03-m04",
+      "prompt": "According to the module, what is the core distinction between what an Azure Web Application Firewall (WAF) does and what an API management layer does?",
+      "kind": "mcq",
+      "choices": [
+        "WAF inspects the content of requests for malicious payloads; the API gateway decides whether a caller is authorized and within their quota",
+        "WAF authorizes callers and validates tokens; the API gateway inspects request content for SQL injection and XSS",
+        "WAF encrypts data in transit with TLS; the API gateway classifies sensitive data before it reaches the app",
+        "WAF issues short-lived managed-identity tokens; the API gateway stores secrets in Key Vault"
+      ],
+      "correct_answers": [
+        "WAF inspects the content of requests for malicious payloads; the API gateway decides whether a caller is authorized and within their quota"
+      ]
+    },
+    {
+      "id": "as-c03-m04-c02",
+      "module_id": "as-c03-m04",
+      "prompt": "The module frames application security as a lifecycle spanning four phases. Which phase is correctly paired with a control the module assigns to it?",
+      "kind": "mcq",
+      "choices": [
+        "Design — threat modeling, asking how each component could be abused",
+        "Develop — bolting a WAF on at the end and calling it secure",
+        "Deploy — runtime protection and anomaly monitoring of data access",
+        "Operate — infrastructure-as-code review to ensure no secrets in config"
+      ],
+      "correct_answers": [
+        "Design — threat modeling, asking how each component could be abused"
+      ]
+    },
+    {
+      "id": "as-c03-m04-c03",
+      "module_id": "as-c03-m04",
+      "prompt": "A reviewer notes that a service reads a database password from an app setting whose value is itself stored in Key Vault, and says this still is not Zero Trust. Per the module, what stronger design removes the weakness and why?",
+      "kind": "mcq",
+      "choices": [
+        "Give the service a managed identity so it requests short-lived tokens at runtime and holds no long-lived secret to leak",
+        "Move the password from the app setting into a more deeply nested Key Vault secret so it is harder to reach",
+        "Encrypt the app setting with a customer-managed key so the stored password is protected at rest",
+        "Put a WAF in Prevention mode in front of the service so the password can never be exfiltrated"
+      ],
+      "correct_answers": [
+        "Give the service a managed identity so it requests short-lived tokens at runtime and holds no long-lived secret to leak"
+      ]
+    },
+    {
+      "id": "as-c03-m04-c04",
+      "module_id": "as-c03-m04",
+      "prompt": "Which statements about data protection in the module are correct? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Data discovery and classification (Microsoft Purview) scans stores, identifies sensitive data, and applies sensitivity labels downstream controls can act on",
+        "Data at rest is encrypted by Azure platform-side by default, and the architect decides whether platform-managed keys suffice or a regulation calls for customer-managed keys held in Key Vault",
+        "Microsoft Defender for the relevant data services detects anomalous access such as a mass-export pattern that should never be normal",
+        "Because all data carries equal risk, identical encryption and monitoring should be designed for every store"
+      ],
+      "correct_answers": [
+        "Data discovery and classification (Microsoft Purview) scans stores, identifies sensitive data, and applies sensitivity labels downstream controls can act on",
+        "Data at rest is encrypted by Azure platform-side by default, and the architect decides whether platform-managed keys suffice or a regulation calls for customer-managed keys held in Key Vault",
+        "Microsoft Defender for the relevant data services detects anomalous access such as a mass-export pattern that should never be normal"
+      ]
+    },
+    {
+      "id": "as-c03-m04-c05",
+      "module_id": "as-c03-m04",
+      "prompt": "In the walkthrough's WAF Bicep policy and the surrounding text, which configuration choices reflect the module's guidance for hardening the public endpoint? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Running the WAF in Prevention mode so it blocks matching attacks outright rather than only logging them",
+        "Applying the OWASP managed rule set to block common attacks like SQL injection and cross-site scripting",
+        "Leaving the WAF in Detection mode permanently because logging attacks is sufficient protection",
+        "Relying on the WAF alone to decide whether a caller is authorized and within their quota"
+      ],
+      "correct_answers": [
+        "Running the WAF in Prevention mode so it blocks matching attacks outright rather than only logging them",
+        "Applying the OWASP managed rule set to block common attacks like SQL injection and cross-site scripting"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "as-c03-m04-l01",
+      "module_id": "as-c03-m04",
+      "prompt": "Your team proposes to 'add security at the end' by deploying a WAF just before go-live. Explain why that is insufficient as an application security strategy and what a lifecycle approach adds across its phases.",
+      "reference_answer": "A pre-go-live WAF only inspects request content at the edge and catches design and code flaws at the most expensive moment to fix them, since each lifecycle phase has cheaper fixes than the next. A lifecycle strategy instead embeds security across every phase: threat modeling at design (asking how each component could be abused), secure coding with dependency scanning and secret detection during develop, infrastructure-as-code review with no secrets in config at deploy, and runtime protection plus monitoring at operate. This front-loads effort so problems are found and fixed cheaply rather than at release. The architect's job is to specify which control lives at which phase, not to bolt a WAF on at the end and call the app secure."
+    },
+    {
+      "id": "as-c03-m04-l02",
+      "module_id": "as-c03-m04",
+      "prompt": "Describe how workload identities replace stored secrets in the shipment-tracking stack, including the role of managed identity, Key Vault, DefaultAzureCredential, and what concrete benefit this delivers.",
+      "reference_answer": "The most common application credential leak is a connection string or API key checked into source or pasted into an app setting, so the Zero-Trust answer is to remove the secret entirely. A managed identity gives an Azure service its own identity in Microsoft Entra ID, so the app requests short-lived tokens at runtime and authenticates to Key Vault, a database, or storage as itself with least-privilege access, never holding a long-lived secret. Where a secret is genuinely unavoidable it lives in Azure Key Vault rather than in config, and the app reads it using its managed identity. In code, DefaultAzureCredential makes this seamless because it uses the managed identity in Azure and a developer's signed-in login locally, so the same code runs in both places with no secret. In the walkthrough the tracking API connects to Azure SQL with a short-lived token tied to its identity, eliminating the standing secret as an attack target."
+    },
+    {
+      "id": "as-c03-m04-l03",
+      "module_id": "as-c03-m04",
+      "prompt": "Two stores hold data: one with public route schedules and one with customer personal data. Explain why designing identical encryption and monitoring for both reflects a flawed approach, and what the module says should drive the difference.",
+      "reference_answer": "Because not all data is equal, you cannot protect it uniformly; treating both stores identically wastes strong controls on low-value public schedules while under-protecting sensitive customer data, and it leaves you unable to prove compliance. The module's sequence is classify, then encrypt, then watch: data discovery and classification with Microsoft Purview scans stores, identifies sensitive personal or financial data, and applies sensitivity labels that downstream controls act on. Classification should then drive the level of protection — for example using customer-managed keys held in Key Vault where a regulatory requirement calls for them rather than platform-managed keys, tighter access restriction, and anomaly monitoring via Microsoft Defender for the data services to catch patterns like mass export. In all cases data in transit is protected with enforced TLS. In short, classify first and protect proportionally to sensitivity instead of encrypting everything while classifying nothing."
+    }
+  ]
+}
