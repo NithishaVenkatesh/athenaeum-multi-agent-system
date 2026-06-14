@@ -9,6 +9,7 @@ and persists it. Assessments are modeled but not yet produced (empty list).
 from __future__ import annotations
 
 import json
+import re
 import threading
 from collections.abc import Iterator
 from datetime import date
@@ -301,20 +302,57 @@ def _pace_choice_pending(course: Course) -> bool:
     return False
 
 
-def _suggested_catalog_id(course: Course) -> str | None:
-    """Catalog id of a single-course suggestion the last assistant turn offered.
+# Ordinal words → option index, so "the second one" / "the latter" resolves a choice.
+_ORDINAL_INDEX = {
+    "first": 0, "1st": 0, "former": 0, "second": 1, "2nd": 1, "latter": 1, "third": 2,
+    "3rd": 2, "fourth": 3, "4th": 3, "fifth": 4, "5th": 4, "last": -1,
+}  # fmt: skip
+_ORDINAL_NUM_RE = re.compile(r"\b(?:number|option|the)\s+(\d+)\b|\b(\d+)(?:st|nd|rd|th)\b")
 
-    Returns None if the chat is already linked, the last assistant turn made no
-    suggestion, or it offered several courses (a bare "yes" would be ambiguous).
+
+def _last_suggestion_options(course: Course) -> list[dict[str, object]]:
+    """The course options the last assistant turn offered (newest turn wins)."""
+    for message in reversed(course.messages):
+        if message.get("role") == "assistant":
+            return ((message.get("meta") or {}).get("suggestion") or {}).get("options") or []
+    return []
+
+
+def _resolve_suggestion_choice(course: Course, content: str) -> str | None:
+    """Catalog id the learner picked from the last suggestion, by accept / ordinal / name.
+
+    Handles "yes, start that one" (single option), "the second one" / "number 2" /
+    "the latter" (positional), and naming the course/title. Returns None when the chat
+    is already linked, nothing was offered, or a bare "yes" is ambiguous (many options).
     """
     if course.catalog_id:
         return None
-    for message in reversed(course.messages):
-        if message.get("role") == "assistant":
-            options = ((message.get("meta") or {}).get("suggestion") or {}).get("options") or []
-            if len(options) == 1:
-                return (options[0] or {}).get("catalog_id")
+    options = _last_suggestion_options(course)
+    if not options:
+        return None
+    low = content.lower()
+
+    def _cid(index: int) -> str | None:
+        try:
+            return str((options[index] or {}).get("catalog_id") or "") or None
+        except IndexError:
             return None
+
+    for word, index in _ORDINAL_INDEX.items():
+        if re.search(rf"\b{word}\b", low):
+            return _cid(index)
+    num = _ORDINAL_NUM_RE.search(low)
+    if num:
+        n = int(num.group(1) or num.group(2))
+        if 1 <= n <= len(options):
+            return _cid(n - 1)
+    for option in options:
+        cid = str(option.get("catalog_id") or "").lower()
+        title = str(option.get("title") or "").lower()
+        if (cid and cid in low) or (title and title in low):
+            return str(option.get("catalog_id") or "") or None
+    if len(options) == 1 and is_acceptance(content):
+        return _cid(0)
     return None
 
 
@@ -322,8 +360,8 @@ def _conversation_context(course: Course) -> tuple[list[dict[str, str]], str | N
     """Recent turns + what the last assistant turn proposed (for follow-up routing).
 
     ``pending`` is "pace" when the last assistant turn asked the pace, or "suggestion"
-    when it offered a single course to start, so a bare "yes" resolves to building the
-    plan / accepting the course instead of being read as a fresh greeting.
+    when it offered course(s) to start, so a follow-up ("yes", "the second one")
+    resolves to accepting/building instead of being read as a fresh greeting.
     """
     history = [
         {"role": str(m.get("role", "")), "content": str(m.get("content", ""))}
@@ -336,7 +374,7 @@ def _conversation_context(course: Course) -> tuple[list[dict[str, str]], str | N
             meta = message.get("meta") or {}
             if meta.get("pace_request"):
                 pending = "pace"
-            elif _suggested_catalog_id(course) is not None:
+            elif not course.catalog_id and _last_suggestion_options(course):
                 pending = "suggestion"
             break
     return history, pending
@@ -511,10 +549,10 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
         # like a bare "yes". The trailing turn is the current message itself.
         history, pending = _conversation_context(current)
         history = history[:-1] if history else []
-        # Conversational course accept (R2): "yes, start that one" after a single-course
-        # suggestion links that course here, the same as clicking the suggestion button.
-        if pending == "suggestion" and is_acceptance(content):
-            suggested = _suggested_catalog_id(current)
+        # Conversational course accept (R2): "yes, start that one" / "the second one"
+        # after a suggestion links the chosen course here, like the suggestion button.
+        if pending == "suggestion":
+            suggested = _resolve_suggestion_choice(current, content)
             if suggested and is_valid_course_id(suggested):
                 linked = get_catalog_course(suggested)
                 current.catalog_id = suggested

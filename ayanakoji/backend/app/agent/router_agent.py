@@ -49,6 +49,20 @@ def is_acceptance(text: str) -> bool:
     """True if the message reads as accepting a just-offered course suggestion."""
     return bool(_ACCEPT_RE.search(text))
 
+
+# Ordinal / positional references to a specific offered option ("the second one",
+# "number 3", "the first") so a multi-option suggestion is resolvable by chat (R2+).
+_ORDINAL_RE = re.compile(
+    r"\b(first|1st|second|2nd|third|3rd|fourth|4th|fifth|5th|last|former|latter"
+    r"|(?:number|option|the)\s+\d+|\d+(?:st|nd|rd|th)|that\s+(?:one|course))\b",
+    re.IGNORECASE,
+)
+
+
+def is_suggestion_response(text: str) -> bool:
+    """True if the message responds to an offered suggestion — accept or pick one."""
+    return is_acceptance(text) or bool(_ORDINAL_RE.search(text))
+
 # "Help me choose / explore courses" signals → Recommend (profile- or topic-scoped).
 _RECOMMEND_RE = re.compile(
     r"\b(suggest|recommend|which)\b.{0,40}\bcourse"
@@ -183,12 +197,13 @@ def classify(
             off_topic=0.0,
             confidence=0.8,
         )
-    # Accepting a course suggestion ("yes, start that one") begins the course setup;
-    # the courses layer links the course, then this routes to the first setup step.
-    if pending == "suggestion" and is_acceptance(text):
+    # Responding to a course suggestion ("yes, start that one", "the second one")
+    # begins setup; the courses layer links the chosen course, then this routes to
+    # the first setup step.
+    if pending == "suggestion" and is_suggestion_response(text):
         return RouteDecision(
             route=Route.STUDY_PLAN,
-            reasoning="Accepted a course suggestion — start the course and begin setup.",
+            reasoning="Responded to a course suggestion — start the course and begin setup.",
             off_topic=0.0,
             confidence=0.8,
         )
@@ -333,7 +348,7 @@ def _parse_decision(
     # Deterministic, high-signal intents win over the LLM regardless of its call.
     if pending == "pace" and _AFFIRM_RE.search(text):
         return classify(text, grounding=grounding, pending=pending)
-    if pending == "suggestion" and is_acceptance(text):
+    if pending == "suggestion" and is_suggestion_response(text):
         return classify(text, grounding=grounding, pending=pending)
     if is_plan_intent(text):
         return _study_plan_decision()
