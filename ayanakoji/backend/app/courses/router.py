@@ -18,8 +18,17 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
+from app.agent.answer import answer_feedback
 from app.agent.clock import today_in_timezone
-from app.agent.contracts import Pace, PlanEvent, ScheduledBlock, TakenCourse, TokenEvent
+from app.agent.contracts import (
+    DoneEvent,
+    Pace,
+    PhaseEvent,
+    PlanEvent,
+    ScheduledBlock,
+    TakenCourse,
+    TokenEvent,
+)
 from app.agent.orchestrator import run_pipeline
 from app.agent.router_agent import is_acceptance
 from app.agent.schedule_edit import parse_adjustment, parse_pace
@@ -29,7 +38,7 @@ from app.catalog.content import get_module_content
 from app.catalog.loader import get_course as get_catalog_course
 from app.catalog.loader import is_valid_course_id
 from app.config import get_settings
-from app.courses.models import Course, CourseModule
+from app.courses.models import Assessment, Course, CourseModule
 from app.courses.repository import CourseRepository
 from app.courses.schemas import (
     AcceptCourse,
@@ -38,6 +47,7 @@ from app.courses.schemas import (
     CoursePatch,
     CourseRead,
     CourseSummary,
+    EvaluationRead,
     MessageIn,
     ModuleContentRead,
     ModuleRead,
@@ -146,6 +156,51 @@ def list_course_assessments(course_id: str, session: SessionDep) -> list[Assessm
         AssessmentRead(id=a.id, type=a.type, is_practice=a.is_practice, created_at=a.created_at)
         for a in repo.list_assessments(course_id)
     ]
+
+
+@router.get(
+    "/{course_id}/evaluations",
+    response_model=list[EvaluationRead],
+    summary="The course's per-module evaluations (quiz + oral each) with lock + score",
+)
+def list_evaluations(course_id: str, session: SessionDep) -> list[EvaluationRead]:
+    """The canonical evaluation set: two per module (choices then llm), in module order.
+
+    Lock state mirrors ``start_assessment``: a module's evaluations open only once the
+    prior module is complete (sequential), and the oral exam additionally waits on that
+    module's quiz being passed. Score/review fields reflect the latest *completed*
+    attempt of each, so the Evaluations tab can show progress and a review link.
+    """
+    repo = CourseRepository(session)
+    _require(repo.get(course_id), course_id)
+    out: list[EvaluationRead] = []
+    prev_done = True  # the first module's evaluations are reachable with the module
+    for m in repo.list_modules(course_id):
+        module_unlocked = prev_done
+        attempts = repo.list_module_assessments(m.id)
+        choices_passed = repo.latest_passed(m.id, "choices")
+        for etype in ("choices", "llm"):
+            type_attempts = [a for a in attempts if a.type == etype]
+            # The latest attempt that was actually graded (passed is set) backs the review.
+            completed = next((a for a in reversed(type_attempts) if a.passed is not None), None)
+            locked = not module_unlocked or (etype == "llm" and not choices_passed)
+            out.append(
+                EvaluationRead(
+                    module_id=m.module_id,
+                    module_title=m.title,
+                    sequence=m.sequence,
+                    type=etype,
+                    locked=locked,
+                    completed=completed is not None and completed.passed is True,
+                    attempted=bool(type_attempts),
+                    score=completed.score if completed else None,
+                    passed=completed.passed if completed else None,
+                    review_assessment_id=completed.id if completed else None,
+                    attempts=len(type_attempts),
+                )
+            )
+        prev_done = m.completed
+    return out
 
 
 @router.post(
@@ -570,6 +625,124 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
                 if not completed:
                     meta["interrupted"] = True
                 stream_repo.append_message(current, role="assistant", content=answer, meta=meta)
+
+
+# ── Assessment feedback (in-chat, grounded, bypasses the topic gate) ─────────────
+
+
+def _feedback_performance(repo: CourseRepository, assessment: Assessment, type: str) -> str:
+    """A readable summary of what the learner actually got wrong, for the tutor prompt.
+
+    The feedback request is first-party (the learner just took this test), so we hand
+    the model the real per-question outcome instead of a bare natural-language question
+    that the topic gate would reject as ungrounded.
+    """
+    if type == "choices":
+        wrong = [q for q in repo.list_choice_questions(assessment.id) if q.is_correct is False]
+        if not wrong:
+            return "You answered every question correctly."
+        lines = [
+            f'- "{q.prompt}" You chose: {", ".join(q.learner_choice or []) or "nothing"}. '
+            f'Correct: {", ".join(q.correct_answers)}.'
+            for q in wrong
+        ]
+        return "Questions you missed:\n" + "\n".join(lines)
+    lines = [
+        f'- "{q.prompt}" Examiner note: {q.reasoning or "n/a"} (scored {q.score}/10).'
+        for q in repo.list_llm_questions(assessment.id)
+    ]
+    return "Your oral answers:\n" + "\n".join(lines)
+
+
+@router.post(
+    "/{course_id}/modules/{module_id}/feedback",
+    summary="Grounded feedback on the latest assessment, streamed into the chat (SSE)",
+)
+def post_feedback(
+    course_id: str, module_id: str, type: str, session: SessionDep
+) -> StreamingResponse:
+    """Stream tutor feedback on the learner's latest quiz/oral attempt for a module.
+
+    This is the 'Get Feedback' button's path. It does NOT run through the chat
+    pipeline's topic gate: a generic "why did I fail my quiz" question has none of
+    the module's vocabulary, so grounding rejects it and the answer agent refuses.
+    Here the request is first-party and scoped, grounded in the module's own material
+    plus the learner's actual answers, so the feedback is specific and never refused.
+    """
+    if type not in ("choices", "llm"):
+        raise HTTPException(status_code=422, detail="type must be 'choices' or 'llm'")
+    repo = CourseRepository(session)
+    _require(repo.get(course_id), course_id)
+    return StreamingResponse(
+        _stream_feedback(course_id, module_id, type),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+def _stream_feedback(course_id: str, module_id: str, type: str) -> Iterator[str]:
+    """SSE generator for one feedback turn; persists both turns like a normal chat turn."""
+    label = "quiz" if type == "choices" else "oral exam"
+    with _course_lock(course_id), session_scope() as s:
+        repo = CourseRepository(s)
+        course = repo.get(course_id)
+        if course is None:  # pragma: no cover - guarded by post_feedback's 404
+            yield _sse({"type": "error", "message": "course not found"})
+            return
+        mod = repo.get_module(course_id, module_id)
+        module_title = mod.title if mod else module_id
+        # Persist a readable learner turn so the thread reads naturally on reload.
+        request_text = f"Can you give me feedback on my {label} for {module_title}?"
+        repo.append_message(course, role="user", content=request_text)
+
+        # The module's own material grounds the feedback (trimmed for the prompt budget).
+        content = get_module_content(module_id)
+        material = (content.body[:1600] if content else "") or module_title
+
+        score: float | None = None
+        passed: bool | None = None
+        performance = ""
+        if mod is not None:
+            graded = [
+                a
+                for a in repo.list_module_assessments(mod.id)
+                if a.type == type and a.passed is not None
+            ]
+            latest = graded[-1] if graded else None
+            if latest is not None:
+                score, passed = latest.score, latest.passed
+                performance = _feedback_performance(repo, latest, type)
+
+        reply = answer_feedback(
+            module_id=module_id,
+            module_title=module_title,
+            course_title=course.chat_name,
+            material=material,
+            kind=type,
+            score=score,
+            passed=passed,
+            performance=performance,
+        )
+
+        yield _sse(PhaseEvent(phase=reply.telemetry).model_dump(mode="json"))
+        parts: list[str] = []
+        completed = False
+        try:
+            for token in reply.tokens:
+                parts.append(token)
+                yield _sse(TokenEvent(token=token).model_dump(mode="json"))
+            yield _sse(DoneEvent(route=reply.telemetry.route).model_dump(mode="json"))
+            completed = True
+        finally:
+            answer = "".join(parts).strip()
+            if answer:
+                meta: dict[str, object] = {
+                    "phases": [reply.telemetry.model_dump(mode="json")],
+                    "sources": [src.model_dump(mode="json") for src in reply.sources],
+                }
+                if not completed:
+                    meta["interrupted"] = True
+                repo.append_message(course, role="assistant", content=answer, meta=meta)
 
 
 @router.post("/{course_id}/pace", response_model=CourseRead, summary="Set the study pace")

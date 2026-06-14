@@ -138,11 +138,13 @@ def start_assessment(
     type: str,
     session: SessionDep,
     asmtsession: AssessmentSessionDep,
+    force: bool = False,
 ) -> AssessmentSessionRead:
     """Create a new assessment attempt; samples questions from the bank.
 
-    Returns 409 if the learner has already passed this assessment type
-    (use ?force=true to bypass for admin purposes — not wired in the UI).
+    Returns 409 if the learner has already passed this assessment type, unless
+    ``?force=true`` is passed (an explicit retake from the Evaluations tab). A
+    retake samples a fresh question set and persists it as a new attempt.
     Returns 422 if the bank has no questions for this module+type.
     """
     if type not in ("choices", "llm"):
@@ -160,8 +162,9 @@ def start_assessment(
     if target and any(not m.completed for m in modules if m.sequence < target.sequence):
         raise HTTPException(status_code=409, detail="complete earlier modules first")
 
-    # Block retake if already passed.
-    if repo.latest_passed(mod.id, type):
+    # Block retake if already passed — unless an explicit retake (force) is requested,
+    # in which case we fall through and sample a fresh question set below.
+    if not force and repo.latest_passed(mod.id, type):
         raise HTTPException(
             status_code=409,
             detail=f"{type} assessment already passed for this module",

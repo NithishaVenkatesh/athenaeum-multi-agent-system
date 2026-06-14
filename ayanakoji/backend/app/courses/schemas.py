@@ -104,6 +104,31 @@ class AssessmentRead(BaseModel):
     created_at: datetime
 
 
+class EvaluationRead(BaseModel):
+    """One of a course's canonical per-module evaluations (choices + llm per module).
+
+    There are exactly two per module (a quiz and an oral exam), so a 4-module course
+    has 8. ``locked`` mirrors the same gating as starting an assessment: a module's
+    evaluations open only once the prior module is complete, and the oral (llm) also
+    waits on that module's quiz being passed. Score/review fields reflect the latest
+    *completed* attempt, so the Evaluations tab can show progress and link to a review.
+    """
+
+    module_id: str
+    module_title: str
+    sequence: int
+    type: str  # "choices" | "llm"
+    locked: bool
+    completed: bool = Field(description="Latest completed attempt passed")
+    attempted: bool = Field(description="Any attempt exists (including in-progress)")
+    score: float | None = Field(default=None, description="Latest completed attempt score (0–10)")
+    passed: bool | None = None
+    review_assessment_id: str | None = Field(
+        default=None, description="Latest completed attempt id, for the read-only review"
+    )
+    attempts: int = 0
+
+
 # ── Learner assessment session schemas (new evaluation pipeline) ──────────────
 
 
