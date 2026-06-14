@@ -10,7 +10,7 @@
  * transcript; the live trace and suggestion live in this component's state.
  */
 
-import { ArrowDown, MessageSquarePlus } from "lucide-react";
+import { ArrowDown, ArrowRight, MessageSquarePlus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -89,16 +89,30 @@ function updateAssistant(
   return next;
 }
 
-/** One course per chat: when locked, offer a fresh chat to explore another course. */
+/**
+ * One course per chat. Two shapes:
+ * - locked chat → button starts a fresh chat to explore another course;
+ * - course already registered elsewhere → button opens that existing chat.
+ */
 function NewChatNotice({ newChat }: { newChat: NewChat }) {
+  const target = newChat.target_course_id;
+  const href = target ? `/chat/${target}` : "/chat";
+  const label = target
+    ? `Open ${newChat.target_title ?? "that chat"}`
+    : "Start a new chat";
   return (
     <div className="border-brand/30 bg-brand/5 flex items-center justify-between gap-3 rounded-2xl border px-4 py-3">
       <p className="text-muted-foreground text-xs text-pretty">{newChat.prompt}</p>
       <Link
-        href="/chat"
+        href={href}
         className="border-input bg-background hover:bg-accent hover:text-accent-foreground inline-flex shrink-0 items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors"
       >
-        <MessageSquarePlus className="size-3.5" /> Start a new chat
+        {target ? (
+          <ArrowRight className="size-3.5" />
+        ) : (
+          <MessageSquarePlus className="size-3.5" />
+        )}{" "}
+        {label}
       </Link>
     </div>
   );
