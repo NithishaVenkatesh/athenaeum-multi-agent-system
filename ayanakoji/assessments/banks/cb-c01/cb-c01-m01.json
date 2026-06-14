@@ -1,0 +1,106 @@
+{
+  "course_id": "cb-c01",
+  "module_id": "cb-c01-m01",
+  "module_title": "Hosting web APIs with Azure App Service",
+  "choices": [
+    {
+      "id": "cb-c01-m01-c01",
+      "module_id": "cb-c01-m01",
+      "prompt": "In Azure App Service, what is the App Service Plan according to the module?",
+      "kind": "mcq",
+      "choices": [
+        "The set of compute resources (a tier and a number of instances) that one or more web apps share, defining horsepower and feature set",
+        "The deployed application workload itself, including your code or container image",
+        "A staging copy of your app with its own hostname used for zero-downtime releases",
+        "A managed certificate store that terminates TLS on behalf of your app"
+      ],
+      "correct_answers": [
+        "The set of compute resources (a tier and a number of instances) that one or more web apps share, defining horsepower and feature set"
+      ]
+    },
+    {
+      "id": "cb-c01-m01-c02",
+      "module_id": "cb-c01-m01",
+      "prompt": "A team on a Basic-tier plan finds the \"Add slot\" button is missing. Based on the module, what is the correct explanation and fix?",
+      "kind": "mcq",
+      "choices": [
+        "Deployment slots are a Standard-and-above feature; scale the plan up to at least Standard (S1) to enable slots",
+        "Slots require the Free tier to be disabled first; downgrade billing then re-add the slot",
+        "The app name is not globally unique; rename the app and the slot option will reappear",
+        "HTTPS-only must be turned off before slots can be created; set --https-only false first"
+      ],
+      "correct_answers": [
+        "Deployment slots are a Standard-and-above feature; scale the plan up to at least Standard (S1) to enable slots"
+      ]
+    },
+    {
+      "id": "cb-c01-m01-c03",
+      "module_id": "cb-c01-m01",
+      "prompt": "After a slot swap, production suddenly connects to the staging database. According to the module, what configuration mistake most likely caused this?",
+      "kind": "mcq",
+      "choices": [
+        "The database connection setting was not marked as a deployment-slot (sticky) setting, so it followed the code from staging into production during the swap",
+        "The staging slot was not warmed up before the swap, so production served stale connections",
+        "The app settings were baked into the deployment image, overriding the platform values",
+        "HTTPS-only was enabled, which redirected the production connection string to staging"
+      ],
+      "correct_answers": [
+        "The database connection setting was not marked as a deployment-slot (sticky) setting, so it followed the code from staging into production during the swap"
+      ]
+    },
+    {
+      "id": "cb-c01-m01-c04",
+      "module_id": "cb-c01-m01",
+      "prompt": "Which statements about App Service application settings and secrets are accurate per the module? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "App Service injects application settings into your process as environment variables at startup",
+        "Settings configured in the platform override matching values baked into your deployment",
+        "App settings stored as plaintext are fully secure and need no further protection, since they are out of source control",
+        "For real secrets, the module recommends referencing Key Vault rather than storing raw values"
+      ],
+      "correct_answers": [
+        "App Service injects application settings into your process as environment variables at startup",
+        "Settings configured in the platform override matching values baked into your deployment",
+        "For real secrets, the module recommends referencing Key Vault rather than storing raw values"
+      ]
+    },
+    {
+      "id": "cb-c01-m01-c05",
+      "module_id": "cb-c01-m01",
+      "prompt": "In the Northwind Parcel walkthrough, which steps and details are correct as shown in the module? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "A Standard plan (S1) is created because the Standard tier is required for slots",
+        "The --https-only true setting causes any http:// request to be redirected",
+        "The swap command exchanges the staging slot with the production target slot for a zero-downtime release",
+        "The web app's globally unique name requirement can be ignored because *.azurewebsites.net hostnames are scoped per resource group"
+      ],
+      "correct_answers": [
+        "A Standard plan (S1) is created because the Standard tier is required for slots",
+        "The --https-only true setting causes any http:// request to be redirected",
+        "The swap command exchanges the staging slot with the production target slot for a zero-downtime release"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "cb-c01-m01-l01",
+      "module_id": "cb-c01-m01",
+      "prompt": "Explain how a deployment slot swap achieves a zero-downtime release in Azure App Service, and walk through what happens to the production and staging slots before, during, and after the swap.",
+      "reference_answer": "A deployment slot is a fully functioning copy of the app with its own hostname, running inside the same App Service Plan. You deploy the new version to the staging slot, let it warm up, and smoke-test it against its own URL (e.g. https://northwind-orders-api-staging.azurewebsites.net). When you run the swap, App Service first warms up the staging instances, then redirects production traffic to them by exchanging the routing, so users never hit a cold or half-deployed app. After the swap the production hostname serves the new build while the old version now sits in staging, which means a swap back is instant if the new version misbehaves. Because App Service warmed the instances before redirecting traffic, production returns no errors during the release."
+    },
+    {
+      "id": "cb-c01-m01-l02",
+      "module_id": "cb-c01-m01",
+      "prompt": "Compare 'sticky' (deployment-slot) settings with normal settings during a swap, and explain why getting this distinction wrong can point production at the wrong database.",
+      "reference_answer": "Normal (non-sticky) settings move with the code during a swap, so a value configured in staging follows the deployment into production when slots are exchanged. Settings marked as deployment-slot settings (called 'sticky') instead stay pinned to their slot during a swap, which is useful for keeping a staging connection string out of production. If a database connection string is left non-sticky when it should be slot-specific, the swap carries the staging value into production, so production ends up connecting to the staging database. The fix is to deliberately mark environment-specific values, such as connection strings, as deployment-slot settings so they remain pinned to their slot and only the intended code moves during the swap."
+    },
+    {
+      "id": "cb-c01-m01-l03",
+      "module_id": "cb-c01-m01",
+      "prompt": "Walk through why choosing an App Service tier is a feature decision and not just a price decision, and explain the related pitfall of treating the tier as a price knob only.",
+      "reference_answer": "App Service tiers range from Free and Basic up through Standard, Premium, and Isolated, and the practical rule is that features like deployment slots and autoscaling appear at Standard and above. So when you choose a tier you are choosing a feature set and a scaling ceiling, not just a price. The pitfall is treating the tier as a price knob only: picking Basic to save money silently removes slots and autoscaling, which can leave a team without zero-downtime releases or scale-out capability and confused when the 'Add slot' button is missing. The correct approach is to choose the tier by the features the workload actually needs, then optimize cost within that tier, for example using a Standard (S1) plan when slots are required. Exact per-tier instance sizes and limits should be confirmed in the current docs because Microsoft revises them."
+    }
+  ]
+}
