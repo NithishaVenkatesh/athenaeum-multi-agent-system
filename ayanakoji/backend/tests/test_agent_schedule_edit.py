@@ -79,6 +79,56 @@ def test_parse_pace_requires_a_steering_cue() -> None:
     assert parse_pace("how do Azure Functions work") is None
 
 
+def test_only_days_restricts_to_given_days() -> None:
+    adj = parse_adjustment("please schedule me only on Tuesday and Thursday", today=TODAY)
+    assert adj is not None
+    # All days except tue and thu should be excluded
+    assert "tue" not in adj.exclude_days
+    assert "thu" not in adj.exclude_days
+    assert "mon" in adj.exclude_days
+    assert "wed" in adj.exclude_days
+    assert "fri" in adj.exclude_days
+
+
+def test_only_days_just_one_day() -> None:
+    adj = parse_adjustment("just schedule on fridays please", today=TODAY)
+    assert adj is not None
+    assert "fri" not in adj.exclude_days
+    assert "mon" in adj.exclude_days
+    assert "tue" in adj.exclude_days
+
+
+def test_exam_date_parsed_from_natural_language() -> None:
+    adj = parse_adjustment("my exam is on July 10", today=TODAY)
+    assert adj is not None
+    assert adj.exam_date == date(2026, 7, 10)
+
+
+def test_exam_date_month_day_order() -> None:
+    adj = parse_adjustment("targeting August 15 for the cert exam", today=TODAY)
+    assert adj is not None
+    assert adj.exam_date == date(2026, 8, 15)
+
+
+def test_exam_date_bumps_to_next_year_if_past() -> None:
+    adj = parse_adjustment("exam date January 5", today=TODAY)
+    assert adj is not None
+    assert adj.exam_date is not None
+    assert adj.exam_date.year == 2027  # Jan 5 2026 is in the past
+
+
+def test_exam_date_combined_with_start_date() -> None:
+    adj = parse_adjustment("start from July 1, my exam is August 20", today=TODAY)
+    assert adj is not None
+    assert adj.start_date == date(2026, 7, 1)
+    assert adj.exam_date == date(2026, 8, 20)
+
+
+def test_no_edit_text_returns_none() -> None:
+    adj = parse_adjustment("what is Azure Functions?", today=TODAY)
+    assert adj is None
+
+
 def test_remove_week_parses_skip_weeks_and_drops_that_week() -> None:
     adj = parse_adjustment(
         "remove the schedules from week 2 as I am occupied, move to later slots", today=TODAY

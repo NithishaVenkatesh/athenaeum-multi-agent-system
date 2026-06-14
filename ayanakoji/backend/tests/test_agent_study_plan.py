@@ -7,6 +7,7 @@ from datetime import date
 from app.agent.contracts import Pace
 from app.agent.study_plan import (
     ModuleInfo,
+    _BALLOON_WEEKS_THRESHOLD,
     build_study_plan,
     course_modules,
     estimate_module_minutes,
@@ -146,3 +147,147 @@ def test_build_plan_unknown_course_is_none() -> None:
         build_study_plan(catalog_id="nope", title="x", cert="y", persona=vega, start_date=START)
         is None
     )
+
+
+# ── Reservation-aware scheduling ───────────────────────────────────────────────
+
+
+from app.agent.study_plan import block_date, occupied_intervals  # noqa: E402
+from app.agent.contracts import ScheduledBlock  # noqa: E402
+
+
+def test_block_date_week1_same_day() -> None:
+    # Week 1, Monday when start_date is a Monday → same day.
+    start = date(2026, 6, 15)  # Monday
+    assert block_date(start, week=1, weekday="mon") == date(2026, 6, 15)
+
+
+def test_block_date_week1_forward_weekday() -> None:
+    # Week 1, Wednesday when start is Monday → +2 days.
+    start = date(2026, 6, 15)  # Monday
+    assert block_date(start, week=1, weekday="wed") == date(2026, 6, 17)
+
+
+def test_block_date_week2() -> None:
+    # Week 2 starts +7 from start; Tuesday after that Monday start = +8 days.
+    start = date(2026, 6, 15)
+    assert block_date(start, week=2, weekday="tue") == date(2026, 6, 23)
+
+
+def test_occupied_intervals_returns_absolute_tuples() -> None:
+    start = date(2026, 6, 15)  # Monday
+    blocks = [ScheduledBlock(week=1, day="mon", start="11:00", end="12:00", minutes=60)]
+    intervals = occupied_intervals(start, blocks)
+    assert ("2026-06-15", 660, 720) in intervals
+
+
+def test_schedule_modules_skips_reserved_interval() -> None:
+    """A block occupied by another course should not be double-booked."""
+    vega = get_repository().get_persona("EMP-001")
+    assert vega is not None
+    slots = weekly_study_slots(vega)
+    # Vega's slots are tue/wed/thu 11:00–12:00 (660–720).
+    # Reserve the entire Tuesday 11:00–12:00 in week 1.
+    reserved: frozenset = frozenset({("2026-06-16", 660, 720)})  # 2026-06-15 Mon, +1=Tue
+    estimates = [(_module(3), 30)]  # 30 min; fits in half a slot
+    plans = schedule_modules(estimates, slots, START, reserved=reserved)
+    assert plans
+    blocks = plans[0].scheduled
+    # No block should overlap the reserved interval on that date.
+    for b in blocks:
+        day_iso = block_date(START, b.week, b.day).isoformat()
+        if day_iso == "2026-06-16":
+            b_start = int(b.start.split(":")[0]) * 60 + int(b.start.split(":")[1])
+            b_end = int(b.end.split(":")[0]) * 60 + int(b.end.split(":")[1])
+            assert b_end <= 660 or b_start >= 720, (
+                f"Block {b} overlaps reserved 11:00–12:00 on 2026-06-16"
+            )
+
+
+def test_schedule_modules_extends_timeline_when_slot_fully_reserved() -> None:
+    """When a whole weekly slot is reserved the work flows to the next week, not double-booked."""
+    vega = get_repository().get_persona("EMP-001")
+    assert vega is not None
+    slots = weekly_study_slots(vega)
+    # Reserve all three week-1 slots (tue/wed/thu 11:00–12:00).
+    start = START  # 2026-06-15 Monday
+    reserved: frozenset = frozenset(
+        {
+            ("2026-06-16", 660, 720),  # tue week 1
+            ("2026-06-17", 660, 720),  # wed week 1
+            ("2026-06-18", 660, 720),  # thu week 1
+        }
+    )
+    estimates = [(_module(3), 60)]
+    plans_no_res = schedule_modules(estimates, slots, start)
+    plans_with_res = schedule_modules(estimates, slots, start, reserved=reserved)
+    assert plans_with_res
+    # The plan with all week-1 slots reserved must end later than the unreserved plan.
+    assert plans_with_res[0].complete_before >= plans_no_res[0].complete_before
+
+
+# ── PTO / on-call skip dates ───────────────────────────────────────────────────
+
+
+def test_build_study_plan_skips_pto_days() -> None:
+    """Modules should not be scheduled on PTO days."""
+    vega = get_repository().get_persona("EMP-001")
+    assert vega is not None
+    # Inject a PTO day that falls in week 1 (first Tuesday, 2026-06-16)
+    vega = vega.model_copy(
+        update={"work_context": vega.work_context.model_copy(
+            update={"pto_days": ["2026-06-16"]}
+        )}
+    )
+    plan = build_study_plan(
+        catalog_id="cb-c01",
+        title="Test",
+        cert="AZ-204",
+        persona=vega,
+        start_date=date(2026, 6, 15),
+    )
+    assert plan is not None
+    # No block should land on 2026-06-16
+    from app.agent.study_plan import block_date
+    for mod in plan.modules:
+        for b in mod.scheduled:
+            bd = block_date(date(2026, 6, 15), b.week, b.day)
+            assert bd.isoformat() != "2026-06-16", f"Block on PTO day: {bd}"
+
+
+# ── Balloon warning ────────────────────────────────────────────────────────────
+
+
+def test_build_study_plan_exam_date_overrun_sets_balloon_warning() -> None:
+    """A plan that overruns the exam date should set balloon_warning."""
+    vega = get_repository().get_persona("EMP-001")
+    assert vega is not None
+    plan = build_study_plan(
+        catalog_id="cb-c01",
+        title="Test",
+        cert="AZ-204",
+        persona=vega,
+        start_date=date(2026, 6, 15),
+        exam_date=date(2026, 6, 16),  # tomorrow — definitely overruns
+    )
+    assert plan is not None
+    assert plan.balloon_warning is not None
+    assert "exam" in plan.balloon_warning.lower() or "day" in plan.balloon_warning.lower()
+
+
+def test_build_study_plan_no_balloon_warning_when_within_deadline() -> None:
+    """A plan that finishes before the exam date should not warn."""
+    vega = get_repository().get_persona("EMP-001")
+    assert vega is not None
+    plan = build_study_plan(
+        catalog_id="cb-c01",
+        title="Test",
+        cert="AZ-204",
+        persona=vega,
+        start_date=date(2026, 6, 15),
+        exam_date=date(2027, 12, 31),  # far future — won't overrun
+    )
+    assert plan is not None
+    # Either no warning or only a length warning (not exam-overrun) for this deadline
+    if plan.balloon_warning:
+        assert "exam" not in plan.balloon_warning.lower()

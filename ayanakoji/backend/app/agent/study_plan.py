@@ -19,6 +19,7 @@ An LLM only narrates the result, every number here is computed and auditable.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, timedelta
 from functools import lru_cache
@@ -47,7 +48,14 @@ PACE_FACTOR: dict[Pace, float] = {Pace.SLOWER: 1.35, Pace.NORMAL: 1.0, Pace.FAST
 _STUDY_CATEGORIES = {"learning"}  # dedicated study blocks already in the calendar
 _WEEKDAY_ORDER = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 _WEEKDAY_INDEX = {d: i for i, d in enumerate(_WEEKDAY_ORDER)}
-_MIN_SLOT_MINUTES = 20  # ignore slivers too short to study in
+_MIN_SLOT_MINUTES = 30  # ignore slivers too short to be meaningful (coalesce threshold)
+# Cap how much of a single unscheduled gap is counted as studyable. Lunch and
+# between-meeting buffers look like free time but rarely all are, so we take at
+# most this many minutes from any one gap. Dedicated learning blocks are uncapped.
+_MAX_FREE_GAP_MINUTES = 60
+# Warn when the plan stretches past this many weeks — likely means capacity is
+# very low or estimates are too high for a realistic schedule.
+_BALLOON_WEEKS_THRESHOLD = 14
 
 
 @dataclass(frozen=True)
@@ -139,18 +147,25 @@ class WeeklySlot:
 
 
 def _day_study_slots(day: DaySchedule, work_start: int, work_end: int) -> list[WeeklySlot]:
-    """Study openings in one day: dedicated study blocks + genuine free gaps."""
+    """Study openings in one day: dedicated study blocks + capped free gaps.
+
+    Dedicated ``learning`` blocks are taken in full. Unscheduled gaps (lunch,
+    between-meeting buffers) are counted only up to ``_MAX_FREE_GAP_MINUTES`` so
+    that long free windows do not over-state capacity.
+    """
     slots: list[WeeklySlot] = []
     cursor = work_start
     for block in sorted(day.blocks, key=lambda b: _to_min(b.start)):
         bs, be = _to_min(block.start), _to_min(block.end)
-        if bs > cursor:  # an unscheduled gap is free to study in
-            slots.append(WeeklySlot(day.day, cursor, bs, "free time"))
-        if block.category in _STUDY_CATEGORIES:  # an existing study block
+        if bs > cursor:
+            gap_end = cursor + min(bs - cursor, _MAX_FREE_GAP_MINUTES)
+            slots.append(WeeklySlot(day.day, cursor, gap_end, "free time"))
+        if block.category in _STUDY_CATEGORIES:
             slots.append(WeeklySlot(day.day, bs, be, block.title))
         cursor = max(cursor, be)
     if cursor < work_end:
-        slots.append(WeeklySlot(day.day, cursor, work_end, "free time"))
+        gap_end = cursor + min(work_end - cursor, _MAX_FREE_GAP_MINUTES)
+        slots.append(WeeklySlot(day.day, cursor, gap_end, "free time"))
     return [s for s in slots if s.minutes >= _MIN_SLOT_MINUTES]
 
 
@@ -204,16 +219,67 @@ def _next_open_week(week: int, skip_weeks: frozenset[int]) -> int:
     return week
 
 
+# A concrete time already taken on the learner's calendar by ANOTHER course's
+# plan: (ISO date, start-minute, end-minute). Cross-course, so it's keyed on the
+# absolute date (each course numbers its own weeks from its own start).
+ReservedInterval = tuple[str, int, int]
+
+
+def block_date(start_date: date, week: int, weekday: str) -> date:
+    """Absolute date of a plan block: the ``weekday`` within plan-week ``week``.
+
+    Week 1 begins at ``start_date``; each later week is +7 days. Resolving to a
+    real date lets two courses with *different* start dates be compared on the
+    same calendar so their reserved blocks line up (and never double-book).
+    """
+    base = start_date + timedelta(days=(week - 1) * 7)
+    offset = (_WEEKDAY_INDEX.get(weekday, 0) - base.weekday()) % 7
+    return base + timedelta(days=offset)
+
+
+def occupied_intervals(
+    course_start: date, blocks: Iterable[ScheduledBlock]
+) -> set[ReservedInterval]:
+    """Absolute (date, start, end) intervals a course's scheduled blocks occupy."""
+    return {
+        (block_date(course_start, b.week, b.day).isoformat(), _to_min(b.start), _to_min(b.end))
+        for b in blocks
+    }
+
+
+def _free_segment(
+    day_iso: str, cursor: int, slot_end: int, reserved: frozenset[ReservedInterval]
+) -> tuple[int, int]:
+    """The first free sub-interval at/after ``cursor`` in a slot, avoiding reserved.
+
+    Walks the reserved intervals on this date: a reservation straddling the cursor
+    pushes it past; the segment then runs until the next reservation or slot end.
+    """
+    start = cursor
+    for res_start, res_end in sorted(
+        (s, e) for (d, s, e) in reserved if d == day_iso and e > cursor and s < slot_end
+    ):
+        if res_start <= start:
+            start = max(start, res_end)  # cursor sits inside a reservation → jump past it
+        else:
+            return start, min(res_start, slot_end)  # free until the next reservation
+    return start, slot_end
+
+
 def schedule_modules(
     estimates: list[tuple[ModuleInfo, int]],
     slots: list[WeeklySlot],
     start_date: date,
     skip_weeks: frozenset[int] = frozenset(),
+    reserved: frozenset[ReservedInterval] = frozenset(),
+    skip_dates: frozenset[str] = frozenset(),
 ) -> list[ModulePlan]:
     """Fill the repeating weekly slots with modules in order; deadline per module.
 
-    ``skip_weeks`` are plan-week numbers the learner said they're occupied in;
-    those weeks are left empty and the work flows into the next available week.
+    ``skip_weeks`` are plan-week numbers the learner said they're occupied in.
+    ``reserved`` are absolute (date, start, end) intervals taken by other courses.
+    ``skip_dates`` are ISO date strings for PTO/on-call days — any slot that falls
+    on one of these dates is skipped entirely (the work flows to the next slot).
     """
     if not slots:
         return []
@@ -228,14 +294,30 @@ def schedule_modules(
         last_week = week
         while remaining > 0:
             slot = slots[slot_idx]
-            avail = slot.end - cursor
-            if avail < _MIN_SLOT_MINUTES:  # slot exhausted → advance
+            if cursor < slot.start:
+                cursor = slot.start
+            day_iso = block_date(start_date, week, slot.day).isoformat()
+            if day_iso in skip_dates:
+                # PTO or on-call day — skip this entire slot.
+                seg_start, seg_end = slot.end, slot.end
+            elif reserved:
+                seg_start, seg_end = _free_segment(day_iso, cursor, slot.end, reserved)
+            else:
+                seg_start, seg_end = cursor, slot.end
+            avail = seg_end - seg_start
+            if avail < _MIN_SLOT_MINUTES:  # too little here → skip past it
+                # A free sliver before a reservation: step over the reservation in
+                # the same slot; otherwise the slot is spent, advance to the next.
+                if seg_end < slot.end:
+                    cursor = seg_end
+                    continue
                 slot_idx += 1
                 if slot_idx >= len(slots):  # next repeating week
                     slot_idx = 0
                     week = _next_open_week(week + 1, skip_weeks)
                 cursor = slots[slot_idx].start
                 continue
+            cursor = seg_start
             take = min(remaining, avail)
             blocks.append(
                 ScheduledBlock(
@@ -278,6 +360,8 @@ def build_study_plan(
     start_date: date,
     exclude_days: frozenset[str] = frozenset(),
     skip_weeks: frozenset[int] = frozenset(),
+    reserved: frozenset[ReservedInterval] = frozenset(),
+    exam_date: date | None = None,
     settings: Settings | None = None,
 ) -> StudyPlan | None:
     """Assemble the calendar-grounded, module-level plan, or None if no modules."""
@@ -294,7 +378,14 @@ def build_study_plan(
     weekly_minutes = sum(s.minutes for s in slots)
     weekly_hours = round(weekly_minutes / 60, 1) if weekly_minutes else 0.0
 
-    module_plans = schedule_modules(estimates, slots, start_date, skip_weeks)
+    # PTO days and on-call dates are absolute calendar dates to skip.
+    pto = frozenset(persona.work_context.pto_days or [])
+    on_call_dates = frozenset(persona.work_context.on_call.dates or [])
+    skip_dates = pto | on_call_dates
+
+    module_plans = schedule_modules(
+        estimates, slots, start_date, skip_weeks, reserved, skip_dates
+    )
     weeks = max((b.week for m in module_plans for b in m.scheduled), default=0)
 
     sessions = [
@@ -309,6 +400,22 @@ def build_study_plan(
         for s in slots
     ]
 
+    # Balloon warning: plan too long or overruns exam date.
+    balloon_warning: str | None = None
+    plan_end = start_date + timedelta(days=weeks * 7)
+    if weeks > _BALLOON_WEEKS_THRESHOLD:
+        balloon_warning = (
+            f"This plan spans {weeks} weeks, which is unusually long. "
+            "Consider a faster pace or freeing up more study time."
+        )
+    if exam_date is not None and plan_end > exam_date:
+        days_over = (plan_end - exam_date).days
+        overrun_msg = (
+            f"At this pace the plan finishes {days_over} day(s) after your exam on "
+            f"{exam_date.isoformat()}. Consider a faster pace or additional study sessions."
+        )
+        balloon_warning = overrun_msg if balloon_warning is None else f"{balloon_warning} {overrun_msg}"
+
     return StudyPlan(
         catalog_id=catalog_id,
         title=title,
@@ -321,4 +428,5 @@ def build_study_plan(
         modules=module_plans,
         sessions=sessions,
         capacity_reason=_capacity_reason(slots, weekly_hours),
+        balloon_warning=balloon_warning,
     )

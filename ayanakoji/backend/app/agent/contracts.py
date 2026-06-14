@@ -35,6 +35,7 @@ class Route(StrEnum):
     FOUNDRY_IQ = "foundry_iq"  # a named course/topic → grounded answer + offer to start it
     STUDY_PLAN = "study_plan"  # "make me a study plan" → workload-aware schedule for the course
     WORK_IQ = "work_iq"  # the learner's own schedule / workload / capacity
+    UPCOMING = "upcoming"  # "what's my next module / session" → next scheduled module + deadline
     GENERAL = "general"  # off-topic → helpful answer + steer back to learning
 
 
@@ -60,6 +61,23 @@ class InjectionVerdict(BaseModel):
     blocked: bool
     reason: str = Field(description="Why it was (not) blocked — shown in telemetry")
     confidence: float = Field(ge=0, le=1, default=0.5)
+
+
+class TraceStep(BaseModel):
+    """One sub-step within a pipeline phase, shown in the grounding trace.
+
+    Used by the injection gate (regex → Azure → Prompt Guard) and the router
+    (heuristic vs LLM call) so the full decision chain is visible, not just the
+    final verdict.
+    """
+
+    label: str = Field(description="Layer name: Regex pre-filter | Azure LLM classifier | Groq Prompt Guard 2 | …")
+    passed: bool | None = Field(
+        default=None,
+        description="True=passed, False=blocked, None=informational (unavailable/skipped)",
+    )
+    detail: str = Field(description="Human-readable outcome with scores, thresholds, or patterns")
+    model: str | None = Field(default=None, description="Model / service identifier if applicable")
 
 
 class RouteDecision(BaseModel):
@@ -167,6 +185,10 @@ class StudyPlan(BaseModel):
     modules: list[ModulePlan]
     sessions: list[StudySession] = Field(description="The recurring weekly study slots")
     capacity_reason: str = Field(description="Which real calendar slots back the weekly load")
+    balloon_warning: str | None = Field(
+        default=None,
+        description="Set when the plan stretches unrealistically long or overruns an exam date",
+    )
 
 
 class PhaseTelemetry(BaseModel):
@@ -183,6 +205,16 @@ class PhaseTelemetry(BaseModel):
     route: Route | None = None
     state: str | None = Field(default=None, description="Course state at this turn (state graph)")
     sources: list[GroundingSource] = Field(default_factory=list)
+    steps: list[TraceStep] = Field(
+        default_factory=list,
+        description="Sub-step chain for this phase (gate layers, router decision, …)",
+    )
+    confidence: float | None = Field(
+        default=None, description="Decision confidence 0..1 (gate or router)"
+    )
+    off_topic: float | None = Field(
+        default=None, description="Router off-topic score 0..1 (0=on-platform, 1=far off)"
+    )
 
 
 # ── Pipeline events (the SSE wire protocol) ────────────────────────────────────
@@ -238,16 +270,25 @@ class PaceRequestEvent(BaseModel):
 
 
 class NewChatEvent(BaseModel):
-    """This chat is locked to its course; steer the learner to open a new chat.
+    """Steer the learner to another chat (a fresh one, or the course's existing one).
 
-    Emitted when a learner asks to switch / pick another course in a chat that
-    already has one. The frontend renders the prompt with a 'Start a new chat'
-    button so one chat stays one course (clean plan + progress per chat).
+    Two cases share this event:
+    - **Locked chat** — the learner asks to switch course in a chat that already
+      has one; the frontend offers a 'Start a new chat' button (no target).
+    - **Already registered elsewhere** — the learner explicitly asks for a course
+      that is already linked to *another* chat; ``target_course_id`` is set and the
+      frontend offers a button that opens THAT chat instead of forking a duplicate.
     """
 
     type: Literal["new_chat"] = "new_chat"
     prompt: str = Field(description="User-facing line explaining the one-course-per-chat rule")
     current_title: str | None = Field(default=None, description="The course this chat is locked to")
+    target_course_id: str | None = Field(
+        default=None, description="Existing chat to open (set when the course is in another chat)"
+    )
+    target_title: str | None = Field(
+        default=None, description="Display title of the course/chat the button opens"
+    )
 
 
 class DoneEvent(BaseModel):

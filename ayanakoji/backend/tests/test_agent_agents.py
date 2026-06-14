@@ -15,6 +15,7 @@ from app.agent.answer import (
     answer_greeting,
     answer_recommend,
     answer_study_plan,
+    answer_upcoming,
     answer_work,
 )
 from app.agent.contracts import PhaseName, PhaseStatus, Route
@@ -391,3 +392,154 @@ def test_greeting_does_not_resuggest_when_chat_has_a_course() -> None:
 def test_recommend_still_suggests_without_a_course() -> None:
     reply = answer_recommend("suggest me a course", persona_id=_a_learner(), taken=[])
     assert reply.suggestion is not None
+
+
+# ── cross_chat_redirect ────────────────────────────────────────────────────────
+
+
+from app.agent.answer import cross_chat_redirect  # noqa: E402
+from app.agent.contracts import NewChatEvent  # noqa: E402
+
+
+# cb-c02 = "Cloud Data & Storage for Developers"; "developers" is a unique title token.
+_REGISTERED: dict[str, tuple[str, str]] = {
+    "cb-c02": ("chat-abc123", "Cloud Data & Storage for Developers"),
+}
+
+
+def test_cross_chat_redirect_returns_reply_for_registered_course() -> None:
+    reply = cross_chat_redirect(
+        "I want the Cloud Data Storage for Developers course",
+        registered=_REGISTERED,
+        catalog_id=None,
+    )
+    assert reply is not None
+    assert reply.new_chat is not None
+    assert isinstance(reply.new_chat, NewChatEvent)
+    assert reply.new_chat.target_course_id == "chat-abc123"
+    assert reply.new_chat.target_title == "Cloud Data & Storage for Developers"
+
+
+def test_cross_chat_redirect_returns_none_when_not_registered() -> None:
+    # cb-c01 ("serverless" is unique) is not in _REGISTERED → no redirect.
+    reply = cross_chat_redirect(
+        "tell me about serverless compute foundations",
+        registered=_REGISTERED,
+        catalog_id=None,
+    )
+    assert reply is None
+
+
+def test_cross_chat_redirect_no_redirect_for_current_chat() -> None:
+    # The learner is already in the cb-c02 chat — no redirect to itself.
+    reply = cross_chat_redirect(
+        "I want cb-c02",
+        registered=_REGISTERED,
+        catalog_id="cb-c02",
+    )
+    assert reply is None
+
+
+def test_cross_chat_redirect_returns_none_when_registered_empty() -> None:
+    reply = cross_chat_redirect(
+        "Cloud Data Storage for Developers",
+        registered={},
+        catalog_id=None,
+    )
+    assert reply is None
+
+
+def test_cross_chat_redirect_sets_new_chat_prompt() -> None:
+    reply = cross_chat_redirect(
+        "I want the Cloud Data Storage developers course",
+        registered=_REGISTERED,
+        catalog_id=None,
+    )
+    assert reply is not None
+    assert reply.new_chat is not None
+    assert reply.new_chat.target_course_id is not None
+
+
+# ── answer_upcoming ────────────────────────────────────────────────────────────
+
+
+_MODULES_WITH_NEXT = [
+    {
+        "module_id": "cb-c01-m01",
+        "title": "Azure App Service Fundamentals",
+        "sequence": 1,
+        "complete_before": "2026-07-01",
+        "scheduled": [
+            {"day": "tue", "start": "09:00", "end": "10:00"},
+            {"day": "thu", "start": "09:00", "end": "10:00"},
+        ],
+        "completed": False,
+    },
+    {
+        "module_id": "cb-c01-m02",
+        "title": "Containers and Docker",
+        "sequence": 2,
+        "complete_before": "2026-07-15",
+        "scheduled": [],
+        "completed": False,
+    },
+]
+
+_MODULES_ALL_DONE = [
+    {
+        "module_id": "cb-c01-m01",
+        "title": "Azure App Service Fundamentals",
+        "sequence": 1,
+        "complete_before": "2026-07-01",
+        "scheduled": [],
+        "completed": True,
+    },
+]
+
+
+def test_answer_upcoming_returns_next_module() -> None:
+    reply = answer_upcoming(_MODULES_WITH_NEXT)
+    text = "".join(reply.tokens)
+    assert "Azure App Service Fundamentals" in text
+    assert "2026-07-01" in text
+
+
+def test_answer_upcoming_includes_sessions() -> None:
+    reply = answer_upcoming(_MODULES_WITH_NEXT)
+    text = "".join(reply.tokens)
+    assert "Tue" in text or "tue" in text.lower()
+
+
+def test_answer_upcoming_all_done_encourages_exam() -> None:
+    reply = answer_upcoming(_MODULES_ALL_DONE)
+    text = "".join(reply.tokens)
+    assert "complete" in text.lower() or "exam" in text.lower()
+
+
+def test_answer_upcoming_no_plan_suggests_building_one() -> None:
+    reply = answer_upcoming([])
+    text = "".join(reply.tokens)
+    assert "study plan" in text.lower() or "plan" in text.lower()
+
+
+def test_answer_upcoming_route_is_upcoming() -> None:
+    reply = answer_upcoming(_MODULES_WITH_NEXT)
+    assert reply.telemetry.route == Route.UPCOMING
+
+
+# ── UPCOMING route detection ───────────────────────────────────────────────────
+
+
+def test_classify_upcoming_for_next_module_query() -> None:
+    decision = classify("what's my next module?")
+    assert decision.route == Route.UPCOMING
+
+
+def test_classify_upcoming_for_upcoming_session() -> None:
+    decision = classify("what is upcoming in my session")
+    assert decision.route == Route.UPCOMING
+
+
+def test_classify_upcoming_for_where_am_i_in_plan() -> None:
+    decision = classify("where am I in my plan")
+    assert decision.route == Route.UPCOMING

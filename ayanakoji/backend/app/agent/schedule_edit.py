@@ -53,6 +53,24 @@ _EXCLUDE = re.compile(
     re.IGNORECASE,
 )
 
+# "only on tuesday and thursday" / "just on tue/thu" → restrict to those days.
+_ONLY_DAYS = re.compile(
+    r"\b(only|just|exclusively|restrict\s+to|limit\s+to|schedule\s+(?:me\s+)?(?:only\s+)?on)\b"
+    r"[^.]{0,40}?\b(mon|monday|tue|tues|tuesday|wed|weds|wednesday|thu|thur|thurs|thursday|"
+    r"fri|friday|sat|saturday|sun|sunday)s?\b",
+    re.IGNORECASE,
+)
+
+# "my exam is on July 10" / "target date: June 30" / "targeting Aug 15 for the cert"
+_EXAM_DATE = re.compile(
+    r"\b(?:exam|cert(?:ification)?|test|assessment|target(?:ing|ed|s)?)\b[^.]{0,40}?"
+    r"(?:on|by|before|date\s*:?\s*)?\s*"
+    r"(?:(\d{1,2})(?:st|nd|rd|th)?\s+(\w+)|(\w+)\s+(\d{1,2})(?:st|nd|rd|th)?)",
+    re.IGNORECASE,
+)
+
+_ALL_WEEKDAYS = frozenset(_WEEKDAYS.values())
+
 # "I'm occupied / busy / away in week 2" → drop that plan week, repacking later.
 _BUSY = (
     r"(skip|avoid|remove|free\s+up|busy|occupied|unavailable|can'?t|cannot|drop|off|away|out|no)"
@@ -100,6 +118,7 @@ class ScheduleAdjustment:
     exclude_days: frozenset[str]
     note: str
     skip_weeks: frozenset[int] = field(default_factory=frozenset)
+    exam_date: date | None = None
 
 
 def _resolve_month_day(month: int, day: int, today: date) -> date | None:
@@ -151,6 +170,45 @@ def _parse_excludes(text: str) -> frozenset[str]:
     return frozenset(_WEEKDAYS[m.group(2).lower()] for m in _EXCLUDE.finditer(text))
 
 
+def _parse_only_days(text: str) -> frozenset[str]:
+    """Infer exclude_days from "only on tue and thu" (complement of the allowed set).
+
+    Returns the set of weekdays to *exclude* (all days NOT in the allowed set),
+    or an empty frozenset when no "only on" restriction is found.
+    """
+    matches = list(_ONLY_DAYS.finditer(text))
+    if not matches:
+        return frozenset()
+    allowed: set[str] = set()
+    for m in matches:
+        allowed.add(_WEEKDAYS[m.group(2).lower()])
+    # Also scan for any additional weekdays after the first match (e.g. "only tue and thu and fri")
+    day_re = re.compile(
+        r"\b(mon|monday|tue|tues|tuesday|wed|weds|wednesday|thu|thur|thurs|thursday|"
+        r"fri|friday|sat|saturday|sun|sunday)s?\b",
+        re.IGNORECASE,
+    )
+    first_trigger = matches[0].start()
+    for dm in day_re.finditer(text, first_trigger):
+        allowed.add(_WEEKDAYS[dm.group(1).lower()])
+    return _ALL_WEEKDAYS - allowed
+
+
+def _parse_exam_date(text: str, today: date) -> date | None:
+    """Extract an exam/certification target date from natural language."""
+    m = _EXAM_DATE.search(text)
+    if not m:
+        return None
+    # Group layout: (day, monthword) or (monthword, day)
+    if m.group(1) and m.group(2) and m.group(2).lower() in _MONTHS:
+        day, month = int(m.group(1)), _MONTHS[m.group(2).lower()]
+    elif m.group(3) and m.group(4) and m.group(3).lower() in _MONTHS:
+        month, day = _MONTHS[m.group(3).lower()], int(m.group(4))
+    else:
+        return None
+    return _resolve_month_day(month, day, today)
+
+
 def _parse_skip_weeks(text: str) -> frozenset[int]:
     """Plan-week numbers the learner says they're occupied in (e.g. 'busy in week 2')."""
     weeks: set[int] = set()
@@ -165,19 +223,26 @@ def parse_adjustment(text: str, *, today: date) -> ScheduleAdjustment | None:
     """Return a structured adjustment, or None if the text has no schedule edit."""
     start = _parse_start(text, today)
     excludes = _parse_excludes(text)
+    only_excludes = _parse_only_days(text)
     skip_weeks = _parse_skip_weeks(text)
-    if start is None and not excludes and not skip_weeks:
+    exam_date = _parse_exam_date(text, today)
+    # Merge explicit excludes with the complement-of-only-days excludes.
+    combined_excludes = excludes | only_excludes
+    if start is None and not combined_excludes and not skip_weeks and exam_date is None:
         return None
     parts: list[str] = []
     if start is not None:
         parts.append(f"start on {start.isoformat()}")
-    if excludes:
-        parts.append("skip " + ", ".join(sorted(excludes)))
+    if combined_excludes:
+        parts.append("skip " + ", ".join(sorted(combined_excludes)))
     if skip_weeks:
         parts.append("skip week(s) " + ", ".join(str(w) for w in sorted(skip_weeks)))
+    if exam_date is not None:
+        parts.append(f"exam on {exam_date.isoformat()}")
     return ScheduleAdjustment(
         start_date=start,
-        exclude_days=excludes,
+        exclude_days=combined_excludes,
         note="; ".join(parts),
         skip_weeks=skip_weeks,
+        exam_date=exam_date,
     )

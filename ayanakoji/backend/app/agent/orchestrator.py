@@ -30,7 +30,9 @@ from app.agent.answer import (
     answer_greeting,
     answer_recommend,
     answer_study_plan,
+    answer_upcoming,
     answer_work,
+    cross_chat_redirect,
 )
 from app.agent.contracts import (
     BlockedEvent,
@@ -75,6 +77,10 @@ _SERVICES_DOWN_MESSAGE = (
 )
 _STREAM_BROKE_MESSAGE = "The reply was interrupted before it finished. Please resend your message."
 
+# Routes that act on a specific course, where naming an already-registered course
+# should steer the learner to its existing chat instead of duplicating it.
+_COURSE_INTENT_ROUTES = frozenset({Route.RECOMMEND, Route.FOUNDRY_IQ, Route.STUDY_PLAN})
+
 
 def _dispatch(
     text: str,
@@ -83,10 +89,14 @@ def _dispatch(
     persona_id: str,
     catalog_id: str | None,
     taken: list[TakenCourse],
+    registered: dict[str, tuple[str, str]],
+    reserved: frozenset[tuple[str, int, int]],
     pace: Pace | None,
     start_date: date | None,
     exclude_days: frozenset[str],
     skip_weeks: frozenset[int],
+    exam_date: date | None,
+    modules: list[dict[str, object]],
     router: ModelRouter | None,
     grounding: CourseGrounding,
     settings: Settings,
@@ -102,9 +112,12 @@ def _dispatch(
             persona_id=persona_id,
             taken=taken,
             catalog_id=catalog_id,
+            registered=registered,
             router=router,
             settings=settings,
         )
+    if decision.route is Route.UPCOMING:
+        return answer_upcoming(modules, settings=settings)
     if decision.route is Route.STUDY_PLAN:
         return answer_study_plan(
             text,
@@ -115,6 +128,8 @@ def _dispatch(
             start_date=start_date,
             exclude_days=exclude_days,
             skip_weeks=skip_weeks,
+            reserved=reserved,
+            exam_date=exam_date,
             router=router,
             settings=settings,
         )
@@ -133,10 +148,14 @@ def run_pipeline(
     persona_id: str,
     catalog_id: str | None = None,
     taken: list[TakenCourse] | None = None,
+    registered: dict[str, tuple[str, str]] | None = None,
+    reserved: frozenset[tuple[str, int, int]] = frozenset(),
     pace: Pace | None = None,
     start_date: date | None = None,
     exclude_days: frozenset[str] = frozenset(),
     skip_weeks: frozenset[int] = frozenset(),
+    exam_date: date | None = None,
+    modules: list[dict[str, object]] | None = None,
     course_state: CourseState | None = None,
     history: list[dict[str, str]] | None = None,
     pending: str | None = None,
@@ -152,6 +171,7 @@ def run_pipeline(
     settings = settings or get_settings()
     grounding = grounding or get_grounding()
     taken = taken or []
+    registered = registered or {}
     # One router instance per turn so the provider clients are reused across nodes.
     if router is None and not settings.llm_offline:
         router = ModelRouter(settings)
@@ -181,26 +201,38 @@ def run_pipeline(
     yield PhaseEvent(phase=route_tel)
 
     # ── Node 3: answer agent (open stream; all-providers-down → explicit error) ─
-    try:
-        reply = _dispatch(
-            text,
-            decision,
-            persona_id=persona_id,
-            catalog_id=catalog_id,
-            taken=taken,
-            pace=pace,
-            start_date=start_date,
-            exclude_days=exclude_days,
-            skip_weeks=skip_weeks,
-            router=router,
-            grounding=grounding,
-            settings=settings,
+    # Route-independent guard: an explicitly-named course already registered in
+    # another chat steers the learner there instead of duplicating it (no model).
+    reply: AgentReply | None = None
+    if decision.route in _COURSE_INTENT_ROUTES:
+        reply = cross_chat_redirect(
+            text, registered=registered, catalog_id=catalog_id, settings=settings
         )
-    except AllProvidersDown:
-        logger.warning("all providers down while answering route=%s", decision.route)
-        yield ErrorEvent(message=_SERVICES_DOWN_MESSAGE)
-        yield DoneEvent(route=decision.route)
-        return
+    if reply is None:
+        try:
+            reply = _dispatch(
+                text,
+                decision,
+                persona_id=persona_id,
+                catalog_id=catalog_id,
+                taken=taken,
+                registered=registered,
+                reserved=reserved,
+                pace=pace,
+                start_date=start_date,
+                exclude_days=exclude_days,
+                skip_weeks=skip_weeks,
+                exam_date=exam_date,
+                modules=modules or [],
+                router=router,
+                grounding=grounding,
+                settings=settings,
+            )
+        except AllProvidersDown:
+            logger.warning("all providers down while answering route=%s", decision.route)
+            yield ErrorEvent(message=_SERVICES_DOWN_MESSAGE)
+            yield DoneEvent(route=decision.route)
+            return
 
     yield PhaseEvent(phase=reply.telemetry)
 

@@ -66,6 +66,8 @@ class Course(SQLModel, table=True):
     # Plan-week numbers the learner is occupied in (e.g. "remove week 2"); the
     # planner leaves these weeks empty and flows the work into later weeks.
     plan_skip_weeks: list[int] = Field(default_factory=list, sa_type=JSON)
+    # ISO date of a target exam ("my exam is July 10"); used to warn if the plan overruns it.
+    plan_exam_date: str | None = Field(default=None)
     messages: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON)
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)

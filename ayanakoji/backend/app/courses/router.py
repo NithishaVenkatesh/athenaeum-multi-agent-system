@@ -17,10 +17,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
-from app.agent.contracts import Pace, PlanEvent, TakenCourse, TokenEvent
+from app.agent.contracts import Pace, PlanEvent, ScheduledBlock, TakenCourse, TokenEvent
 from app.agent.orchestrator import run_pipeline
 from app.agent.schedule_edit import parse_adjustment, parse_pace
 from app.agent.state import derive_course_state
+from app.agent.study_plan import occupied_intervals
 from app.catalog.content import get_module_content
 from app.catalog.loader import get_course as get_catalog_course
 from app.catalog.loader import is_valid_course_id
@@ -173,7 +174,7 @@ def accept_course(course_id: str, body: AcceptCourse, session: SessionDep) -> Co
 def _apply_schedule_edit(repo: CourseRepository, course: Course, text: str) -> Course:
     """Persist a natural-language schedule edit on the course (merges with prior).
 
-    The edit sticks: future plan builds reuse the start date and skipped days.
+    The edit sticks: future plan builds reuse the start date, skipped days, and exam date.
     """
     adj = parse_adjustment(text, today=date.today())
     if adj is None:
@@ -181,6 +182,8 @@ def _apply_schedule_edit(repo: CourseRepository, course: Course, text: str) -> C
     course.plan_start = adj.start_date.isoformat() if adj.start_date else course.plan_start
     course.plan_excludes = sorted(set(course.plan_excludes) | adj.exclude_days)
     course.plan_skip_weeks = sorted(set(course.plan_skip_weeks) | adj.skip_weeks)
+    if adj.exam_date is not None:
+        course.plan_exam_date = adj.exam_date.isoformat()
     repo.save(course)
     return course
 
@@ -228,6 +231,56 @@ def _taken_courses(
     return [TakenCourse(catalog_id=cid, status=status) for cid, status in best.items()]
 
 
+def _registered_courses(
+    repo: CourseRepository, persona_id: str, *, exclude_id: str
+) -> dict[str, tuple[str, str]]:
+    """Catalog course → (chat id, chat title) for the persona's *other* linked chats.
+
+    Lets a turn detect that an explicitly-asked course already lives in another
+    chat and point the learner there instead of opening a duplicate. Most-recent
+    chat wins when a course somehow appears in more than one.
+    """
+    out: dict[str, tuple[str, str]] = {}
+    for course in repo.list_for_persona(persona_id):  # most-recently-updated first
+        if course.id == exclude_id or not course.catalog_id:
+            continue
+        out.setdefault(course.catalog_id, (course.id, course.chat_name))
+    return out
+
+
+def _reserved_intervals(
+    repo: CourseRepository, persona_id: str, *, exclude_id: str
+) -> frozenset[tuple[str, int, int]]:
+    """Absolute (date, start, end) calendar time the persona's *other* course plans use.
+
+    Each module block is resolved to a real date via that course's own start, so
+    the planner for this chat schedules around time already committed elsewhere
+    and two chats never double-book the same slot. Completed modules are excluded:
+    once a module is done its hours are freed up for other courses.
+    """
+    intervals: set[tuple[str, int, int]] = set()
+    for course in repo.list_for_persona(persona_id):
+        if course.id == exclude_id or not course.catalog_id:
+            continue
+        course_start = (
+            date.fromisoformat(course.plan_start) if course.plan_start else date.today()
+        )
+        blocks = [
+            ScheduledBlock(
+                week=int(b["week"]),
+                day=str(b["day"]),
+                start=str(b["start"]),
+                end=str(b["end"]),
+                minutes=int(b.get("minutes", 0)),
+            )
+            for module in repo.list_modules(course.id)
+            if not module.completed  # completed modules free up their reserved hours
+            for b in module.scheduled
+        ]
+        intervals |= occupied_intervals(course_start, blocks)
+    return frozenset(intervals)
+
+
 @router.post("/{course_id}/messages", summary="Send a message; stream the agent pipeline (SSE)")
 def post_message(course_id: str, body: MessageIn, session: SessionDep) -> StreamingResponse:
     """Append the learner's turn, run it through the agent pipeline, and stream events.
@@ -252,6 +305,12 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
                 return
 
             taken = _taken_courses(stream_repo, current.persona_id, exclude_id=current.id)
+            registered = _registered_courses(
+                stream_repo, current.persona_id, exclude_id=current.id
+            )
+            reserved = _reserved_intervals(
+                stream_repo, current.persona_id, exclude_id=current.id
+            )
             # A pace change in the message ("revert to a slower pace") updates the
             # course pace before planning, so the re-plan honors it.
             requested_pace = parse_pace(body.content)
@@ -267,6 +326,11 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
             )
             exclude_days = frozenset(current.plan_excludes)
             skip_weeks = frozenset(current.plan_skip_weeks)
+            exam_date = (
+                date.fromisoformat(current.plan_exam_date)
+                if current.plan_exam_date
+                else None
+            )
             # Recent turns + the pending action (e.g. a pace question) for follow-ups
             # like a bare "yes". The trailing turn is the current message itself.
             history, pending = _conversation_context(current)
@@ -287,15 +351,30 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
             meta_plan: dict[str, object] | None = None
             meta_pace: dict[str, object] | None = None
             meta_new_chat: dict[str, object] | None = None
+            modules_as_dicts: list[dict[str, object]] = [
+                {
+                    "module_id": m.module_id,
+                    "title": m.title,
+                    "sequence": m.sequence,
+                    "complete_before": m.complete_before,
+                    "scheduled": m.scheduled,
+                    "completed": m.completed,
+                }
+                for m in existing_modules
+            ]
             for event in run_pipeline(
                 body.content,
                 persona_id=current.persona_id,
                 catalog_id=current.catalog_id,
                 taken=taken,
+                registered=registered,
+                reserved=reserved,
                 pace=pace,
                 start_date=start_date,
                 exclude_days=exclude_days,
                 skip_weeks=skip_weeks,
+                exam_date=exam_date,
+                modules=modules_as_dicts,
                 course_state=course_state,
                 history=history or None,
                 pending=pending,

@@ -12,7 +12,7 @@ import json
 import re
 from datetime import date
 
-from app.agent.contracts import PhaseName, PhaseStatus, PhaseTelemetry, Route, RouteDecision
+from app.agent.contracts import PhaseName, PhaseStatus, PhaseTelemetry, Route, RouteDecision, TraceStep
 from app.agent.grounding import CourseGrounding, get_grounding
 from app.agent.llm import AllProvidersDown, Capability, ModelRouter
 from app.agent.recommend import vertical_from_text
@@ -84,6 +84,15 @@ _GREETING_RE = re.compile(
     r"how\s+are\s+you|what\s+can\s+you\s+do|who\s+are\s+you)\b",
     re.IGNORECASE,
 )
+# "What's my next module / session / upcoming" → Upcoming route.
+_UPCOMING_RE = re.compile(
+    r"\b(what(?:'?s?|\s+is)\s+(?:my\s+)?(?:next|upcoming)|what\s+(?:am\s+i|should\s+i)\s+(?:studying|doing)\s+next"
+    r"|next\s+(?:module|session|thing|topic)\s+(?:i\s+(?:should|need\s+to)\s+)?(?:study|do|cover|learn|work\s+on)?"
+    r"|(what|which)\s+module\s+(?:is\s+)?(?:next|coming\s+up|am\s+i\s+on)"
+    r"|where\s+(?:am\s+i|should\s+i\s+(?:be|start))\s+(?:in\s+my\s+plan|in\s+my\s+schedule)?"
+    r"|upcoming\s+(?:module|session|study|class|deadline)s?)\b",
+    re.IGNORECASE,
+)
 
 _ROUTE_SYSTEM = (
     "You route a message in an enterprise learning platform that teaches Azure across five "
@@ -96,11 +105,13 @@ _ROUTE_SYSTEM = (
     "- greeting: hi/hello/thanks/who are you/what can you do (onboarding small talk).\n"
     "- recommend: asks to suggest/recommend/explore courses, what to learn next, what tracks "
     "or verticals exist, or help choosing (in ANY of the five tracks).\n"
+    "- upcoming: asks what the NEXT module or session to study is, where they are in their "
+    "plan, what is coming up, or what they should do next in their current course.\n"
     "- study_plan: asks to build/make a study plan or schedule, or how/when to study.\n"
     "- foundry_iq: asks about the CONTENT of a specific course/cert/Azure topic.\n"
     "- work_iq: asks about THEIR OWN schedule, workload, meetings, capacity, or study timing.\n"
     "- general: only genuinely off-platform topics.\n"
-    'Reply ONLY with JSON: {"route":"greeting|recommend|study_plan|foundry_iq|work_iq|general",'
+    'Reply ONLY with JSON: {"route":"greeting|recommend|upcoming|study_plan|foundry_iq|work_iq|general",'
     '"reasoning":"<short>","off_topic":0..1,"confidence":0..1}.'
 )
 
@@ -151,6 +162,13 @@ def classify(
         )
     if is_plan_intent(text):
         return _study_plan_decision()
+    if _UPCOMING_RE.search(text):
+        return RouteDecision(
+            route=Route.UPCOMING,
+            reasoning="Asks about the next module or upcoming session in their plan.",
+            off_topic=0.0,
+            confidence=0.8,
+        )
     if _RECOMMEND_RE.search(text):
         return RouteDecision(
             route=Route.RECOMMEND,
@@ -204,6 +222,17 @@ def classify(
 
 
 def _telemetry(decision: RouteDecision, *, model: str | None, tier: int | None) -> PhaseTelemetry:
+    is_heuristic = model is None or "heuristic" in (model or "")
+    label = "Heuristic classifier" if is_heuristic else "LLM router"
+    step = TraceStep(
+        label=label,
+        passed=True,
+        detail=(
+            f"Route: {decision.route.value} · confidence {decision.confidence:.0%}"
+            f" · off-topic score {decision.off_topic:.0%}"
+        ),
+        model=model,
+    )
     return PhaseTelemetry(
         phase=PhaseName.ROUTE,
         status=PhaseStatus.PASSED,
@@ -212,6 +241,9 @@ def _telemetry(decision: RouteDecision, *, model: str | None, tier: int | None) 
         route=decision.route,
         model=model,
         tier=tier,
+        steps=[step],
+        confidence=decision.confidence,
+        off_topic=decision.off_topic,
     )
 
 
