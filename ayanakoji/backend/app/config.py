@@ -107,6 +107,15 @@ class Settings(BaseSettings):
     groq_model_guard: str = "meta-llama/llama-prompt-guard-2-86m"
     # Block when the guard's jailbreak probability is at/above this.
     guard_block_threshold: float = 0.8
+
+    # --- Azure AI Content Safety — Prompt Shields (optional; a SEPARATE resource) ---
+    # A purpose-built Azure detector for jailbreak / prompt-injection: role-play,
+    # encoding (base64/cipher), conversation-mockup, and system-rule override attacks.
+    # Distinct from the Responsible-AI filter on chat completions — called explicitly
+    # on untrusted text (a learner answer). When unset, callers degrade gracefully.
+    content_safety_endpoint: str | None = None
+    content_safety_api_key: str | None = None
+    content_safety_api_version: str = "2024-09-01"
     # Per-call model timeout (seconds) so a hung provider can't stall a whole turn.
     llm_timeout_seconds: float = 30.0
     # Safety ceiling for LLM-grader exchanges per question. The grader calls
@@ -134,6 +143,14 @@ class Settings(BaseSettings):
     def groq_configured(self) -> bool:
         """True when a usable Groq API key is present (the fallback provider)."""
         return not _is_placeholder(self.groq_api_key)
+
+    @property
+    def content_safety_configured(self) -> bool:
+        """True when Azure Content Safety (Prompt Shields) endpoint + key are present."""
+        return not any(
+            _is_placeholder(v)
+            for v in (self.content_safety_endpoint, self.content_safety_api_key)
+        )
 
     @property
     def llm_offline(self) -> bool:

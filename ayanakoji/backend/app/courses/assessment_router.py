@@ -16,6 +16,7 @@ when the learner has *passed* the latest attempt of BOTH choices and llm.
 from __future__ import annotations  # all annotations are strings at runtime
 
 import json
+import logging
 import random
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -42,6 +43,8 @@ from app.courses.schemas import (
     SessionLlmQuestionRead,
 )
 from app.db import get_session
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/courses", tags=["assessments"])
 
@@ -591,6 +594,25 @@ def _stream_llm_turn(
     bank_q = a_repo.get_llm_question_by_id(q.bank_question_id) if q.bank_question_id else None
     reference_answer = bank_q.reference_answer if bank_q else ""
 
+    # Purpose-built input guard: screen the answer for grade-gaming BEFORE it reaches
+    # the grader. Non-blocking by design — a detection neutralises (the grader is told
+    # to score only genuine conceptual content) and is logged for audit; it never stops
+    # the assessment, never silently zeroes the turn, and is not surfaced to the learner
+    # (a false positive on a genuine answer stays harmless — it still gets graded).
+    from app.agent.assessment_guard import screen_answer
+
+    guard = screen_answer(answer=content, question=q.prompt)
+    if guard.manipulation:
+        logger.warning(
+            "assessment guard flagged grade-gaming: assessment=%s question=%s detector=%s "
+            "confidence=%.2f reason=%s",
+            assessment_id,
+            question_id,
+            guard.detector,
+            guard.confidence,
+            guard.reason,
+        )
+
     # Append the learner's message to the transcript.
     learner_msg = {"role": "user", "content": content}
     q.messages = [*q.messages, learner_msg]
@@ -604,6 +626,8 @@ def _stream_llm_turn(
         reference_answer=reference_answer,
         history=list(q.messages),  # includes the just-appended user turn
         turn_count=q.turn_count,
+        guard_flagged=guard.manipulation,
+        guard_reason=guard.reason,
     )
 
     if result.grade is not None:

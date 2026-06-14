@@ -154,6 +154,18 @@ def _guard_client(api_key: str | None, base_url: str) -> Any:
     return OpenAI(api_key=api_key, base_url=base_url)
 
 
+def prompt_guard_score(
+    text: str, settings: Settings, guard_fn: GuardFn | None = None
+) -> float | None:
+    """Public reuse hook: Prompt Guard 2 jailbreak probability for ``text``, or None.
+
+    Other guards (e.g. the assessment-answer guard) reuse the *same* purpose-built
+    detector this gate runs rather than standing up a second Prompt Guard client.
+    ``guard_fn`` lets callers/tests inject a deterministic score.
+    """
+    return (guard_fn or (lambda t: _groq_guard_score(t, settings)))(text)
+
+
 def _build_telemetry(
     verdict: InjectionVerdict,
     *,
