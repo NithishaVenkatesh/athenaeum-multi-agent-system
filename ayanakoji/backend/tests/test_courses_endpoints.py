@@ -317,6 +317,27 @@ def test_concurrent_turns_same_course_lose_no_messages() -> None:
         assert user_contents == {f"hello number {i}" for i in range(n)}
 
 
+def test_typing_is_blocked_while_a_pace_choice_is_pending(client: TestClient) -> None:
+    """While a pace decision is outstanding, free text is rejected; the learner must
+    use the pace buttons. Picking a pace unblocks typing (critique HITL)."""
+    course_id = _create(client, content="How do Azure Functions work?")["id"]
+    client.post(f"/api/courses/{course_id}/accept", json={"catalog_id": "cb-c01"})
+
+    # Asking for a plan with no pace set surfaces the pace_request gate.
+    resp = client.post(f"/api/courses/{course_id}/messages", json={"content": "build a study plan"})
+    assert "pace_request" in [e["type"] for e in _parse_sse(resp.text)]
+
+    # Now typing anything is rejected — the choice must be clicked.
+    blocked = client.post(f"/api/courses/{course_id}/messages", json={"content": "uhh sure"})
+    assert blocked.status_code == 409
+
+    # Clicking a pace (POST /pace) resolves the gate; typing works again.
+    assert client.post(f"/api/courses/{course_id}/pace", json={"pace": "normal"}).status_code == 200
+    ok = client.post(f"/api/courses/{course_id}/messages", json={"content": "build a study plan"})
+    assert ok.status_code == 200
+    assert "plan" in [e["type"] for e in _parse_sse(ok.text)]
+
+
 def test_oversized_message_is_rejected_422(client: TestClient) -> None:
     """A message past MAX_MESSAGE_CHARS is rejected at the boundary, never stored (C2)."""
     from app.courses.schemas import MAX_MESSAGE_CHARS

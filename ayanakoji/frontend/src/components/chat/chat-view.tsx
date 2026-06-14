@@ -302,6 +302,11 @@ export function ChatView({ courseId }: { courseId?: string }) {
   }
 
   const isEmpty = turns.length === 0;
+  // HITL gate: while the last turn is asking for a pace and none is chosen yet,
+  // typing is disabled so the learner uses the pace buttons (the backend also
+  // rejects free text with 409 in this state). Course suggestions do not lock.
+  const lastTurn = turns[turns.length - 1];
+  const paceLocked = Boolean(lastTurn?.paceRequest) && lastTurn?.paceChosen == null;
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4">
@@ -377,7 +382,7 @@ export function ChatView({ courseId }: { courseId?: string }) {
             <ArrowDown className="size-4" />
           </button>
         )}
-        <ChatComposer onSend={handleSend} busy={busy} />
+        <ChatComposer onSend={handleSend} busy={busy} locked={paceLocked} />
         <p className="text-muted-foreground/70 mt-2 text-center text-xs">
           Answers are grounded and AI-generated. Reasoning is shown for every turn.
         </p>

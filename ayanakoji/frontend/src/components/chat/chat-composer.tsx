@@ -16,10 +16,17 @@ function isTypingElsewhere(): boolean {
 export function ChatComposer({
   onSend,
   busy,
+  locked = false,
+  lockedHint = "Pick an option above to continue.",
   placeholder = "Ask about a course…",
 }: {
   onSend: (text: string) => void;
   busy: boolean;
+  // When a human-in-the-loop choice (e.g. a pace selection) is pending, typing is
+  // disabled and the learner must use the buttons; the backend also rejects free
+  // text with 409 while such a choice is outstanding (HITL gate).
+  locked?: boolean;
+  lockedHint?: string;
   placeholder?: string;
 }) {
   const [value, setValue] = useState("");
@@ -41,7 +48,7 @@ export function ChatComposer({
 
   function submit() {
     const text = value.trim();
-    if (!text || busy) return;
+    if (!text || busy || locked) return;
     onSend(text);
     setValue("");
   }
@@ -64,15 +71,16 @@ export function ChatComposer({
             submit();
           }
         }}
-        placeholder={placeholder}
+        placeholder={locked ? lockedHint : placeholder}
         aria-label="Message"
         rows={1}
-        className="max-h-40 min-h-9 resize-none border-0 bg-transparent px-2 py-1.5 shadow-none focus-visible:ring-0 dark:bg-transparent"
+        disabled={locked}
+        className="max-h-40 min-h-9 resize-none border-0 bg-transparent px-2 py-1.5 shadow-none focus-visible:ring-0 disabled:opacity-60 dark:bg-transparent"
       />
       <Button
         type="submit"
         size="icon"
-        disabled={busy || value.trim().length === 0}
+        disabled={busy || locked || value.trim().length === 0}
         aria-label="Send message"
         className="active:scale-97 transition-transform"
       >

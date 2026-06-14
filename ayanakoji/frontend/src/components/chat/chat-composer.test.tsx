@@ -31,4 +31,18 @@ describe("ChatComposer", () => {
     render(<ChatComposer onSend={vi.fn()} busy />);
     expect(screen.getByRole("button", { name: /send message/i })).toBeDisabled();
   });
+
+  it("locks typing while a choice is pending and shows the hint (HITL)", () => {
+    const onSend = vi.fn();
+    render(<ChatComposer onSend={onSend} busy={false} locked lockedHint="Pick a pace above." />);
+    const box = screen.getByRole("textbox", { name: "Message" });
+
+    expect(box).toBeDisabled();
+    expect(box).toHaveAttribute("placeholder", "Pick a pace above.");
+    expect(screen.getByRole("button", { name: /send message/i })).toBeDisabled();
+
+    // Even a forced Enter must not send while locked.
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(onSend).not.toHaveBeenCalled();
+  });
 });

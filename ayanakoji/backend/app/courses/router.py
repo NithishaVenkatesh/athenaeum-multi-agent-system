@@ -195,6 +195,22 @@ def _apply_schedule_edit(
     return course
 
 
+def _pace_choice_pending(course: Course) -> bool:
+    """True when the last assistant turn asked for a pace and none is set yet.
+
+    While a pace decision is outstanding the learner must pick it with the pace
+    buttons (POST /pace), not by typing — a human-in-the-loop gate (HITL). Course
+    *suggestions* are deliberately not gated: a learner can keep typing while
+    choosing a course. Picking a pace clears this (course.pace is then set).
+    """
+    if course.pace:
+        return False
+    for message in reversed(course.messages):
+        if message.get("role") == "assistant":
+            return bool((message.get("meta") or {}).get("pace_request"))
+    return False
+
+
 def _conversation_context(course: Course) -> tuple[list[dict[str, str]], str | None]:
     """Recent turns + what the last assistant turn proposed (for follow-up routing).
 
@@ -316,7 +332,15 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
     course suggestion, every event is one of the typed ``PipelineEvent`` shapes.
     """
     repo = CourseRepository(session)
-    _require(repo.get(course_id), course_id)
+    course = _require(repo.get(course_id), course_id)
+    # HITL gate: while a pace choice is outstanding the learner must use the pace
+    # buttons (POST /pace), not free text (critique HITL). 409 tells the client to
+    # resolve the pending choice via its control.
+    if _pace_choice_pending(course):
+        raise HTTPException(
+            status_code=409,
+            detail="Pick a pace with the buttons above to continue.",
+        )
     return StreamingResponse(
         _stream_turn(course_id, body.content),
         media_type="text/event-stream",
