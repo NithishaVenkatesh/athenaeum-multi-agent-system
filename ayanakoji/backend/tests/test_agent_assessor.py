@@ -267,7 +267,7 @@ def test_grade_practice_multiselect_is_wrong() -> None:
 def test_review_practice_ready_offers_take_evaluation() -> None:
     from app.agent.assessor import PracticeGrade, review_practice
 
-    grade = PracticeGrade(correct=5, total=5, verdict="ready", missed=[])
+    grade = PracticeGrade(correct=5, total=5, verdict="ready", missed=())
     reply = review_practice(
         module_id="cb-c01-m01", module_title="Functions", material="Body.", grade=grade
     )
@@ -279,13 +279,36 @@ def test_review_practice_ready_offers_take_evaluation() -> None:
 def test_review_practice_study_offers_go_to_module() -> None:
     from app.agent.assessor import PracticeGrade, review_practice
 
-    grade = PracticeGrade(correct=1, total=5, verdict="study", missed=["Q2", "Q3"])
+    grade = PracticeGrade(correct=1, total=5, verdict="study", missed=("Q2", "Q3"))
     reply = review_practice(
         module_id="cb-c01-m01", module_title="Functions", material="Body.", grade=grade
     )
     kinds = [a.kind for a in reply.actions.actions]
     assert "go_to_module" in kinds
     assert "take_evaluation" not in kinds
+
+
+def test_review_practice_online_streams_and_tags_tier() -> None:
+    from app.agent.assessor import PracticeGrade, review_practice
+    from app.config import Settings
+
+    grade = PracticeGrade(correct=2, total=5, verdict="not_yet", missed=("Q3", "Q4", "Q5"))
+    fake = FakeRouter(tokens=["You ", "are ", "close."])
+    online = Settings(_env_file=None, offline_llm=False, groq_api_key="gsk_x")  # type: ignore[call-arg]
+    reply = review_practice(
+        module_id="cb-c01-m01",
+        module_title="Functions",
+        material="Body.",
+        grade=grade,
+        router=fake,
+        settings=online,
+    )
+    kinds = [a.kind for a in reply.actions.actions]
+    assert "go_to_module" in kinds and "take_evaluation" not in kinds
+    assert _drain(reply) == "You are close."
+    # The online path tags the model + tier (observability parity with sibling agents).
+    assert reply.telemetry.tier == 1
+    assert reply.telemetry.model == "gpt-4o-mini"
 
 
 def test_answer_assessor_practise_with_module(monkeypatch) -> None:

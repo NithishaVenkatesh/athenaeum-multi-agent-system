@@ -219,7 +219,7 @@ class PracticeGrade:
     correct: int
     total: int
     verdict: str  # "ready" | "not_yet" | "study"
-    missed: list[str]  # prompts of the questions answered wrong
+    missed: tuple[str, ...]  # prompts of the questions answered wrong (immutable)
 
 
 def _verdict_for(correct: int) -> str:
@@ -238,13 +238,17 @@ def grade_practice(
     missed: list[str] = []
     for q in questions:
         qid = str(q.get("id"))
-        picks = selections.get(qid, []) or []
-        if len(picks) == 1 and picks[0] == q.get("correct"):
+        picks = selections.get(qid) or []
+        # A single exact match wins; blank, wrong, multi-select, or a non-list value
+        # (defensive — the wire schema enforces a list, but this is a pure function) → missed.
+        if isinstance(picks, list) and len(picks) == 1 and picks[0] == q.get("correct"):
             correct += 1
         else:
             missed.append(str(q.get("prompt", qid)))
     total = len(questions)
-    return PracticeGrade(correct=correct, total=total, verdict=_verdict_for(correct), missed=missed)
+    return PracticeGrade(
+        correct=correct, total=total, verdict=_verdict_for(correct), missed=tuple(missed)
+    )
 
 
 def _practice_actions(verdict: str, module_id: str) -> ActionEvent:
@@ -269,6 +273,8 @@ def _practice_actions(verdict: str, module_id: str) -> ActionEvent:
 def _review_offline(module_title: str, grade: PracticeGrade) -> str:
     score = f"{grade.correct}/{grade.total}"
     missed = "; ".join(grade.missed[:3])
+    # Only name specific gaps when there are any (avoids a dangling ": ." if missed is empty).
+    gaps = f" Review these before the evaluation: {missed}." if missed else ""
     if grade.verdict == "ready":
         return (
             f"(offline mode) Nice work, you got {score} on this practice for {module_title}. You "
@@ -276,12 +282,12 @@ def _review_offline(module_title: str, grade: PracticeGrade) -> str:
         )
     if grade.verdict == "not_yet":
         return (
-            f"(offline mode) You got {score} on this practice for {module_title}. You are close. "
-            f"Review these before the evaluation: {missed}. Then practise again or open the module."
+            f"(offline mode) You got {score} on this practice for {module_title}. You are close."
+            f"{gaps} Then practise again or open the module."
         )
     return (
         f"(offline mode) You got {score} on this practice for {module_title}. Let us build the "
-        f"foundation first. Revisit the module, especially: {missed}. Practise again when ready."
+        f"foundation first. Revisit the module.{gaps} Practise again when ready."
     )
 
 
@@ -302,8 +308,11 @@ def review_practice(
     if settings.llm_offline:
         tokens: Iterator[str] = _offline_stream(_review_offline(module_title, grade))
         model: str | None = "offline"
+        tier: int | None = None
+        steps = [TraceStep(label="LLM review", passed=True, detail="offline mode", model="offline")]
     else:
-        missed = "; ".join(grade.missed) or "(none)"
+        # Cap the named gaps at 3, matching the offline path (bounds the prompt + focuses study).
+        missed = "; ".join(grade.missed[:3]) or "(none)"
         tone = (
             "They passed; congratulate them honestly and invite them to take the evaluation."
             if grade.verdict == "ready"
@@ -329,6 +338,15 @@ def review_practice(
         )
         tokens = stream_handle.tokens
         model = stream_handle.model
+        tier = stream_handle.tier
+        steps = [
+            TraceStep(
+                label="LLM review",
+                passed=True,
+                detail="WORKHORSE capability · max 500 tokens · grounded in module material",
+                model=model,
+            )
+        ]
 
     return AgentReply(
         telemetry=_answer_telemetry(
@@ -337,7 +355,8 @@ def review_practice(
             route=Route.PRACTISE_MODULE,
             sources=[source],
             model=model,
-            tier=None,
+            tier=tier,
+            steps=steps,
         ),
         tokens=tokens,
         sources=[source],
