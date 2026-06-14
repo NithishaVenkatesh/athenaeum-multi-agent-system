@@ -1,0 +1,106 @@
+{
+  "course_id": "do-c02",
+  "module_id": "do-c02-m02",
+  "module_title": "Package management and artifact versioning",
+  "choices": [
+    {
+      "id": "do-c02-m02-c01",
+      "module_id": "do-c02-m02",
+      "prompt": "According to the module, what is the defining feature that turns a package feed from a private cache into an organizational asset?",
+      "kind": "mcq",
+      "choices": [
+        "An upstream source that proxies a public registry, saves its own copy of fetched packages, and becomes a single chokepoint for security and license policy",
+        "A view named @release that only production builds are allowed to consume",
+        "A lockfile committed alongside package.json that pins exact resolved versions",
+        "A SemVer scheme applied to every package so consumers can reason about compatibility"
+      ],
+      "correct_answers": [
+        "An upstream source that proxies a public registry, saves its own copy of fetched packages, and becomes a single chokepoint for security and license policy"
+      ]
+    },
+    {
+      "id": "do-c02-m02-c02",
+      "module_id": "do-c02-m02",
+      "prompt": "A teammate wants to ship a backward-compatible bug fix to the widely linked `larkspur-telemetry` library currently at `2.4.1`. Under SemVer as described in the module, which version is appropriate?",
+      "kind": "mcq",
+      "choices": [
+        "2.4.2, because PATCH is bumped for backward-compatible bug fixes",
+        "2.5.0, because any change to a published package bumps MINOR",
+        "3.0.0, because shipping a fix to a widely linked library is a breaking change",
+        "2026.04.0, because CalVer encodes the release date for shipped fixes"
+      ],
+      "correct_answers": [
+        "2.4.2, because PATCH is bumped for backward-compatible bug fixes"
+      ]
+    },
+    {
+      "id": "do-c02-m02-c03",
+      "module_id": "do-c02-m02",
+      "prompt": "In the consuming warehouse service, the dependency is declared as `\"@larkspur/telemetry\": \"^2.4.1\"`. Per the module, what does this caret range allow and refuse?",
+      "kind": "mcq",
+      "choices": [
+        "It accepts any 2.x release because those are promised backward-compatible, but refuses 3.0.0, which by definition may break",
+        "It pins exactly 2.4.1 and refuses every other version, making the lockfile unnecessary",
+        "It accepts any release at or above 2.4.1, including 3.0.0, since newer is always safer",
+        "It accepts only patch releases like 2.4.2 and refuses the minor release 2.5.0"
+      ],
+      "correct_answers": [
+        "It accepts any 2.x release because those are promised backward-compatible, but refuses 3.0.0, which by definition may break"
+      ]
+    },
+    {
+      "id": "do-c02-m02-c04",
+      "module_id": "do-c02-m02",
+      "prompt": "The module contrasts SemVer and CalVer as version 'promises.' Select all statements that match how the module describes each scheme.",
+      "kind": "msq",
+      "choices": [
+        "SemVer (MAJOR.MINOR.PATCH) communicates compatibility and is the right default for libraries other code links against, like larkspur-telemetry",
+        "CalVer (e.g. 2026.04.0) communicates recency and fits products that ship continuously, such as an end-user application or service image",
+        "Applying SemVer to a continuously shipped app, or CalVer to a linked library, sends a signal consumers cannot act on",
+        "CalVer guarantees backward compatibility within the same calendar year, so consumers never need a changelog"
+      ],
+      "correct_answers": [
+        "SemVer (MAJOR.MINOR.PATCH) communicates compatibility and is the right default for libraries other code links against, like larkspur-telemetry",
+        "CalVer (e.g. 2026.04.0) communicates recency and fits products that ship continuously, such as an end-user application or service image",
+        "Applying SemVer to a continuously shipped app, or CalVer to a linked library, sends a signal consumers cannot act on"
+      ]
+    },
+    {
+      "id": "do-c02-m02-c05",
+      "module_id": "do-c02-m02",
+      "prompt": "Which practices does the module list as common pitfalls to avoid? Select all that apply.",
+      "kind": "msq",
+      "choices": [
+        "Vendoring shared code by copying a library folder into each repo, which guarantees divergence",
+        "Republishing a version like 2.4.1 with different bytes, which breaks the immutability consumers rely on",
+        "Skipping upstream sources and letting every build hit the public internet, losing the policy chokepoint",
+        "Committing the lockfile (package-lock.json) so two builds a month apart produce identical dependency trees"
+      ],
+      "correct_answers": [
+        "Vendoring shared code by copying a library folder into each repo, which guarantees divergence",
+        "Republishing a version like 2.4.1 with different bytes, which breaks the immutability consumers rely on",
+        "Skipping upstream sources and letting every build hit the public internet, losing the policy chokepoint"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "do-c02-m02-l01",
+      "module_id": "do-c02-m02",
+      "prompt": "Explain why promoting a package between feed views (e.g. from @prerelease to @release) does not require rebuilding it, and why that property is valuable.",
+      "reference_answer": "Views are named slices of the feed at different quality levels (conventionally @local, @prerelease, @release) through which a single immutable artifact flows. Promotion simply re-points the same already-published bytes into a higher view rather than producing a new build, so the exact thing that was tested in @prerelease is the exact thing released in @release. This byte-for-byte identity is what makes the promotion a trustworthy quality signal: if rebuilding occurred, you would risk shipping something subtly different from what passed integration testing. It also lets consumers choose their risk level, with a service under active development tracking @prerelease while a production build pins to @release."
+    },
+    {
+      "id": "do-c02-m02-l02",
+      "module_id": "do-c02-m02",
+      "prompt": "Larkspur's CI builds pass locally, but a build from last month resolved a different transitive dependency version than today's, causing a regression. Walk through how versioning ranges and lockfiles interact, and what practice would have prevented this.",
+      "reference_answer": "The consuming service depends on the package by a version range such as ^2.4.1, which says what is allowed (any 2.x release) but does not fix which exact version resolves. Because a range permits drift, the same range can resolve to different transitive dependency versions over time, which is how last month's build differed from today's. The crucial reproducibility step is committing the lockfile (package-lock.json, or its NuGet/Maven equivalent), which pins the exact resolved version of every dependency. With the lockfile committed and restored as part of the build, two builds a month apart produce identical dependency trees, preventing the 'worked last Tuesday' regression."
+    },
+    {
+      "id": "do-c02-m02-l03",
+      "module_id": "do-c02-m02",
+      "prompt": "Compare SemVer and CalVer and explain how to choose between them for two cases: the linked `larkspur-telemetry` library versus a continuously shipped service image. Why is mixing the intents a mistake?",
+      "reference_answer": "A version string is a promise, and the scheme determines what it says. SemVer (MAJOR.MINOR.PATCH) communicates compatibility: PATCH for backward-compatible fixes, MINOR for backward-compatible features, MAJOR for breaks, so a consumer reading 2.4.1 to 2.5.0 knows nothing they depend on was removed without consulting a changelog. That makes SemVer the right default for libraries other code links against, like larkspur-telemetry, whose consumers desperately need to know whether an upgrade is safe. CalVer (e.g. 2026.04.0) instead encodes the release date and communicates recency, which fits products that ship continuously and whose breaking-change concept is fuzzy, like an end-user application or a service image. Mixing intents is a mistake because applying SemVer to a continuously shipped app or CalVer to a linked library sends a signal the consumer cannot act on, since the scheme should match whether consumers reason about compatibility or recency."
+    }
+  ]
+}
