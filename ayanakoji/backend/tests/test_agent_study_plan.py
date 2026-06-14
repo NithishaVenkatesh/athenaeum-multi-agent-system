@@ -7,6 +7,7 @@ from datetime import date
 from app.agent.contracts import Pace
 from app.agent.study_plan import (
     ModuleInfo,
+    WeeklySlot,
     _BALLOON_WEEKS_THRESHOLD,
     build_study_plan,
     course_modules,
@@ -291,3 +292,42 @@ def test_build_study_plan_no_balloon_warning_when_within_deadline() -> None:
     # Either no warning or only a length warning (not exam-overrun) for this deadline
     if plan.balloon_warning:
         assert "exam" not in plan.balloon_warning.lower()
+
+
+# ── Time-of-day window + max session length (agentic scheduler capabilities) ─────
+
+
+def test_time_window_clips_slots_to_part_of_day() -> None:
+    vega = get_repository().get_persona("EMP-001")
+    assert vega is not None
+    full = weekly_study_slots(vega)
+    windowed = weekly_study_slots(vega, time_window=(13 * 60, 17 * 60))
+    # Every windowed slot sits strictly inside the afternoon window...
+    assert all(13 * 60 <= s.start and s.end <= 17 * 60 for s in windowed)
+    # ...and the window can only remove time, never add it.
+    assert sum(s.minutes for s in windowed) <= sum(s.minutes for s in full)
+
+
+def test_max_session_minutes_caps_every_block() -> None:
+    slots = [WeeklySlot("mon", 9 * 60, 13 * 60, "free time")]  # one 4-hour opening
+    estimates = [(_module(objectives=6, skills=4), 200)]  # a 200-minute module
+    plans = schedule_modules(estimates, slots, START, max_session_minutes=45)
+    blocks = plans[0].scheduled
+    assert blocks, "expected scheduled blocks"
+    assert all(b.minutes <= 45 for b in blocks)  # no sitting longer than 45 min
+    assert sum(b.minutes for b in blocks) == 200  # but the whole module still fits
+
+
+def test_build_plan_respects_max_session_minutes() -> None:
+    vega = get_repository().get_persona("EMP-001")
+    assert vega is not None
+    plan = build_study_plan(
+        catalog_id="cb-c01",
+        title="x",
+        cert="AZ-204",
+        persona=vega,
+        start_date=START,
+        max_session_minutes=30,
+    )
+    assert plan is not None
+    assert all(b.minutes <= 30 for m in plan.modules for b in m.scheduled)

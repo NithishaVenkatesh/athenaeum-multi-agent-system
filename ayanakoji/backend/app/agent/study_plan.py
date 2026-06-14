@@ -169,14 +169,38 @@ def _day_study_slots(day: DaySchedule, work_start: int, work_end: int) -> list[W
     return [s for s in slots if s.minutes >= _MIN_SLOT_MINUTES]
 
 
+def _clip_to_window(
+    slots: list[WeeklySlot], window: tuple[int, int] | None
+) -> list[WeeklySlot]:
+    """Clip slots to a [earliest, latest] minute-of-day window (e.g. evenings only).
+
+    A slot is trimmed to the overlap with the window and dropped if what remains is
+    shorter than the minimum studyable block.
+    """
+    if window is None:
+        return slots
+    lo, hi = window
+    clipped: list[WeeklySlot] = []
+    for s in slots:
+        start, end = max(s.start, lo), min(s.end, hi)
+        if end - start >= _MIN_SLOT_MINUTES:
+            clipped.append(WeeklySlot(s.day, start, end, s.source))
+    return clipped
+
+
 def weekly_study_slots(
-    persona: Persona, exclude_days: frozenset[str] = frozenset()
+    persona: Persona,
+    exclude_days: frozenset[str] = frozenset(),
+    *,
+    time_window: tuple[int, int] | None = None,
 ) -> list[WeeklySlot]:
     """The learner's recurring weekly study slots, grounded in their calendar.
 
     Restricted to their preferred study days when those have any opening; the one
     committed week is the repeating template for every week of the plan.
-    ``exclude_days`` (a natural-language edit) drops those weekdays entirely.
+    ``exclude_days`` drops those weekdays entirely. ``time_window`` (earliest,
+    latest minutes-of-day) restricts study to a part of the day, e.g. "evenings
+    only" or "after 21:00".
     """
     work_start = _to_min(persona.work_context.working_hours.start)
     work_end = _to_min(persona.work_context.working_hours.end)
@@ -186,7 +210,7 @@ def weekly_study_slots(
     for day in persona.schedule.days:
         if day.day in exclude_days:
             continue
-        opened = _day_study_slots(day, work_start, work_end)
+        opened = _clip_to_window(_day_study_slots(day, work_start, work_end), time_window)
         if opened:
             by_day[day.day] = opened
 
@@ -273,6 +297,7 @@ def schedule_modules(
     skip_weeks: frozenset[int] = frozenset(),
     reserved: frozenset[ReservedInterval] = frozenset(),
     skip_dates: frozenset[str] = frozenset(),
+    max_session_minutes: int | None = None,
 ) -> list[ModulePlan]:
     """Fill the repeating weekly slots with modules in order; deadline per module.
 
@@ -318,7 +343,8 @@ def schedule_modules(
                 cursor = slots[slot_idx].start
                 continue
             cursor = seg_start
-            take = min(remaining, avail)
+            cap = max_session_minutes if max_session_minutes else avail
+            take = min(remaining, avail, cap)
             blocks.append(
                 ScheduledBlock(
                     week=week,
@@ -331,6 +357,10 @@ def schedule_modules(
             last_week = week
             cursor += take
             remaining -= take
+            # Cap session length: after a full max-length block, move to the next
+            # slot so one sitting never exceeds the learner's chosen session size.
+            if max_session_minutes and take >= max_session_minutes and remaining > 0:
+                cursor = slot.end
         # Complete-before = end of the last week the module occupies.
         complete_before = start_date + timedelta(days=last_week * 7)
         plans.append(
@@ -362,9 +392,18 @@ def build_study_plan(
     skip_weeks: frozenset[int] = frozenset(),
     reserved: frozenset[ReservedInterval] = frozenset(),
     exam_date: date | None = None,
+    time_window: tuple[int, int] | None = None,
+    max_session_minutes: int | None = None,
+    extra_skip_dates: frozenset[str] = frozenset(),
     settings: Settings | None = None,
 ) -> StudyPlan | None:
-    """Assemble the calendar-grounded, module-level plan, or None if no modules."""
+    """Assemble the calendar-grounded, module-level plan, or None if no modules.
+
+    ``time_window`` restricts study to a part of the day (earliest, latest
+    minutes), ``max_session_minutes`` caps any single sitting, and
+    ``extra_skip_dates`` are additional ISO dates to avoid (e.g. a one-off
+    appointment) on top of the persona's PTO/on-call days.
+    """
     settings = settings or get_settings()
     path = str(settings.athenaeum_catalog_path or default_catalog_path())
     modules = course_modules(path, catalog_id)
@@ -374,17 +413,17 @@ def build_study_plan(
     estimates = [(m, estimate_module_minutes(m, pace)) for m in modules]
     total_minutes = sum(mins for _, mins in estimates)
 
-    slots = weekly_study_slots(persona, exclude_days)
+    slots = weekly_study_slots(persona, exclude_days, time_window=time_window)
     weekly_minutes = sum(s.minutes for s in slots)
     weekly_hours = round(weekly_minutes / 60, 1) if weekly_minutes else 0.0
 
     # PTO days and on-call dates are absolute calendar dates to skip.
     pto = frozenset(persona.work_context.pto_days or [])
     on_call_dates = frozenset(persona.work_context.on_call.dates or [])
-    skip_dates = pto | on_call_dates
+    skip_dates = pto | on_call_dates | extra_skip_dates
 
     module_plans = schedule_modules(
-        estimates, slots, start_date, skip_weeks, reserved, skip_dates
+        estimates, slots, start_date, skip_weeks, reserved, skip_dates, max_session_minutes
     )
     weeks = max((b.week for m in module_plans for b in m.scheduled), default=0)
 

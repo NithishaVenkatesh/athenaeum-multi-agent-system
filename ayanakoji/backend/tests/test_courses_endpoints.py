@@ -245,7 +245,7 @@ def test_post_message_to_missing_course_404(client: TestClient) -> None:
     assert client.post("/api/courses/nope/messages", json={"content": "hi"}).status_code == 404
 
 
-def test_client_disconnect_persists_partial_assistant_turn() -> None:
+def test_client_disconnect_persists_partial_assistant_turn(db_engine: object) -> None:
     """A mid-stream disconnect still flushes the partial answer, never a dangling
     user turn with no reply (critique C1)."""
     import json as _json
@@ -280,7 +280,7 @@ def test_client_disconnect_persists_partial_assistant_turn() -> None:
         assert assistant.get("meta", {}).get("interrupted") is True
 
 
-def test_concurrent_turns_same_course_lose_no_messages() -> None:
+def test_concurrent_turns_same_course_lose_no_messages(db_engine: object) -> None:
     """Concurrent turns to one course are serialized; no read-modify-write loses a
     message off the transcript blob (critique C4)."""
     import threading
