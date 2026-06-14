@@ -28,6 +28,7 @@ foundry = [
     "openai>=1.54",
     "azure-identity>=1.19",
     "azure-ai-projects>=1.0.0",
+    "azure-storage-blob>=12",
 ]
 
 [build-system]
@@ -71,4 +72,4 @@ markers = ["integration: tests that hit live Azure/Foundry (need creds + foundry
 # app/foundry.py is a cloud adapter exercised by the live smoke + integration test,
 # not the offline unit gate (its SDKs aren't installed in CI). Keep it out of the
 # offline coverage number so the gate measures deterministic, testable logic.
-omit = ["app/foundry.py", "tests/*", "scripts/*"]
+omit = ["app/foundry.py", "app/assessments/azure_blob.py", "tests/*", "scripts/*"]

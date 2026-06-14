@@ -102,6 +102,7 @@ dev = [
 foundry = [
     { name = "azure-ai-projects" },
     { name = "azure-identity" },
+    { name = "azure-storage-blob" },
     { name = "openai" },
 ]
 
@@ -127,6 +128,7 @@ dev = [
 foundry = [
     { name = "azure-ai-projects", specifier = ">=1.0.0" },
     { name = "azure-identity", specifier = ">=1.19" },
+    { name = "azure-storage-blob", specifier = ">=12" },
     { name = "openai", specifier = ">=1.54" },
 ]
 
