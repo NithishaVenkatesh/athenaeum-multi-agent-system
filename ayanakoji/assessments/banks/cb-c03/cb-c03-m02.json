@@ -1,0 +1,104 @@
+{
+  "course_id": "cb-c03",
+  "module_id": "cb-c03-m02",
+  "module_title": "Secrets, keys, and managed identities",
+  "choices": [
+    {
+      "id": "cb-c03-m02-c01",
+      "module_id": "cb-c03-m02",
+      "prompt": "According to the module, which three kinds of material is Azure Key Vault designed to store?",
+      "kind": "mcq",
+      "choices": [
+        "Secrets, keys, and certificates",
+        "Secrets, tokens, and managed identities",
+        "Connection strings, RBAC roles, and access policies",
+        "Keys, SAS tokens, and environment variables"
+      ],
+      "correct_answers": [
+        "Secrets, keys, and certificates"
+      ]
+    },
+    {
+      "id": "cb-c03-m02-c02",
+      "module_id": "cb-c03-m02",
+      "prompt": "A Function app has the Contributor role on its Key Vault, but calling get_secret still returns a 403. Based on the module, what is missing?",
+      "kind": "mcq",
+      "choices": [
+        "A data-plane role assignment such as Key Vault Secrets User",
+        "A second Contributor assignment scoped to the secret rather than the vault",
+        "The vault must be switched from RBAC authorization back to access policies",
+        "A user-assigned managed identity attached to the Function app"
+      ],
+      "correct_answers": [
+        "A data-plane role assignment such as Key Vault Secrets User"
+      ]
+    },
+    {
+      "id": "cb-c03-m02-c03",
+      "module_id": "cb-c03-m02",
+      "prompt": "Two separate apps both need read access to the same vault, and you want the identity to survive even if one of the apps is deleted. Which managed identity flavor does the module recommend, and why?",
+      "kind": "mcq",
+      "choices": [
+        "A user-assigned identity, because it is a standalone resource that can attach to many services and persists independently of any single app",
+        "A system-assigned identity, because it is tied one-to-one to a resource and is automatically deleted with it",
+        "A user-assigned identity, because system-assigned identities cannot be granted RBAC roles on Key Vault",
+        "A system-assigned identity per app, because sharing one identity across apps violates least privilege"
+      ],
+      "correct_answers": [
+        "A user-assigned identity, because it is a standalone resource that can attach to many services and persists independently of any single app"
+      ]
+    },
+    {
+      "id": "cb-c03-m02-c04",
+      "module_id": "cb-c03-m02",
+      "prompt": "The module contrasts managed identities with storing a credential. Which statements about managed identities and DefaultAzureCredential are correct? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "With a managed identity there is no secret to store, rotate, or leak; the platform issues short-lived tokens automatically",
+        "DefaultAzureCredential discovers the managed identity in Azure and falls back to your az login session during local development",
+        "DefaultAzureCredential requires the vault's account key to be set in an environment variable before it can authenticate",
+        "A system-assigned identity is tied one-to-one to a single resource and is deleted with it"
+      ],
+      "correct_answers": [
+        "With a managed identity there is no secret to store, rotate, or leak; the platform issues short-lived tokens automatically",
+        "DefaultAzureCredential discovers the managed identity in Azure and falls back to your az login session during local development",
+        "A system-assigned identity is tied one-to-one to a single resource and is deleted with it"
+      ]
+    },
+    {
+      "id": "cb-c03-m02-c05",
+      "module_id": "cb-c03-m02",
+      "prompt": "A partner needs to download one report blob for the next ten minutes. Per the module, which approach correctly applies a shared access signature?",
+      "kind": "mcq",
+      "choices": [
+        "Issue a user-delegation SAS scoped to that single blob with read-only permission and a ten-minute expiry",
+        "Issue an account-key-signed SAS granting read-write on the whole container for a year so it can be reused",
+        "Share the storage account key directly so the partner can construct their own request",
+        "Grant the partner the Key Vault Secrets User role scoped to the blob"
+      ],
+      "correct_answers": [
+        "Issue a user-delegation SAS scoped to that single blob with read-only permission and a ten-minute expiry"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "cb-c03-m02-l01",
+      "module_id": "cb-c03-m02",
+      "prompt": "Explain why the module argues that managed identities are an improvement over storing the Entra client secret in Key Vault, and walk through how the refactored Northwind expense portal authenticates to Key Vault with no stored credential.",
+      "reference_answer": "Key Vault centralizes the secret behind audited, policy-governed access, but a credential your code can read is still a credential an attacker can read, and it must be rotated. Managed identities go one step further: there is no secret to store, rotate, or leak because Entra ID issues short-lived tokens to the resource automatically, so the code authenticates as who it is rather than what it knows. In the walkthrough the Function app's system-assigned identity is enabled (az functionapp identity assign), and that principal is granted the least-privilege Key Vault Secrets User data-plane role scoped to the vault. The application code then constructs a SecretClient with DefaultAzureCredential, which discovers the managed identity in Azure and obtains a token from Entra ID with no credential in configuration. The result is no client secret in appsettings.json or an environment variable and nothing to rotate in the deployment."
+    },
+    {
+      "id": "cb-c03-m02-l02",
+      "module_id": "cb-c03-m02",
+      "prompt": "Compare Key Vault's management plane and data plane. Explain why someone with the Contributor role can still get a 403 when reading secrets, and what the module recommends to avoid this confusion.",
+      "reference_answer": "Access to a vault has two layers. The management plane controls the vault resource itself (who can create or delete it) and is governed by Azure RBAC, while the data plane controls who can read or write the secrets inside, governed either by the older access policies model or, preferably, by Azure RBAC with roles like Key Vault Secrets User. Contributor is a management-plane role, so with RBAC authorization enabled it does not grant the ability to read secret values; the data plane requires its own role assignment, which is why mismatched planes produce confusing 403s. The module recommends RBAC for the data plane because it is consistent with the rest of Azure and supports fine-grained, auditable assignments, and it warns against half-migrating between access policies and RBAC since a vault uses one model or the other and mixing them leads to silent denials."
+    },
+    {
+      "id": "cb-c03-m02-l03",
+      "module_id": "cb-c03-m02",
+      "prompt": "Walk through how you would decide when a shared access signature is the right tool, and explain why a user-delegation SAS is preferred and how it should be scoped.",
+      "reference_answer": "A SAS is the right tool when you must hand a third party temporary access to a specific storage resource without sharing an account key, for example letting a partner read one blob for the next fifteen minutes. The module prefers a user-delegation SAS because it is signed with Entra ID credentials rather than the storage account key, so it can be tied to a managed identity and revoked by rotating the user delegation key. You should always scope a SAS to the least permission (for example read-only), the shortest lifetime, and the narrowest resource the scenario allows, such as a single blob rather than a whole container. A long-lived, account-key-signed, read-write SAS on an entire container is a liability because it cannot be easily revoked and is dangerous if leaked, which is the blast radius the narrow scoping is meant to limit."
+    }
+  ]
+}
