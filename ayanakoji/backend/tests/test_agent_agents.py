@@ -272,6 +272,37 @@ def test_answer_foundry_scrubs_fabricated_citation() -> None:
     assert "Azure Functions" in text
 
 
+def test_answer_foundry_locked_chat_widens_to_catalog_for_curiosity() -> None:
+    # Locked to an Azure-compute course, the learner asks about ML: instead of a
+    # dead-end, the answer widens to the catalog and is framed as off-course (H2).
+    reply = answer_foundry("machine learning model training", catalog_id="cb-c01")
+    assert reply.sources, "expected widened catalog sources"
+    assert all(not s.ref.startswith("cb-c01") for s in reply.sources)  # from another course
+    assert "Outside this course" in reply.telemetry.reasoning
+    text = "".join(reply.tokens)
+    assert "outside your current course" in text
+    assert reply.suggestion is None  # course-lock: no switch pitch
+
+
+def test_answer_foundry_off_syllabus_is_curious_not_a_dead_end() -> None:
+    # A topic the catalog does not cover at all gets a welcoming, forward-looking
+    # reply, never the old flat "not covered" (H2).
+    reply = answer_foundry("how do I bake sourdough bread", catalog_id="cb-c01")
+    assert reply.sources == []
+    text = "".join(reply.tokens)
+    assert "don't have approved course content covering that yet" not in text
+    assert "outside Athenaeum's approved" in text
+
+
+def test_answer_foundry_open_online_answers_without_fabricating_citations() -> None:
+    # Off-syllabus online: answer from general knowledge, drop any invented citation.
+    router = FakeRouter(tokens=["Bread ", "needs ", "flour ", "[zz-c9-m9]"])
+    reply = answer_foundry("bake bread", catalog_id="cb-c01", router=router, settings=_online())
+    text = "".join(reply.tokens)
+    assert "Bread needs flour" in text
+    assert "[zz-c9-m9]" not in text  # no fabricated citations in an open answer
+
+
 def test_answer_work_offline_uses_persona_signals() -> None:
     # Polaris is a manager; pick a known learner persona id from the roster.
     from app.workiq.repository import get_repository

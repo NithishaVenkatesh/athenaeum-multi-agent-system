@@ -219,14 +219,24 @@ def _sources_block(sources: list[GroundingSource]) -> str:
     return "\n".join(f"[{s.ref}] {s.title}: {s.snippet}" for s in sources)
 
 
-def _foundry_offline(sources: list[GroundingSource]) -> str:
-    if not sources:
+def _foundry_offline(sources: list[GroundingSource], mode: str) -> str:
+    if mode == "open":
+        # Curiosity is welcome even when it's off-syllabus: answer the spirit of
+        # the question rather than dead-ending on "not covered" (H2). The offline
+        # mock can't reason freely, so it points the learner forward warmly.
         return (
-            "(offline mode) I don't have approved course content covering that yet. Try asking "
-            "about an Azure topic such as App Service, Functions, Cosmos DB, or identity."
+            "(offline mode) That's a great question, and it sits outside Athenaeum's approved "
+            "Azure course material, so I can't ground a full answer in our modules here. Ask me "
+            "about an Azure topic like App Service, Functions, Cosmos DB, or identity and I can "
+            "go deep with cited sources."
         )
     lead = sources[0]
     refs = ", ".join(s.ref for s in sources)
+    if mode == "other_course":
+        return (
+            f"(offline mode) That's outside your current course, but our material does cover it. "
+            f"{lead.title} touches on it, {lead.snippet} See the linked modules [{refs}]."
+        )
     return (
         f"(offline mode) Here's what our approved content covers on this. {lead.title} "
         f"addresses it directly, {lead.snippet} You can dig deeper in the linked modules "
@@ -245,7 +255,21 @@ def answer_foundry(
     """Grounded, cited answer over approved content + a 'pursue this course?' suggestion."""
     settings = settings or get_settings()
     grounding = grounding or get_grounding()
-    sources = grounding.search(text, catalog_id=catalog_id)
+    # Curiosity is allowed (H2): try the learner's current course first, but if a
+    # locked chat has nothing on the topic, widen to the whole catalog so an
+    # off-syllabus question still gets a grounded answer (framed as outside this
+    # course); if even that finds nothing, answer helpfully with a clear note,
+    # never a flat "not covered" dead-end.
+    scoped = grounding.search(text, catalog_id=catalog_id)
+    if scoped:
+        sources, mode = scoped, "in_course"
+    elif catalog_id is not None:
+        sources = grounding.search(text, catalog_id=None)
+        mode = "other_course" if sources else "open"
+    else:
+        sources, mode = [], "open"
+    refs = ", ".join(s.ref for s in sources)
+
     course = grounding.suggest(text, catalog_id=catalog_id)
     # Course-lock: never offer to start a DIFFERENT course in a chat that already
     # has one. We still answer the content question; we just don't pitch a switch.
@@ -256,20 +280,23 @@ def answer_foundry(
         if course is not None
         else None
     )
-    reasoning = (
-        f"Grounded on {len(sources)} approved module(s): {', '.join(s.ref for s in sources)}."
-        if sources
-        else "No approved content matched, answering with an explicit 'not covered'."
-    )
+    reasoning = {
+        "in_course": f"Grounded on {len(sources)} approved module(s): {refs}.",
+        "other_course": (
+            f"Outside this course; answered from {len(sources)} module(s) elsewhere "
+            f"in the catalog: {refs}."
+        ),
+        "open": "Outside approved course material; answered helpfully with a clear note.",
+    }[mode]
     steps: list[TraceStep] = [
         TraceStep(
             label="Grounding search",
-            passed=bool(sources),
-            detail=(
-                f"Found {len(sources)} module(s): {', '.join(s.ref for s in sources)}"
-                if sources
-                else "No matching modules — will respond with 'not covered'"
-            ),
+            passed=mode != "open",
+            detail={
+                "in_course": f"Found {len(sources)} module(s) in this course: {refs}",
+                "other_course": f"Not in this course; widened to the catalog: {refs}",
+                "open": "No approved module matched — answering helpfully, outside the syllabus",
+            }[mode],
         ),
         TraceStep(
             label="Course suggestion",
@@ -283,7 +310,7 @@ def answer_foundry(
     ]
 
     if settings.llm_offline:
-        reply = _foundry_offline(sources)
+        reply = _foundry_offline(sources, mode)
         steps.append(TraceStep(label="LLM generation", passed=True, detail="offline mode", model="offline"))
         return AgentReply(
             telemetry=_answer_telemetry(
@@ -301,12 +328,32 @@ def answer_foundry(
         )
 
     router = router or ModelRouter(settings)
-    system = (
-        "You are Athenaeum's course tutor. Answer ONLY from the approved sources below; cite "
-        "the module id in square brackets like [cb-c01-m02] for each claim. If the sources do "
-        "not cover the question, say so plainly, never invent content. Do not use em "
-        "dashes; use commas or periods.\n\nSOURCES:\n" + (_sources_block(sources) or "(none)")
-    )
+    _no_dash = "Do not use em dashes; use commas or periods."
+    if mode == "open":
+        # No approved sources: answer the question helpfully from general knowledge,
+        # but be honest that it is off-syllabus and do not fabricate citations (H2).
+        system = (
+            "You are Athenaeum's Azure learning assistant. The learner asked something our "
+            "approved course material does not cover. Answer helpfully and accurately in 2 to 4 "
+            "sentences from general knowledge, then note in one short sentence that this is "
+            "outside Athenaeum's approved course material. Never invent course citations or "
+            f"[module-id] references. {_no_dash}"
+        )
+    elif mode == "other_course":
+        system = (
+            "You are Athenaeum's course tutor. The learner's current course does not cover this, "
+            "but the approved sources below (from OTHER courses in the catalog) do. Answer from "
+            "those sources, cite each claim's module id in square brackets like [cb-c01-m02], and "
+            "note in one sentence that this is outside their current course. Never invent "
+            f"content or citations. {_no_dash}\n\nSOURCES:\n" + _sources_block(sources)
+        )
+    else:
+        system = (
+            "You are Athenaeum's course tutor. Answer ONLY from the approved sources below; cite "
+            "the module id in square brackets like [cb-c01-m02] for each claim. If the sources do "
+            f"not cover the question, say so plainly, never invent content. {_no_dash}"
+            "\n\nSOURCES:\n" + (_sources_block(sources) or "(none)")
+        )
     handle = router.stream(
         Capability.WORKHORSE,
         [{"role": "system", "content": system}, {"role": "user", "content": text}],
