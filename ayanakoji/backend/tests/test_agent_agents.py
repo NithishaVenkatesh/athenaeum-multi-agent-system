@@ -335,6 +335,22 @@ def test_answer_work_unknown_persona_explains_no_context() -> None:
     assert "couldn't find" in "".join(reply.tokens).lower()
 
 
+def test_answer_work_surfaces_synthetic_disclaimer() -> None:
+    from app.workiq.repository import get_repository
+
+    repo = get_repository()
+    learner = repo.list_personas(learners_only=True)[0]
+    reply = answer_work("when should I study this week?", persona_id=learner.employee_id)
+    text = "".join(reply.tokens)
+    # The synthetic-data provenance is shown in the answer body itself (not only the trace).
+    assert "synthetic" in text.lower()
+    # And the full Work IQ service disclaimer rides the trace.
+    labels = [s.label for s in reply.telemetry.steps]
+    assert "Synthetic data" in labels
+    disclaimer_step = next(s for s in reply.telemetry.steps if s.label == "Synthetic data")
+    assert disclaimer_step.detail == repo.service_info().disclaimer
+
+
 def test_answer_greeting_welcomes_and_offers_options() -> None:
     from app.workiq.repository import get_repository
 

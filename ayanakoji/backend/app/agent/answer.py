@@ -669,6 +669,31 @@ def _work_offline(persona: Persona) -> str:
     )
 
 
+# Work IQ figures are fabricated demo data. The service descriptor carries the full
+# disclaimer (surfaced as a trace step); this concise note rides the answer itself so the
+# learner sees the provenance in the reply, not only in the collapsible trace.
+_WORK_SYNTHETIC_NOTE = (
+    " (Note: these are synthetic, demo-only Work IQ signals for a fictional persona, "
+    "not real schedule data.)"
+)
+
+
+def _with_suffix(tokens: Iterator[str], suffix: str) -> Iterator[str]:
+    """Stream ``tokens``, then a fixed suffix — used to append an honest closing note."""
+    yield from tokens
+    if suffix:
+        yield suffix
+
+
+def _work_synthetic_step(repo: WorkIQRepository) -> TraceStep:
+    """The Work IQ synthetic-data provenance, surfaced in the trace (full disclaimer)."""
+    return TraceStep(
+        label="Synthetic data",
+        passed=None,
+        detail=repo.service_info().disclaimer,
+    )
+
+
 _CROSS_USER_DECLINE = (
     "I can't share another person's schedule, workload, or progress. I only have access to your "
     "own learning and calendar. Ask about your own courses, progress, or schedule and I'll help."
@@ -789,6 +814,7 @@ def answer_work(
     sources = _work_sources(persona)
     reasoning = f"Grounded on Work IQ signals for {persona.codename}: {_work_facts(persona)}."
     steps: list[TraceStep] = [
+        _work_synthetic_step(repo),
         TraceStep(
             label="Work IQ lookup",
             passed=True,
@@ -813,7 +839,7 @@ def answer_work(
                 tier=None,
                 steps=steps,
             ),
-            tokens=_offline_stream(_work_offline(persona)),
+            tokens=_with_suffix(_offline_stream(_work_offline(persona)), _WORK_SYNTHETIC_NOTE),
             sources=sources,
         )
 
@@ -860,7 +886,7 @@ def answer_work(
             tier=handle.tier,
             steps=steps,
         ),
-        tokens=handle.tokens,
+        tokens=_with_suffix(handle.tokens, _WORK_SYNTHETIC_NOTE),
         sources=sources,
     )
 
