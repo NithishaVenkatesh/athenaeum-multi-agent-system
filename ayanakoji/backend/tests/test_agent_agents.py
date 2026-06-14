@@ -257,8 +257,8 @@ def test_answer_foundry_online_streams_grounded() -> None:
     router = FakeRouter(tokens=["Azure ", "Functions ", "[cb-c01-m02]"])
     reply = answer_foundry("azure functions", router=router, settings=_online())
     assert reply.telemetry.tier == 1
-    # The narration is buffered + guard-checked, then re-streamed (a real source's
-    # citation is kept verbatim).
+    # Streamed live through the grounding scrubber; a real source's citation is
+    # kept verbatim (M5).
     assert "".join(reply.tokens).strip() == "Azure Functions [cb-c01-m02]"
     assert reply.sources
 

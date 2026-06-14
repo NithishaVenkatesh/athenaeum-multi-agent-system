@@ -15,7 +15,7 @@ that leaked in ungrounded, so a regression is caught rather than shipped.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 
 from app.agent.contracts import GroundingSource, StudyPlan
 
@@ -88,3 +88,74 @@ def strip_unknown_citations(text: str, sources: Iterable[GroundingSource]) -> st
         return match.group(0) if match.group(1).lower() in allowed else ""
 
     return _CITATION.sub(_drop, text)
+
+
+# ── Streaming grounding enforcement (M5 live streaming + H5 honesty) ─────────────
+
+# Shape of a citation's inner id (matches _CITATION minus the brackets).
+_CITATION_INNER = re.compile(r"[a-z]{2,}-[a-z0-9-]+", re.IGNORECASE)
+# Longest a "[...]" run can get before we decide it is prose, not a citation.
+_MAX_CITATION_LEN = 40
+# Only nag about missing citations once the answer has real substance, so a short
+# "that isn't covered here" reply doesn't get a spurious disclaimer.
+_MIN_CONTENT_FOR_DISCLAIMER = 60
+_GROUNDING_DISCLAIMER = (
+    " (Note: this answer goes beyond the cited course material above, "
+    "double-check it against the linked modules.)"
+)
+
+
+def stream_grounded(
+    tokens: Iterable[str], sources: Iterable[GroundingSource]
+) -> Iterator[str]:
+    """Stream a tutor answer live while enforcing grounding (M5 + H5).
+
+    Yields tokens as they arrive (no buffer-then-restream), but:
+    - drops any invented ``[module-id]`` before it ever reaches the client,
+      buffering only across an open ``[`` so the bracket can span model tokens
+      (the citation guard, now streaming-safe); and
+    - if the answer produced real substance yet never cited a single approved
+      source, appends one honesty disclaimer at the end, so an ungrounded claim
+      is flagged rather than passed off as sourced (claims, not just ids).
+    """
+    allowed = {s.ref.lower() for s in sources}
+    has_sources = bool(allowed)
+    pending = ""  # buffer while inside a candidate "[...]"
+    content_len = 0
+    cited = False
+
+    def _resolve(bracket: str) -> str:
+        """Decide a completed/abandoned bracket buffer: keep, drop, or pass through."""
+        nonlocal cited
+        inner = bracket[1:-1] if bracket.endswith("]") else bracket[1:]
+        if bracket.endswith("]") and _CITATION_INNER.fullmatch(inner):
+            if inner.lower() in allowed:
+                cited = True
+                return bracket  # a real citation, keep it verbatim
+            return ""  # invented id, drop it
+        return bracket  # not citation-shaped, it was just prose
+
+    for token in tokens:
+        out: list[str] = []
+        for ch in token:
+            if pending:
+                if ch == "[":  # a new bracket opened before the last closed → prose
+                    out.append(_resolve(pending))
+                    pending = "["
+                else:
+                    pending += ch
+                    if ch == "]" or len(pending) > _MAX_CITATION_LEN:
+                        out.append(_resolve(pending))
+                        pending = ""
+            elif ch == "[":
+                pending = "["
+            else:
+                out.append(ch)
+        if out:
+            chunk = "".join(out)
+            content_len += sum(len(p) for p in out if not _CITATION.fullmatch(p))
+            yield chunk
+    if pending:  # unterminated "[..." at end of stream
+        yield _resolve(pending)
+    if has_sources and not cited and content_len >= _MIN_CONTENT_FOR_DISCLAIMER:
+        yield _GROUNDING_DISCLAIMER

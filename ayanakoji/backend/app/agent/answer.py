@@ -37,7 +37,7 @@ from app.agent.contracts import (
     TraceStep,
 )
 from app.agent.grounding import CourseGrounding, get_grounding
-from app.agent.guards import plan_narration_is_grounded, strip_unknown_citations, unknown_citations
+from app.agent.guards import plan_narration_is_grounded, stream_grounded
 from app.agent.llm import Capability, ModelRouter, StreamHandle
 from app.agent.recommend import (
     course_from_text,
@@ -315,21 +315,16 @@ def answer_foundry(
     steps.append(TraceStep(
         label="LLM generation",
         passed=True,
-        detail="WORKHORSE capability · max 800 tokens · citations required",
+        detail="WORKHORSE capability · max 800 tokens · streamed live · citations required",
         model=handle.model,
     ))
-    # Buffer + scrub any fabricated [module-id] the model invents (guard at runtime).
-    raw = _collect(handle)
-    fabricated = unknown_citations(raw, [s.ref for s in sources])
-    cleaned = strip_unknown_citations(raw, sources)
+    # Stream live through the grounding guard: invented [module-id] citations are
+    # dropped inline (no buffer-then-restream, M5), and an answer that makes claims
+    # without citing any approved source gets an honesty disclaimer (H5).
     steps.append(TraceStep(
         label="Citation guard",
-        passed=not fabricated,
-        detail=(
-            f"Stripped {len(fabricated)} fabricated citation(s): {', '.join(sorted(fabricated))}"
-            if fabricated
-            else "All citations verified against approved sources"
-        ),
+        passed=True,
+        detail="Streaming: invented citations dropped inline; uncited claims flagged",
     ))
     return AgentReply(
         telemetry=_answer_telemetry(
@@ -341,7 +336,7 @@ def answer_foundry(
             tier=handle.tier,
             steps=steps,
         ),
-        tokens=_offline_stream(cleaned),
+        tokens=stream_grounded(handle.tokens, sources),
         sources=sources,
         suggestion=suggestion,
     )
