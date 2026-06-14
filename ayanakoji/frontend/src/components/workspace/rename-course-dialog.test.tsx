@@ -15,7 +15,6 @@ const COURSE: CourseSummary = {
   persona_id: "EMP-001",
   chat_name: "Functions",
   catalog_id: null,
-  status: 0,
   updated_at: "2026-06-13T00:00:00Z",
 };
 
@@ -25,7 +24,6 @@ const RENAMED: Course = {
   chat_name: "Functions deep dive",
   catalog_id: null,
   catalog_title: null,
-  status: 0,
   messages: [],
   assessment_ids: [],
   created_at: "",

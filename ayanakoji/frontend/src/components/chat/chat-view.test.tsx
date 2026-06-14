@@ -36,7 +36,6 @@ function course(overrides: Partial<Course> = {}): Course {
     chat_name: "Functions",
     catalog_id: null,
     catalog_title: null,
-    status: 0,
     messages: [],
     assessment_ids: [],
     created_at: "2026-06-13T00:00:00Z",
@@ -140,7 +139,7 @@ describe("ChatView", () => {
 
   it("shows a course suggestion and enrolls on accept", async () => {
     mockCreate.mockResolvedValue(course());
-    mockAccept.mockResolvedValue(course({ catalog_id: "cb-c01", status: 1 }));
+    mockAccept.mockResolvedValue(course({ catalog_id: "cb-c01" }));
     mockStream.mockImplementation(async (_id, _text, handlers) => {
       handlers.onToken?.("Here is the answer.");
       handlers.onSuggestion?.({

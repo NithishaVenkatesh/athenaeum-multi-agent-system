@@ -32,16 +32,16 @@ describe("PageSwitcher", () => {
       "aria-selected",
       "true",
     );
-    expect(screen.getByRole("tab", { name: "Assessments" })).toHaveAttribute(
+    expect(screen.getByRole("tab", { name: "Evaluations" })).toHaveAttribute(
       "aria-selected",
       "false",
     );
   });
 
-  it("marks Assessments active and navigates between views", () => {
+  it("marks Evaluations active and navigates between views", () => {
     pathnameRef.current = "/chat/abc/assessments";
     render(<PageSwitcher />);
-    expect(screen.getByRole("tab", { name: "Assessments" })).toHaveAttribute(
+    expect(screen.getByRole("tab", { name: "Evaluations" })).toHaveAttribute(
       "aria-selected",
       "true",
     );

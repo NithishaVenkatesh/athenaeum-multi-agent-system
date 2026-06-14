@@ -92,7 +92,6 @@ export interface CourseSummary {
   persona_id: string;
   chat_name: string;
   catalog_id: string | null;
-  status: number;
   updated_at: string;
 }
 
@@ -102,7 +101,6 @@ export interface Course {
   chat_name: string;
   catalog_id: string | null;
   catalog_title: string | null;
-  status: number;
   messages: ChatMessage[];
   assessment_ids: string[];
   /** The open skill-check quiz, if one is in progress — used to restore the card. */
@@ -660,17 +658,6 @@ export function getModuleContent(
   );
 }
 
-/** Mark a module complete (sequential — only the active module). */
-export function completeModule(
-  courseId: string,
-  moduleId: string,
-): Promise<CourseModuleProgress[]> {
-  return requestJson<CourseModuleProgress[]>(
-    `/api/courses/${courseId}/modules/${moduleId}/complete`,
-    { method: "POST" },
-  );
-}
-
 // ── Evaluations (the canonical per-module set: a quiz + an oral each) ──────────
 
 /** One of a course's evaluations (two per module) with lock + latest-attempt score. */
@@ -684,6 +671,7 @@ export interface Evaluation {
   attempted: boolean;
   score: number | null;
   passed: boolean | null;
+  attempts_to_pass: number | null;
   review_assessment_id: string | null;
   attempts: number;
 }
@@ -746,6 +734,7 @@ export interface ModuleAssessmentSummary {
   attempt_number: number;
   score: number | null;
   passed: boolean | null;
+  attempts_to_pass: number | null;
   completed_at: string | null;
   created_at: string;
 }

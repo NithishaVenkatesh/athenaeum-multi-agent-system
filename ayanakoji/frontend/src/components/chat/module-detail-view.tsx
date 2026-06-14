@@ -67,9 +67,13 @@ export function ModuleDetailView({
   const next = modules && index >= 0 ? (modules[index + 1] ?? null) : null;
   const assessmentHref = `/chat/${courseId}/modules/${moduleId}/assessment/choices`;
 
-  const choicesPassed = attempts.some((a) => a.type === "choices" && a.passed === true);
-  const llmPassed = attempts.some((a) => a.type === "llm" && a.passed === true);
-  const totalAttempts = attempts.length;
+  // "Cleared" is permanent (passed at least once), derived from attempts_to_pass —
+  // a later failed retake of the latest attempt must not flip this back.
+  const choicesPassed = attempts.some(
+    (a) => a.type === "choices" && a.attempts_to_pass !== null,
+  );
+  const llmPassed = attempts.some((a) => a.type === "llm" && a.attempts_to_pass !== null);
+  const totalAttempts = attempts.reduce((sum, a) => sum + a.attempt_number, 0);
 
   if (modules === null) {
     return (

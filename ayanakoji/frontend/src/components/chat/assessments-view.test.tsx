@@ -2,36 +2,64 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AssessmentsView } from "@/components/chat/assessments-view";
-import { listAssessments } from "@/lib/api";
+import { listEvaluations, type Evaluation } from "@/lib/api";
 
 vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
-  return { ...actual, listAssessments: vi.fn() };
+  return { ...actual, listEvaluations: vi.fn() };
 });
-const mockList = vi.mocked(listAssessments);
+const mockList = vi.mocked(listEvaluations);
+
+function evaluation(over: Partial<Evaluation>): Evaluation {
+  return {
+    module_id: "m1",
+    module_title: "Module One",
+    sequence: 1,
+    type: "choices",
+    locked: false,
+    completed: false,
+    attempted: false,
+    score: null,
+    passed: null,
+    attempts_to_pass: null,
+    review_assessment_id: null,
+    attempts: 0,
+    ...over,
+  };
+}
 
 afterEach(() => vi.clearAllMocks());
 
 describe("AssessmentsView", () => {
-  it("shows a designed empty state when there are no assessments", async () => {
+  it("shows a designed empty state when there are no evaluations", async () => {
     mockList.mockResolvedValue([]);
     render(<AssessmentsView courseId="c1" />);
     await waitFor(() =>
-      expect(screen.getByText("No assessments yet")).toBeInTheDocument(),
+      expect(screen.getByText("No evaluations yet")).toBeInTheDocument(),
     );
   });
 
-  it("lists assessments with their practice/evaluation mode", async () => {
+  it("groups evaluations by module and surfaces score, lock, and progress", async () => {
     mockList.mockResolvedValue([
-      { id: "a1", type: "choices", is_practice: true, created_at: "" },
-      { id: "a2", type: "llm", is_practice: false, created_at: "" },
+      evaluation({
+        type: "choices",
+        completed: true,
+        attempted: true,
+        passed: true,
+        score: 8,
+        attempts_to_pass: 1,
+        review_assessment_id: "a1",
+        attempts: 1,
+      }),
+      evaluation({ type: "llm", locked: true }),
     ]);
     render(<AssessmentsView courseId="c1" />);
 
-    await waitFor(() =>
-      expect(screen.getByText(/choices assessment/i)).toBeInTheDocument(),
-    );
-    expect(screen.getByText("Practice")).toBeInTheDocument();
-    expect(screen.getByText("Evaluation")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Module One")).toBeInTheDocument());
+    // The passed quiz shows its score and a review link; the oral is locked.
+    expect(screen.getByText("8/10")).toBeInTheDocument();
+    expect(screen.getByText("Review")).toBeInTheDocument();
+    expect(screen.getByText("Locked")).toBeInTheDocument();
+    expect(screen.getByText("1/2 passed")).toBeInTheDocument();
   });
 });

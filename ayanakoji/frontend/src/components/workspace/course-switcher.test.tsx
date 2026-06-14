@@ -25,7 +25,6 @@ const COURSE: CourseSummary = {
   persona_id: "EMP-001",
   chat_name: "Functions deep dive",
   catalog_id: null,
-  status: 0,
   updated_at: "2026-06-13T00:00:00Z",
 };
 
