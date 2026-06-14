@@ -35,6 +35,7 @@ from app.agent.answer import (
     answer_work,
     cross_chat_redirect,
 )
+from app.agent.assessor import answer_assessor
 from app.agent.contracts import (
     BlockedEvent,
     DoneEvent,
@@ -150,6 +151,10 @@ def _dispatch(
         )
     if decision.route is Route.WORK_IQ:
         return answer_work(text, persona_id=persona_id, router=router, settings=settings)
+    if decision.route in (Route.PRACTISE_MODULE, Route.TAKE_EVALUATION, Route.GO_TO_MODULE):
+        return answer_assessor(
+            text, decision.route, modules=modules, router=router, settings=settings
+        )
     return answer_general(text, decision, router=router, settings=settings)
 
 
@@ -265,6 +270,12 @@ def run_pipeline(
         yield DoneEvent(route=decision.route)
         return
 
+    # ── Groundedness check (post-answer): the claim-support verdict over the streamed
+    # answer is only known once it is fully generated, so it is surfaced here as a
+    # trailing trace phase (any disclaimer already rode the answer stream itself). ──
+    if reply.grounding_check is not None and reply.grounding_check.phase is not None:
+        yield PhaseEvent(phase=reply.grounding_check.phase)
+
     # ── Skill-gap HITL gate (ask before pacing) ───────────────────────────────
     if reply.skill_gate is not None:
         yield reply.skill_gate
@@ -284,5 +295,11 @@ def run_pipeline(
     # ── Course-lock: steer a "switch course" ask to a fresh chat ───────────────
     if reply.new_chat is not None:
         yield reply.new_chat
+
+    # ── Assessor practice card + CTA buttons ────────────────────────────────────
+    if reply.practice is not None:
+        yield reply.practice
+    if reply.actions is not None:
+        yield reply.actions
 
     yield DoneEvent(route=decision.route, suggested=reply.suggestion is not None)

@@ -231,3 +231,40 @@ def test_mid_stream_break_surfaces_error() -> None:
     assert "token" in kinds  # the partial token made it out
     assert "error" in kinds  # ...and the break was surfaced, not swallowed
     assert kinds[-1] == "done"
+
+
+def test_pipeline_emits_practice_event_with_current_module() -> None:
+    from app.agent.contracts import PracticeEvent
+    from app.agent.orchestrator import run_pipeline
+
+    modules = [{"module_id": "cb-c01-m01", "title": "Functions", "completed": False}]
+    events = list(
+        run_pipeline("quiz me on this module", persona_id="EMP-001", catalog_id="cb-c01", modules=modules)
+    )
+    practice = [e for e in events if isinstance(e, PracticeEvent)]
+    assert len(practice) == 1
+    assert practice[0].module_id == "cb-c01-m01"
+    assert len(practice[0].questions) == 5
+
+
+def test_pipeline_take_evaluation_emits_action_event() -> None:
+    from app.agent.contracts import ActionEvent
+    from app.agent.orchestrator import run_pipeline
+
+    modules = [{"module_id": "cb-c01-m01", "title": "Functions", "completed": False}]
+    events = list(
+        run_pipeline("I'm ready for the test", persona_id="EMP-001", catalog_id="cb-c01", modules=modules)
+    )
+    actions = [e for e in events if isinstance(e, ActionEvent)]
+    assert len(actions) == 1
+    assert actions[0].actions[0].kind == "take_evaluation"
+
+
+def test_pipeline_practise_without_module_emits_no_card() -> None:
+    from app.agent.contracts import ActionEvent, PracticeEvent
+    from app.agent.orchestrator import run_pipeline
+
+    events = list(run_pipeline("quiz me on this module", persona_id="EMP-001", modules=[]))
+    assert not [e for e in events if isinstance(e, (PracticeEvent, ActionEvent))]
+    tokens = "".join(getattr(e, "token", "") for e in events)
+    assert "pick a course" in tokens.lower()
