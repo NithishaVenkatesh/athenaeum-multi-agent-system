@@ -1,0 +1,104 @@
+{
+  "course_id": "ai-c01",
+  "module_id": "ai-c01-m02",
+  "module_title": "Prompt engineering and templates",
+  "choices": [
+    {
+      "id": "ai-c01-m02-c01",
+      "module_id": "ai-c01-m02",
+      "kind": "mcq",
+      "prompt": "Northwind's support-chat assistant keeps inventing a 'platinum member exception' that does not exist when asked about edge cases. According to the module, which single prompt change attacks this fabrication most directly?",
+      "choices": [
+        "Add an explicit refusal clause telling the model to say it does not know and never invent policies, exceptions, or membership tiers",
+        "Lower the temperature toward 0 so the model becomes more consistent and repeatable",
+        "Reduce max_tokens so the answer is too short to include a fabricated exception",
+        "Add a stop sequence that halts generation before the model reaches the fabricated policy"
+      ],
+      "correct_answers": [
+        "Add an explicit refusal clause telling the model to say it does not know and never invent policies, exceptions, or membership tiers"
+      ]
+    },
+    {
+      "id": "ai-c01-m02-c02",
+      "module_id": "ai-c01-m02",
+      "kind": "mcq",
+      "prompt": "The module describes the three message roles in a chat request. Which statement correctly matches a role to its job?",
+      "choices": [
+        "The system message sets durable behavior — who the assistant is, what it may and may not do, and the tone and format",
+        "The user message sets durable behavior such as tone and refusal rules for the whole conversation",
+        "The assistant message carries the specific per-request question from the customer",
+        "The system message carries the live customer question that changes on every request"
+      ],
+      "correct_answers": [
+        "The system message sets durable behavior — who the assistant is, what it may and may not do, and the tone and format"
+      ]
+    },
+    {
+      "id": "ai-c01-m02-c03",
+      "module_id": "ai-c01-m02",
+      "kind": "mcq",
+      "prompt": "You need the assistant to return answers as a JSON object with a fixed set of fields. Per the module, why are a few well-chosen few-shot examples more reliable than a prose description of the format?",
+      "choices": [
+        "Models generalize from demonstrated input/output patterns more faithfully than from a described format",
+        "Few-shot examples are processed before the system prompt, so they override the model's defaults",
+        "Including examples permanently fine-tunes the deployment so the format persists across requests",
+        "Examples reduce the token cost of each request compared to writing the instructions in prose"
+      ],
+      "correct_answers": [
+        "Models generalize from demonstrated input/output patterns more faithfully than from a described format"
+      ]
+    },
+    {
+      "id": "ai-c01-m02-c04",
+      "module_id": "ai-c01-m02",
+      "kind": "msq",
+      "prompt": "For Northwind's factual support answers the walkthrough sets temperature=0.2 and max_tokens=200. Which statements about these and related parameters does the module support?",
+      "choices": [
+        "Low temperature keeps answers focused and repeatable because the model nearly always picks high-probability tokens",
+        "max_tokens caps the length of the completion, preventing mid-sentence truncation surprises and runaway cost",
+        "The common guidance is to tune one of temperature or top_p, not both at once, since they control overlapping behavior",
+        "Raising temperature to 1.2 would improve factual accuracy by giving the model more options to choose the correct answer"
+      ],
+      "correct_answers": [
+        "Low temperature keeps answers focused and repeatable because the model nearly always picks high-probability tokens",
+        "max_tokens caps the length of the completion, preventing mid-sentence truncation surprises and runaway cost",
+        "The common guidance is to tune one of temperature or top_p, not both at once, since they control overlapping behavior"
+      ]
+    },
+    {
+      "id": "ai-c01-m02-c05",
+      "module_id": "ai-c01-m02",
+      "kind": "mcq",
+      "prompt": "The module recommends factoring prompts into a reusable template. What is the defining purpose of a prompt template as described?",
+      "choices": [
+        "It keeps fixed instruction text in one place while per-request values like the customer's question are slotted in at call time",
+        "It increases output diversity by randomizing which instructions are sent on each request",
+        "It replaces the system message so all behavior can be configured through generation parameters instead",
+        "It stores past assistant turns so the model automatically gains conversational memory across users"
+      ],
+      "correct_answers": [
+        "It keeps fixed instruction text in one place while per-request values like the customer's question are slotted in at call time"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "ai-c01-m02-l01",
+      "module_id": "ai-c01-m02",
+      "prompt": "Explain why adding an explicit 'I don't know' refusal clause to the system prompt is described as the single highest-leverage line against hallucination, and why simply lowering the temperature does not solve the same problem.",
+      "reference_answer": "A refusal clause instructs the model to say it does not know and never invent policies, exceptions, or membership tiers, which removes the fabricating behavior itself rather than just reshaping it. The module explains that models are eager to be helpful, so absent an explicit boundary that eagerness becomes confident fabrication, such as Northwind's invented 'platinum exception.' Lowering temperature only makes the model more consistent and repeatable because it more often picks the highest-probability token; but a confidently wrong answer can itself be the highest-probability token, so the fabrication persists. The boundary instruction removes the behavior, while temperature only controls variance, which is why the refusal clause is the strongest defense. The module also notes this defense only covers questions the model could never answer, not getting your own facts right."
+    },
+    {
+      "id": "ai-c01-m02-l02",
+      "module_id": "ai-c01-m02",
+      "prompt": "Compare temperature, top_p, max_tokens, and stop sequences as generation parameters, and walk through which settings you would choose for Northwind's factual support answers and why.",
+      "reference_answer": "All four reshape how the model samples one token at a time from a probability distribution. Temperature scales randomness: near 0 the model almost always picks the most probable token for focused, repeatable output, while higher values flatten the distribution into more varied, creative, less predictable text. top_p (nucleus sampling) restricts choices to the smallest set of tokens whose combined probability reaches p; it is an alternative knob on the same diversity dial, and the guidance is to tune temperature or top_p but not both. max_tokens caps the completion length so answers neither truncate mid-sentence nor balloon cost and latency, and stop sequences halt generation when a given string appears, useful for staying within a structured boundary. For Northwind's factual answers you want correctness and consistency over creativity, so a low temperature (e.g. 0.2) plus a sensible max_tokens (e.g. 200) is the right default, leaving top_p at its default."
+    },
+    {
+      "id": "ai-c01-m02-l03",
+      "module_id": "ai-c01-m02",
+      "prompt": "Walk through how you would make Northwind's inconsistent assistant dependable using a structured system prompt, a few-shot example, and a reusable template, and explain what each piece contributes.",
+      "reference_answer": "Start with a precise system message that states who the assistant is, what it is allowed to answer (orders, returns, shipping, gear care), what to do when it does not know, and how to format the answer (at most three sentences in a warm, plain tone); this removes most variance, and the refusal clause forbidding invented tiers stops fabrication. Add one or a few few-shot examples — input/output pairs that demonstrate the desired behavior, such as declining an out-of-scope stock-recommendation question — because the model follows demonstrated patterns more reliably than prose descriptions, teaching both format and edge-case judgment. Set deterministic parameters like temperature=0.2 and max_tokens=200 so answers are consistent in tone and length. Finally, factor the variable part, the customer's question, through a single reusable template so the fixed instructions live in one versionable, testable place and the prompt evolves through one reviewed edit rather than scattered, drifting copies. The result is consistent answers and a refusal instead of an invented platinum exception."
+    }
+  ]
+}
