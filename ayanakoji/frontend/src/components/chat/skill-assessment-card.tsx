@@ -3,12 +3,14 @@
 /**
  * The multi-tab skill check. One tab per module, each with up to 4 questions.
  * MCQ renders single-select (radio), MSQ multi-select (checkbox, "select all that
- * apply"). Submit unlocks only when every question across every tab is answered.
+ * apply"). The learner steps module-by-module with "Next module" (which scrolls
+ * the card back to the top); "Submit skill check" appears only on the last module
+ * and unlocks once every question across every tab is answered.
  */
 
 import { motion, useReducedMotion } from "framer-motion";
-import { Check } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ArrowRight, Check } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { SkillAnswer, SkillCheck } from "@/lib/api";
@@ -34,6 +36,18 @@ export function SkillAssessmentCard({
   const reduce = useReducedMotion();
   const [tab, setTab] = useState(0);
   const [selections, setSelections] = useState<Selections>({});
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  const isLastModule = tab === check.modules.length - 1;
+
+  /** Switch module and bring the top of the card into view (questions reset to top). */
+  function goToModule(index: number) {
+    setTab(index);
+    cardRef.current?.scrollIntoView({
+      behavior: reduce ? "auto" : "smooth",
+      block: "start",
+    });
+  }
 
   const allQuestions = useMemo(
     () =>
@@ -69,7 +83,8 @@ export function SkillAssessmentCard({
       initial={reduce ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-      className="border-brand/30 bg-card/70 max-w-[88%] space-y-3 rounded-2xl rounded-bl-md border p-3 shadow-sm"
+      ref={cardRef}
+      className="border-brand/30 bg-card/70 max-w-[88%] space-y-3 rounded-2xl rounded-bl-md border p-3 shadow-sm scroll-mt-4"
     >
       {/* Tabs: one per module, with a completion tick */}
       <div className="flex flex-wrap gap-1.5">
@@ -77,7 +92,7 @@ export function SkillAssessmentCard({
           <button
             key={m.module_id}
             type="button"
-            onClick={() => setTab(i)}
+            onClick={() => goToModule(i)}
             className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
               i === tab
                 ? "border-brand bg-brand/10 text-brand"
@@ -146,14 +161,26 @@ export function SkillAssessmentCard({
         <span className="text-muted-foreground text-[11px]">
           {answeredCount}/{allQuestions.length} answered
         </span>
-        <Button
-          size="sm"
-          disabled={!complete || busy}
-          onClick={submit}
-          className="text-xs"
-        >
-          Submit skill check
-        </Button>
+        {isLastModule ? (
+          <Button
+            size="sm"
+            disabled={!complete || busy}
+            onClick={submit}
+            className="text-xs"
+          >
+            Submit skill check
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => goToModule(tab + 1)}
+            className="gap-1 text-xs"
+          >
+            Next module
+            <ArrowRight className="size-3.5" />
+          </Button>
+        )}
       </div>
     </motion.div>
   );
