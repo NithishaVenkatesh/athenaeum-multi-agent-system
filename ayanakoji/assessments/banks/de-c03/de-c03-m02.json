@@ -1,0 +1,104 @@
+{
+  "course_id": "de-c03",
+  "module_id": "de-c03-m02",
+  "module_title": "Spark structured streaming",
+  "choices": [
+    {
+      "id": "de-c03-m02-c01",
+      "module_id": "de-c03-m02",
+      "prompt": "According to the module, what is the central mental model of Spark Structured Streaming?",
+      "kind": "mcq",
+      "choices": [
+        "A stream is an unbounded table that grows forever, and you write the same query against it that you would write against a static table",
+        "Each individual event must be handled explicitly with a custom callback as it arrives",
+        "A stream is a fixed-size table that is fully recomputed from scratch on every trigger",
+        "Streaming queries must use a separate API and transformation syntax distinct from batch DataFrames"
+      ],
+      "correct_answers": [
+        "A stream is an unbounded table that grows forever, and you write the same query against it that you would write against a static table"
+      ]
+    },
+    {
+      "id": "de-c03-m02-c02",
+      "module_id": "de-c03-m02",
+      "prompt": "The module describes the default execution mode of Structured Streaming. Which statement is accurate?",
+      "kind": "mcq",
+      "choices": [
+        "The default execution is micro-batch: the engine periodically checks the source, processes what has arrived as a small batch, commits it, and waits for the next trigger",
+        "The default execution is continuous event-by-event processing with sub-second latency guaranteed",
+        "The default trigger waits a fixed 60 seconds between every batch regardless of load",
+        "Micro-batch mode reprocesses the entire source table on each trigger to ensure correctness"
+      ],
+      "correct_answers": [
+        "The default execution is micro-batch: the engine periodically checks the source, processes what has arrived as a small batch, commits it, and waits for the next trigger"
+      ]
+    },
+    {
+      "id": "de-c03-m02-c03",
+      "module_id": "de-c03-m02",
+      "prompt": "A team deletes a streaming job's checkpoint directory during a cleanup. Based on the module, what is the consequence and the governing rule?",
+      "kind": "mcq",
+      "choices": [
+        "On restart the job loses its record of processed offsets and state, so it reprocesses a huge backlog or cannot reconcile state; the rule is every query gets its own stable checkpoint that is never shared or deleted",
+        "The job seamlessly recreates the checkpoint from the Delta table's transaction log with no data impact",
+        "The job continues from the last committed offset because offsets are stored in the Delta sink, not the checkpoint",
+        "Deleting the checkpoint only affects schema evolution, so ingestion continues but new columns are dropped"
+      ],
+      "correct_answers": [
+        "On restart the job loses its record of processed offsets and state, so it reprocesses a huge backlog or cannot reconcile state; the rule is every query gets its own stable checkpoint that is never shared or deleted"
+      ]
+    },
+    {
+      "id": "de-c03-m02-c04",
+      "module_id": "de-c03-m02",
+      "prompt": "The firmware adds a new field heading_deg, and the current job parses against a fixed schema and writes to Delta without mergeSchema. Per the module, which TWO changes keep the job alive AND capture the new field?",
+      "kind": "msq",
+      "choices": [
+        "Add heading_deg to the parsing schema so the field is captured (old payloads get null)",
+        "Enable mergeSchema on the Delta write so the sink adds the new column instead of rejecting the batch",
+        "Delete the checkpoint location so the job rebuilds its schema from scratch on restart",
+        "Switch the output mode from append to complete so the table is rewritten with the new column"
+      ],
+      "correct_answers": [
+        "Add heading_deg to the parsing schema so the field is captured (old payloads get null)",
+        "Enable mergeSchema on the Delta write so the sink adds the new column instead of rejecting the batch"
+      ]
+    },
+    {
+      "id": "de-c03-m02-c05",
+      "module_id": "de-c03-m02",
+      "prompt": "Which TWO statements about exactly-once delivery to Delta are correct according to the module?",
+      "kind": "msq",
+      "choices": [
+        "Exactly-once relies on checkpointed offsets plus a transactional sink like Delta; a re-attempted micro-batch writes the same data under the same transaction and does not duplicate it",
+        "Writing to a non-transactional sink does not get the same exactly-once guarantee, so you must know what your sink supports",
+        "Exactly-once is automatic for any sink as long as the source guarantees at-least-once delivery",
+        "The Event Hubs source itself provides exactly-once delivery, so the checkpoint is only an optimization"
+      ],
+      "correct_answers": [
+        "Exactly-once relies on checkpointed offsets plus a transactional sink like Delta; a re-attempted micro-batch writes the same data under the same transaction and does not duplicate it",
+        "Writing to a non-transactional sink does not get the same exactly-once guarantee, so you must know what your sink supports"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "de-c03-m02-l01",
+      "module_id": "de-c03-m02",
+      "prompt": "Walk through how Spark delivers exactly-once output to a Delta table even though the Event Hubs source only guarantees at-least-once delivery. Name the specific mechanisms involved.",
+      "reference_answer": "Spark records the source offsets it has processed (and any aggregation state) durably in a dedicated checkpoint location, so it always knows where it left off. Each micro-batch is written to the Delta sink inside a transaction. If a batch fails and is retried, the at-least-once source may redeliver the same events, but the re-attempted micro-batch commits the same data under the same transactional boundary rather than appending duplicates. The combination of checkpointed offsets plus Delta's transactional commit reconciles the redelivery, so the table reflects each event exactly once. This guarantee depends on the sink being transactional like Delta; a non-transactional sink would not get the same behavior."
+    },
+    {
+      "id": "de-c03-m02-l02",
+      "module_id": "de-c03-m02",
+      "prompt": "Explain how the walkthrough job is made tolerant to schema drift when the firmware adds a new field like engine_temp_c, covering both the parsing step and the Delta write.",
+      "reference_answer": "Two things make the job drift-tolerant. First, the new field engine_temp_c is declared in reading_schema, so payloads that include it are parsed normally while old payloads simply get null for that column; parsing is done with from_json in PERMISSIVE mode so malformed or partial records are kept instead of dropping the whole batch. Second, mergeSchema=true is set on the writeStream so the Delta sink adds the genuinely new column to the table rather than rejecting the write, which it would otherwise do by default. When the firmware adds yet another field, you add it to reading_schema, enable the same merge behavior, redeploy, and the job resumes from its checkpoint without losing data. The principle is to decide in advance what happens when a new column appears instead of letting an exception decide."
+    },
+    {
+      "id": "de-c03-m02-l03",
+      "module_id": "de-c03-m02",
+      "prompt": "Compare the micro-batch execution model with the expectation of true event-by-event streaming, and explain why a team should not assume sub-second latency from the default trigger.",
+      "reference_answer": "In the default micro-batch model the engine periodically checks the source for new data, processes whatever has arrived as a small batch, commits it, and waits for the next trigger, which makes the job behave like batch code running on a loop. The trigger interval trades latency against efficiency: a shorter interval gives lower latency but more, smaller batches, while the default simply fires a new batch as soon as the previous one finishes. Because micro-batch processing has inherent per-batch overhead, it is not the same as event-by-event streaming and should not be assumed to deliver sub-second latency. If lower latency is required, the team should tune the trigger and resources and verify the engine's continuous or low-latency options in the documentation rather than assuming the default suffices. A key benefit of this model, however, is that the same transformation logic works on both batch and stream, letting nightly and live jobs share code."
+    }
+  ]
+}
