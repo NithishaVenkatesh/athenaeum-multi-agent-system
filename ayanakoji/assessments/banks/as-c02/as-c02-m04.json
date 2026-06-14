@@ -1,0 +1,105 @@
+{
+  "course_id": "as-c02",
+  "module_id": "as-c02-m04",
+  "module_title": "Designing business continuity",
+  "choices": [
+    {
+      "id": "as-c02-m04-c01",
+      "module_id": "as-c02-m04",
+      "prompt": "According to the module, what does recovery-point objective (RPO) measure?",
+      "kind": "mcq",
+      "choices": [
+        "How much data you can afford to lose, measured as a time window",
+        "How long the workload may be unavailable after a failure",
+        "The maximum number of availability zones a region can contain",
+        "The cost in dollars of synchronous replication per month"
+      ],
+      "correct_answers": [
+        "How much data you can afford to lose, measured as a time window"
+      ]
+    },
+    {
+      "id": "as-c02-m04-c02",
+      "module_id": "as-c02-m04",
+      "prompt": "Aurora's booking workload must survive the loss of an entire Azure region. Why is an availability-zone-only design insufficient, and what should be added?",
+      "kind": "mcq",
+      "choices": [
+        "A regional outage takes all zones down simultaneously, so a cross-region disaster-recovery layer such as a SQL failover group to a secondary region must be added",
+        "Availability zones cannot perform automatic failover, so a manual restore runbook must be added",
+        "Availability zones do not protect against accidental deletion, so Azure Backup must be added",
+        "Zones increase latency too much, so all replicas must be consolidated into a single data center"
+      ],
+      "correct_answers": [
+        "A regional outage takes all zones down simultaneously, so a cross-region disaster-recovery layer such as a SQL failover group to a secondary region must be added"
+      ]
+    },
+    {
+      "id": "as-c02-m04-c03",
+      "module_id": "as-c02-m04",
+      "prompt": "In the Bicep walkthrough for Aurora's booking service, which TWO statements correctly describe what the configuration encodes?",
+      "kind": "msq",
+      "choices": [
+        "`zoneRedundant: true` spreads replicas across availability zones for in-region high availability with automatic failover and no data loss",
+        "The failover group keeps a continuously replicated secondary in another region and exposes a read-write listener endpoint for the DR layer",
+        "`failoverWithDataLossGracePeriodMinutes` of 60 guarantees a zero-data-loss synchronous copy in the secondary region",
+        "The zone-redundant setting alone satisfies the requirement to survive a full regional outage"
+      ],
+      "correct_answers": [
+        "`zoneRedundant: true` spreads replicas across availability zones for in-region high availability with automatic failover and no data loss",
+        "The failover group keeps a continuously replicated secondary in another region and exposes a read-write listener endpoint for the DR layer"
+      ]
+    },
+    {
+      "id": "as-c02-m04-c04",
+      "module_id": "as-c02-m04",
+      "prompt": "Which mechanism does the module describe as producing point-in-time copies for restoring from corruption, accidental deletion, or ransomware, with an RPO equal to its frequency?",
+      "kind": "mcq",
+      "choices": [
+        "Azure Backup, via a Recovery Services vault",
+        "Azure Site Recovery replication of whole VMs",
+        "Active geo-replication of Azure SQL Database",
+        "A SQL failover group read-write listener endpoint"
+      ],
+      "correct_answers": [
+        "Azure Backup, via a Recovery Services vault"
+      ]
+    },
+    {
+      "id": "as-c02-m04-c05",
+      "module_id": "as-c02-m04",
+      "prompt": "Which of the following are common pitfalls the module explicitly warns against when designing business continuity? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Confusing zonal high availability with disaster recovery",
+        "Never testing restores or failovers",
+        "Hard-coding a specific regional server endpoint in the application instead of using a failover-group listener",
+        "Always running drills, which the module says wastes money and should be avoided"
+      ],
+      "correct_answers": [
+        "Confusing zonal high availability with disaster recovery",
+        "Never testing restores or failovers",
+        "Hard-coding a specific regional server endpoint in the application instead of using a failover-group listener"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "as-c02-m04-l01",
+      "module_id": "as-c02-m04",
+      "prompt": "Explain the difference between high availability and disaster recovery as the module defines them, and describe which Azure construct addresses each for compute.",
+      "reference_answer": "High availability keeps a workload running through localized failures — such as a failed disk, a rebooting host, or a single data-center fault — usually within one region, ideally with no data loss and near-zero RTO. Disaster recovery is the plan for a regional loss, failing the workload over to an entirely different region. For HA you deploy compute across availability zones, which are physically separate data centers within a region with independent power, cooling, and networking, so a data-center-level fault is survived while staying in-region with low latency. For DR you need a second region (typically a paired or distant region) with data replicated there and a way to redirect traffic, because a regional outage takes every zone down at once. Designing only zonal redundancy and calling it disaster recovery is a classic gap."
+    },
+    {
+      "id": "as-c02-m04-l02",
+      "module_id": "as-c02-m04",
+      "prompt": "The application connects to `sql-aurora-booking-primary.database.windows.net`. Explain why this is a problem for disaster recovery and what you would change.",
+      "reference_answer": "Connecting to the specific primary server name means that a regional failover would require a manual connection-string change made under pressure during an outage. The fix is to point the application at the failover-group read-write listener endpoint instead of a server name. The failover group exposes a stable, abstracted endpoint that automatically redirects to whichever region is currently primary, so when a failover triggers, the application's connection follows the primary to the new region transparently without any config change. This makes failover seamless and avoids the hard-coded-regional-endpoint pitfall the module calls out."
+    },
+    {
+      "id": "as-c02-m04-l03",
+      "module_id": "as-c02-m04",
+      "prompt": "Leadership asks why the analytics workload, which only needs daily reporting, shouldn't get the same near-zero RPO design as the booking workload. How do you justify a cheaper design?",
+      "reference_answer": "RTO and RPO are business-driven decisions, and tighter objectives cost more: near-zero RPO implies synchronous replication with its added latency and expense, plus secondary infrastructure. The architect's job is to match the design to the stated objectives rather than gold-plating everything to zero, and to make each tier's cost visible so the business chooses with open eyes. The analytics workload tolerates an RTO of a day and an RPO of 24 hours, so it is well served by periodic backup rather than continuous replication. Spending on a near-zero RPO design there would be unjustified gold-plating, whereas booking — which needs an RPO of five minutes and regional survival — genuinely warrants the more expensive replication and failover design."
+    }
+  ]
+}
