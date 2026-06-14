@@ -1,0 +1,104 @@
+{
+  "course_id": "de-c03",
+  "module_id": "de-c03-m04",
+  "module_title": "Monitoring, scaling, and optimization",
+  "choices": [
+    {
+      "id": "de-c03-m04-c01",
+      "module_id": "de-c03-m04",
+      "prompt": "According to the module, why is 'the job is running' an insufficient signal for judging a streaming pipeline's health?",
+      "kind": "mcq",
+      "choices": [
+        "A job can be running while its backlog grows every minute and results go stale, so degradation appears without any error",
+        "A running job always indicates that checkpoints have been corrupted and must be rebuilt",
+        "The running status only updates once per day, so it is always out of date by the time you read it",
+        "A running job consumes no resources, so utilization metrics cannot be collected while it runs"
+      ],
+      "correct_answers": [
+        "A job can be running while its backlog grows every minute and results go stale, so degradation appears without any error"
+      ]
+    },
+    {
+      "id": "de-c03-m04-c02",
+      "module_id": "de-c03-m04",
+      "prompt": "A Stream Analytics job shows input backlog climbing steadily while SU utilization sits at about 35%. Per the module's diagnostic rule, what is the correct interpretation and response?",
+      "kind": "mcq",
+      "choices": [
+        "Low utilization with rising backlog points to a parallelism or skew problem — investigate the source partition ceiling or hot key rather than adding streaming units",
+        "High and low signals like this always mean the checkpoint was deleted, so restore the checkpoint before anything else",
+        "It is a clear capacity shortage, so the immediate fix is to raise streaming units until utilization reaches 100%",
+        "Backlog and utilization are unrelated, so the rising backlog should simply be ignored until users complain"
+      ],
+      "correct_answers": [
+        "Low utilization with rising backlog points to a parallelism or skew problem — investigate the source partition ceiling or hot key rather than adding streaming units"
+      ]
+    },
+    {
+      "id": "de-c03-m04-c03",
+      "module_id": "de-c03-m04",
+      "prompt": "An event hub has 8 partitions and a single consumer group. According to the module's rule tying processing parallelism to source parallelism, what happens if you throw 32 Spark cores at it?",
+      "kind": "mcq",
+      "choices": [
+        "No more than 8 readers can pull concurrently, so the extra cores sit idle while 8 do the work",
+        "All 32 cores immediately read in parallel, quadrupling throughput past the partition ceiling",
+        "The partition count automatically increases to 32 to match the available cores",
+        "The job fails to start because core count must exactly equal partition count"
+      ],
+      "correct_answers": [
+        "No more than 8 readers can pull concurrently, so the extra cores sit idle while 8 do the work"
+      ]
+    },
+    {
+      "id": "de-c03-m04-c04",
+      "module_id": "de-c03-m04",
+      "prompt": "A Spark streaming job recovers cleanly from a five-minute node failure but loses data after a four-hour outage, even though the checkpoint was intact the whole time. Which setting most likely caused the loss?",
+      "kind": "mcq",
+      "choices": [
+        "Source retention shorter than the outage — the unread events expired before the job came back",
+        "An undersized streaming-unit allocation that throttled the recovery read",
+        "A corrupted watermark that reset event time to wall-clock on restart",
+        "Too many partitions, which fragmented the checkpoint across nodes"
+      ],
+      "correct_answers": [
+        "Source retention shorter than the outage — the unread events expired before the job came back"
+      ]
+    },
+    {
+      "id": "de-c03-m04-c05",
+      "module_id": "de-c03-m04",
+      "prompt": "Which of the following are health signals the module names as the ones that actually matter for a streaming pipeline? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Input backlog — how much unprocessed data is sitting in the source",
+        "Lag — how far behind real time the output is",
+        "Resource utilization — such as SU utilization percentage or executor CPU/memory",
+        "The number of times the deployment YAML file has been edited this week"
+      ],
+      "correct_answers": [
+        "Input backlog — how much unprocessed data is sitting in the source",
+        "Lag — how far behind real time the output is",
+        "Resource utilization — such as SU utilization percentage or executor CPU/memory"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "de-c03-m04-l01",
+      "module_id": "de-c03-m04",
+      "prompt": "Explain how reading backlog and resource utilization together lets you distinguish a capacity problem from a parallelism/skew problem, and what the correct scaling response is in each case.",
+      "reference_answer": "The two signals must be read together because each alone is ambiguous. Rising backlog combined with high utilization (for example SU utilization pinned near 100%) means arrival exceeds processing rate and you are near a ceiling, so the fix is more processing parallelism — raise streaming units in Stream Analytics or add executor cores in Spark. Rising backlog combined with low utilization instead points to a parallelism or skew problem: readers are limited by the source partition count, or one hot key dominates one reader while others idle. In that case adding streaming units or cores will not help; the right move is more partitions or a better partition key. Reading the pair is what tells you which lever to pull."
+    },
+    {
+      "id": "de-c03-m04-l02",
+      "module_id": "de-c03-m04",
+      "prompt": "Describe the rule connecting processing parallelism to source parallelism, why partition skew defeats scaling, and how each is correctly addressed.",
+      "reference_answer": "The rule is that processing parallelism cannot exceed source parallelism. Event Hubs partition count caps read parallelism — if a hub has 8 partitions, no more than 8 readers can pull concurrently per consumer group, so adding 32 Spark cores leaves the extra cores idle while 8 do the work. Conversely, adding partitions does nothing if the processing tier is already starved of compute, so the two dimensions must be scaled in proportion. Skew is a separate failure: one hot partition — a single extremely chatty producer like one ferry — overwhelms one reader while the rest idle, so the job will not scale no matter how many resources you add. The fix for skew is a better partition key so keys line up end to end, not more cores."
+    },
+    {
+      "id": "de-c03-m04-l03",
+      "module_id": "de-c03-m04",
+      "prompt": "Explain how a long-running streaming job recovers from interruptions, the role retention plays as a recovery-time budget, and why over-provisioning is a distinct cost concern for streaming.",
+      "reference_answer": "Recovery rests on two properties built in earlier modules: a replayable source and a durable checkpoint. Event Hubs retains events so a restarted consumer resumes from its committed offset, and a Spark checkpoint lets the job resume processing and window state exactly where it left off — checkpoints must never be shared or deleted. Retention is a recovery-time budget, not a storage afterthought: it must be long enough to cover the worst restart window from deployments and outages, because if a job is down longer than retention the unread events expire and are lost permanently. Over-provisioning is a distinct cost concern because a streaming job runs continuously, twenty-four hours a day, so idle headroom is paid for every hour. Right-sizing means watching utilization at peak and trough and adjusting rather than provisioning once for the worst case."
+    }
+  ]
+}
