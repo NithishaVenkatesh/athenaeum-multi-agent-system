@@ -78,3 +78,24 @@ def test_by_module_unknown_module_is_empty(client: TestClient, seeded: dict[str,
     resp = client.get("/api/assessments/by-module/cb-c09-m09")
     assert resp.status_code == 200
     assert resp.json()["assessment_ids"] == []
+
+
+def test_by_course_returns_all_bank_ids(client: TestClient, seeded: dict[str, str]) -> None:
+    resp = client.get("/api/assessments/by-course/cb-c01")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["course_id"] == "cb-c01"
+    # two modules (m01, m02) x two banks each = 4
+    assert len(body["assessment_ids"]) == 4
+    assert set(body["assessment_ids"]) == {
+        seeded["cb-c01-m01-choices"],
+        seeded["cb-c01-m01-llm"],
+        seeded["cb-c01-m02-choices"],
+        seeded["cb-c01-m02-llm"],
+    }
+
+
+def test_by_course_unknown_course_is_empty(client: TestClient, seeded: dict[str, str]) -> None:
+    resp = client.get("/api/assessments/by-course/zz-c99")
+    assert resp.status_code == 200
+    assert resp.json()["assessment_ids"] == []

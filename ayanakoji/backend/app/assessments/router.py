@@ -82,6 +82,23 @@ def assessments_by_module(module_id: str, session: SessionDep) -> AssessmentIdLi
     )
 
 
+@router.get(
+    "/by-course/{course_id}",
+    response_model=AssessmentIdList,
+    summary="List assessment ids for a course",
+)
+def assessments_by_course(course_id: str, session: SessionDep) -> AssessmentIdList:
+    """All assessment (bank) ids for a course, ordered by module then kind.
+
+    Empty list when the course has no authored banks (a valid, queryable state).
+    """
+    repo = AssessmentRepository(session)
+    return AssessmentIdList(
+        course_id=course_id,
+        assessment_ids=repo.assessment_ids_for_course(course_id),
+    )
+
+
 @router.get("/{assessment_id}", response_model=AssessmentRead, summary="Pull an assessment by id")
 def get_assessment(assessment_id: str, session: SessionDep) -> AssessmentRead:
     """Return one assessment bank and its questions, or 404 if it doesn't exist."""
