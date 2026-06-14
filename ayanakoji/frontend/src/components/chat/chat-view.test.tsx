@@ -20,6 +20,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     createCourse: vi.fn(),
     getCourse: vi.fn(),
     streamMessage: vi.fn(),
+    streamPractice: vi.fn(),
     acceptCourse: vi.fn(),
   };
 });
@@ -318,6 +319,42 @@ describe("ChatView", () => {
 
     await waitFor(() => expect(screen.getByText("hello there")).toBeInTheDocument());
     expect(screen.queryByText(/Course complete/i)).toBeNull();
+  });
+
+  it("renders a practice card from a practice event and submits it for review", async () => {
+    const { streamPractice } = await import("@/lib/api");
+    const mockPractice = vi.mocked(streamPractice);
+    mockGet.mockResolvedValue(course({ id: "c1", catalog_id: "cb-c01" }));
+    mockStream.mockImplementation(async (_id, _text, handlers) => {
+      handlers.onToken?.("Here is a quick practice.");
+      handlers.onPractice?.({
+        module_id: "cb-c01-m01",
+        title: "Functions",
+        questions: [{ id: "p1", kind: "mcq", prompt: "Q1?", choices: ["a", "b", "c", "d"] }],
+      });
+      handlers.onDone?.({ route: "practise_module" as never, suggested: false });
+    });
+    mockPractice.mockImplementation(async (_id, _sel, handlers) => {
+      handlers.onToken?.("You scored 1/1. Ready!");
+      handlers.onAction?.([
+        { kind: "take_evaluation", label: "Take the evaluation", module_id: "cb-c01-m01" },
+      ]);
+      handlers.onDone?.({ route: "practise_module" as never, suggested: false });
+    });
+
+    render(<ChatView courseId="c1" />);
+    const box = await screen.findByRole("textbox", { name: "Message" });
+    fireEvent.change(box, { target: { value: "quiz me" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+
+    await waitFor(() => expect(screen.getByText("Q1?")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText("a"));
+    fireEvent.click(screen.getByRole("button", { name: /submit practice/i }));
+
+    await waitFor(() => expect(mockPractice).toHaveBeenCalledWith("c1", { p1: ["a"] }, expect.any(Object)));
+    await waitFor(() =>
+      expect(screen.getByRole("link", { name: /take the evaluation/i })).toBeInTheDocument(),
+    );
   });
 
   it("restores an in-progress skill check from skill_check_active on reload", async () => {

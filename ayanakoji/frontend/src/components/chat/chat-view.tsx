@@ -15,10 +15,12 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { ActionButtons } from "@/components/chat/action-buttons";
 import { ChatComposer } from "@/components/chat/chat-composer";
 import { CourseSuggestionCard } from "@/components/chat/course-suggestion-card";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { PaceChooser } from "@/components/chat/pace-chooser";
+import { PracticeCard } from "@/components/chat/practice-card";
 import { PipelineTrace } from "@/components/chat/pipeline-trace";
 import { SkillAssessmentCard } from "@/components/chat/skill-assessment-card";
 import { SkillGateCard } from "@/components/chat/skill-gate-card";
@@ -40,11 +42,14 @@ import {
   startSkillCheck,
   streamFeedback,
   streamMessage,
+  streamPractice,
+  type Action,
   type AssessmentType,
   type NewChat,
   type Pace,
   type PaceRequest,
   type PhaseTelemetry,
+  type Practice,
   type SkillAnswer,
   type SkillCheck,
   type SkillGateRequest,
@@ -77,6 +82,9 @@ interface AssistantTurn {
   deadlineDone: boolean;
   approveState: "idle" | "approving" | "approved";
   newChat: NewChat | null;
+  practice: Practice | null;
+  practiceDone: boolean;
+  actions: Action[] | null;
   error: string | null;
   streaming: boolean;
 }
@@ -101,6 +109,9 @@ function emptyAssistantTurn(): AssistantTurn {
     deadlineDone: false,
     approveState: "idle",
     newChat: null,
+    practice: null,
+    practiceDone: false,
+    actions: null,
     error: null,
     streaming: true,
   };
@@ -120,6 +131,8 @@ function isAwaitingReply(turn: AssistantTurn): boolean {
     !turn.skillGate &&
     !turn.skillCheck &&
     !turn.skillResult &&
+    !turn.practice &&
+    !turn.actions &&
     !turn.newChat
   );
 }
@@ -271,6 +284,9 @@ export function ChatView({
                   deadlineDone: false,
                   approveState: "idle",
                   newChat: m.meta?.new_chat ?? null,
+                  practice: m.meta?.practice ?? null,
+                  practiceDone: !!m.meta?.practice, // a persisted practice turn was already answered
+                  actions: m.meta?.actions?.actions ?? null,
                   error: null,
                   streaming: false,
                 },
@@ -346,6 +362,8 @@ export function ChatView({
         onPaceRequest: (paceRequest) => patchLastAssistant((t) => ({ ...t, paceRequest })),
         onSkillGate: (skillGate) => patchLastAssistant((t) => ({ ...t, skillGate })),
         onNewChat: (newChat) => patchLastAssistant((t) => ({ ...t, newChat })),
+        onPractice: (practice) => patchLastAssistant((t) => ({ ...t, practice })),
+        onAction: (actions) => patchLastAssistant((t) => ({ ...t, actions })),
         onBlocked: (reason) => {
           toast.error("Message blocked", { description: reason });
           patchLastAssistant((t) => ({ ...t, text: reason }));
@@ -402,6 +420,33 @@ export function ChatView({
         error: "Could not load feedback.",
         text: t.text || "Could not load feedback. Please try again.",
       }));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Submit a practice round and stream the assessor's review into a NEW turn. The
+  // submitted card is marked done (hidden) so it can't be re-graded.
+  async function handlePracticeSubmit(index: number, selections: Record<string, string[]>) {
+    if (!activeCourseId) return;
+    setBusy(true);
+    setTurns((prev) => updateAssistant(prev, index, (t) => ({ ...t, practiceDone: true })));
+    setTurns((prev) => [...prev, emptyAssistantTurn()]);
+    try {
+      await streamPractice(activeCourseId, selections, {
+        onPhase: (phase) => patchLastAssistant((t) => ({ ...t, phases: [...t.phases, phase] })),
+        onToken: (token) => patchLastAssistant((t) => ({ ...t, text: t.text + token })),
+        onAction: (actions) => patchLastAssistant((t) => ({ ...t, actions })),
+        onError: (message) => {
+          toast.error("Something went wrong", { description: message });
+          patchLastAssistant((t) => ({ ...t, error: message, text: t.text || message }));
+        },
+      });
+      patchLastAssistant((t) => ({ ...t, streaming: false }));
+      void reloadCourses();
+    } catch {
+      toast.error("Connection lost", { description: "Could not reach the assistant. Try again." });
+      patchLastAssistant((t) => ({ ...t, streaming: false, error: "Could not reach the assistant." }));
     } finally {
       setBusy(false);
     }
@@ -640,6 +685,20 @@ export function ChatView({
                   />
                 )}
                 {turn.newChat && <NewChatNotice newChat={turn.newChat} />}
+                {turn.practice && !turn.practiceDone && (
+                  <PracticeCard
+                    practice={turn.practice}
+                    busy={busy}
+                    onSubmit={(selections) => handlePracticeSubmit(index, selections)}
+                  />
+                )}
+                {turn.actions && turn.actions.length > 0 && (
+                  <ActionButtons
+                    actions={turn.actions}
+                    courseId={activeCourseId ?? null}
+                    onPracticeAgain={() => handleSend("Let me practise this module again")}
+                  />
+                )}
               </div>
             ),
           )
