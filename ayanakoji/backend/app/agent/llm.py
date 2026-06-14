@@ -19,6 +19,7 @@ in the offline CI lane where ``openai`` is not installed.
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 import time
@@ -184,6 +185,31 @@ class StreamHandle:
     tier: int
 
 
+@dataclass(frozen=True)
+class ToolCall:
+    """One tool invocation the model asked for (arguments are a raw JSON string)."""
+
+    id: str
+    name: str
+    arguments: str
+
+
+@dataclass(frozen=True)
+class ToolLoopResult:
+    """The final assistant text after a tool-calling loop, tagged with its tier."""
+
+    text: str
+    provider: Provider
+    model: str
+    tier: int
+    rounds: int
+
+
+# A tool handler takes the model's parsed arguments and returns a JSON-serializable
+# result (dict or str) the model sees as the tool's output.
+ToolHandler = Callable[[dict[str, Any]], Any]
+
+
 def _is_reasoning_model(model: str) -> bool:
     """o-series reasoning deployments take ``developer`` role + no temperature (§26)."""
     head = model.lower()
@@ -202,6 +228,16 @@ class CompletionProvider(Protocol):
     def stream(
         self, model: str, messages: Sequence[Message], *, max_tokens: int
     ) -> Iterator[str]: ...
+
+    def complete_tools(
+        self,
+        model: str,
+        messages: Sequence[dict[str, Any]],
+        *,
+        tools: list[dict[str, Any]],
+        tool_choice: str,
+        max_tokens: int,
+    ) -> tuple[str, list[ToolCall]]: ...
 
 
 # ── Real providers (lazy SDK import; only constructed when configured) ─────────
@@ -268,6 +304,30 @@ class _OpenAICompatibleProvider:
             token = getattr(choices[0].delta, "content", None)
             if token:
                 yield token
+
+    def complete_tools(
+        self,
+        model: str,
+        messages: Sequence[dict[str, Any]],
+        *,
+        tools: list[dict[str, Any]],
+        tool_choice: str,
+        max_tokens: int,
+    ) -> tuple[str, list[ToolCall]]:
+        kwargs = self._kwargs(model, max_tokens)
+        response = self._client.chat.completions.create(
+            model=model,
+            messages=self._project_messages(model, messages),  # type: ignore[arg-type]
+            tools=tools,
+            tool_choice=tool_choice,
+            **kwargs,
+        )
+        message = response.choices[0].message
+        calls = [
+            ToolCall(id=tc.id, name=tc.function.name, arguments=tc.function.arguments or "{}")
+            for tc in (getattr(message, "tool_calls", None) or [])
+        ]
+        return (message.content or ""), calls
 
 
 def _build_azure_provider(settings: Settings) -> _OpenAICompatibleProvider:
@@ -498,6 +558,102 @@ class ModelRouter:
         if not attempted:
             raise AllProvidersDown("all provider circuits are open")
         raise AllProvidersDown(f"all {len(rungs)} provider tiers failed") from last
+
+    def run_tools(
+        self,
+        capability: Capability,
+        messages: Sequence[dict[str, Any]],
+        *,
+        tools: list[dict[str, Any]],
+        handlers: dict[str, ToolHandler],
+        max_rounds: int = 6,
+        max_tokens: int = 1024,
+    ) -> ToolLoopResult:
+        """Run an LLM tool-calling loop: the model calls tools, we execute the
+        handlers and feed results back, until it returns a plain answer.
+
+        The whole loop runs on one provider (you cannot switch providers
+        mid-conversation); the fallback chain only chooses *which* provider starts
+        it, honoring the circuit breaker. Handlers receive the model's parsed
+        arguments and return a JSON-serializable result.
+        """
+        rungs = [r for r in self.chain(capability) if not self._breaker.is_open(r[1].provider)]
+        if not rungs:
+            raise AllProvidersDown("no LLM provider available for tools")
+        last: Exception | None = None
+        for provider, attempt in rungs:
+            try:
+                result = self._tool_loop(provider, attempt, messages, tools, handlers, max_rounds, max_tokens)
+            except Exception as exc:  # noqa: BLE001 — record and try the next provider
+                logger.warning("tier %d %s tool loop failed: %s", attempt.tier, attempt.provider, exc)
+                last = exc
+                self._breaker.record_failure(attempt.provider)
+                continue
+            self._breaker.record_success(attempt.provider)
+            return result
+        raise AllProvidersDown("all provider tiers failed for tools") from last
+
+    def _tool_loop(
+        self,
+        provider: CompletionProvider,
+        attempt: Attempt,
+        messages: Sequence[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        handlers: dict[str, ToolHandler],
+        max_rounds: int,
+        max_tokens: int,
+    ) -> ToolLoopResult:
+        convo: list[dict[str, Any]] = list(messages)
+        for round_num in range(1, max_rounds + 1):
+            text, calls = provider.complete_tools(
+                attempt.model, convo, tools=tools, tool_choice="auto", max_tokens=max_tokens
+            )
+            if not calls:
+                return ToolLoopResult(
+                    text=text, provider=attempt.provider, model=attempt.model,
+                    tier=attempt.tier, rounds=round_num,
+                )
+            # Echo the model's tool-call message, then append each tool result.
+            convo.append(
+                {
+                    "role": "assistant",
+                    "content": text or None,
+                    "tool_calls": [
+                        {
+                            "id": c.id,
+                            "type": "function",
+                            "function": {"name": c.name, "arguments": c.arguments},
+                        }
+                        for c in calls
+                    ],
+                }
+            )
+            for call in calls:
+                handler = handlers.get(call.name)
+                try:
+                    args = json.loads(call.arguments or "{}")
+                    if not isinstance(args, dict):
+                        args = {}
+                except json.JSONDecodeError:
+                    args = {}
+                result = (
+                    handler(args) if handler is not None else {"error": f"unknown tool {call.name}"}
+                )
+                convo.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call.id,
+                        "content": result if isinstance(result, str) else json.dumps(result),
+                    }
+                )
+        # Ran out of rounds: force a final answer with no further tool calls.
+        text, _ = provider.complete_tools(
+            attempt.model, convo, tools=tools, tool_choice="none", max_tokens=max_tokens
+        )
+        return ToolLoopResult(
+            text=text, provider=attempt.provider, model=attempt.model,
+            tier=attempt.tier, rounds=max_rounds,
+        )
 
 
 def _open_stream(

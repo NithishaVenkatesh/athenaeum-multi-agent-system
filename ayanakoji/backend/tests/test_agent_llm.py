@@ -44,6 +44,9 @@ class FakeProvider:
         assert isinstance(result, list)
         return iter(result)
 
+    def complete_tools(self, *a: object, **k: object) -> tuple[str, list[object]]:  # pragma: no cover
+        raise AssertionError("FakeProvider has no scripted tool calls")
+
 
 def _settings() -> Settings:
     return Settings(
@@ -134,6 +137,79 @@ def test_stream_empty_stream_degrades() -> None:
     handle = router.stream(Capability.WORKHORSE, [{"role": "user", "content": "hi"}])
     assert handle.provider is Provider.GROQ
     assert "".join(handle.tokens) == "ok"
+
+
+class FakeToolProvider:
+    """Scriptable tool-calling provider: each complete_tools call pops the next
+    (text, tool_calls) tuple off the script."""
+
+    def __init__(self, name: Provider, script: list[tuple[str, list[object]]]) -> None:
+        self.name = name
+        self._script = list(script)
+        self.seen_messages: list[list[dict[str, object]]] = []
+
+    def complete(self, *a: object, **k: object) -> RawCompletion:  # pragma: no cover
+        raise AssertionError("not used")
+
+    def stream(self, *a: object, **k: object):  # pragma: no cover
+        raise AssertionError("not used")
+
+    def complete_tools(self, model, messages, *, tools, tool_choice, max_tokens):  # type: ignore[no-untyped-def]
+        self.seen_messages.append(list(messages))
+        text, calls = self._script.pop(0)
+        return text, calls
+
+
+def test_run_tools_executes_handler_and_returns_final_text() -> None:
+    from app.agent.llm import ToolCall
+
+    azure = FakeToolProvider(
+        Provider.AZURE,
+        [
+            ("", [ToolCall(id="c1", name="propose_plan", arguments='{"pace": "faster"}')]),
+            ("Here is your faster plan.", []),
+        ],
+    )
+    router = ModelRouter(_settings(), azure=azure, groq=FakeProvider(Provider.GROQ, []))
+    captured: dict[str, object] = {}
+
+    def propose_plan(args: dict[str, object]) -> dict[str, object]:
+        captured.update(args)
+        return {"weeks": 3}
+
+    result = router.run_tools(
+        Capability.WORKHORSE,
+        [{"role": "user", "content": "make it faster"}],
+        tools=[{"type": "function", "function": {"name": "propose_plan"}}],
+        handlers={"propose_plan": propose_plan},
+    )
+    assert result.text == "Here is your faster plan."
+    assert result.tier == 1
+    assert result.rounds == 2
+    assert captured == {"pace": "faster"}  # handler saw the model's parsed args
+    # The tool result was fed back into the conversation for the second call.
+    second_call_roles = [m["role"] for m in azure.seen_messages[1]]
+    assert "tool" in second_call_roles
+
+
+def test_run_tools_unknown_tool_is_reported_not_crashed() -> None:
+    from app.agent.llm import ToolCall
+
+    azure = FakeToolProvider(
+        Provider.AZURE,
+        [
+            ("", [ToolCall(id="c1", name="does_not_exist", arguments="{}")]),
+            ("Recovered.", []),
+        ],
+    )
+    router = ModelRouter(_settings(), azure=azure, groq=FakeProvider(Provider.GROQ, []))
+    result = router.run_tools(
+        Capability.WORKHORSE,
+        [{"role": "user", "content": "hi"}],
+        tools=[],
+        handlers={},
+    )
+    assert result.text == "Recovered."
 
 
 class _Transient(Exception):
