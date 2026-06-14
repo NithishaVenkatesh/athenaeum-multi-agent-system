@@ -1,0 +1,104 @@
+{
+  "course_id": "do-c03",
+  "module_id": "do-c03-m02",
+  "module_title": "Secrets and secretless authentication",
+  "choices": [
+    {
+      "id": "do-c03-m02-c01",
+      "module_id": "do-c03-m02",
+      "prompt": "According to the module, Azure Key Vault is a dedicated store for which three kinds of material?",
+      "kind": "mcq",
+      "choices": [
+        "Secrets, keys, and certificates",
+        "Secrets, tokens, and passwords",
+        "Connection strings, API keys, and OIDC tokens",
+        "Managed identities, service principals, and certificates"
+      ],
+      "correct_answers": [
+        "Secrets, keys, and certificates"
+      ]
+    },
+    {
+      "id": "do-c03-m02-c02",
+      "module_id": "do-c03-m02",
+      "prompt": "An attacker copies the booking-api workflow file, including the client-id variable, into their own repository and runs it. Per the module, why does the Azure login fail?",
+      "kind": "mcq",
+      "choices": [
+        "The OIDC token from the attacker's workflow carries a subject claim for their repository, which does not match the federated credential's configured subject, so Entra refuses to issue an Azure token",
+        "The client-id variable is encrypted and cannot be decrypted outside the original repository",
+        "GitHub blocks the workflow because the AZURE_CLIENT_ID is stored as a secret rather than a variable",
+        "Azure detects the missing client secret and rejects the login until a service-principal secret is supplied"
+      ],
+      "correct_answers": [
+        "The OIDC token from the attacker's workflow carries a subject claim for their repository, which does not match the federated credential's configured subject, so Entra refuses to issue an Azure token"
+      ]
+    },
+    {
+      "id": "do-c03-m02-c03",
+      "module_id": "do-c03-m02",
+      "prompt": "In the secretless deploy walkthrough, why are the client, tenant, and subscription IDs stored as GitHub Actions variables rather than as secrets?",
+      "kind": "mcq",
+      "choices": [
+        "They are not sensitive, because they are useless without a token that matches the federated subject",
+        "GitHub Actions does not support storing identifier values as secrets",
+        "Variables are automatically masked in logs while secrets are not",
+        "Storing them as secrets would prevent the OIDC token from being requested"
+      ],
+      "correct_answers": [
+        "They are not sensitive, because they are useless without a token that matches the federated subject"
+      ]
+    },
+    {
+      "id": "do-c03-m02-c04",
+      "module_id": "do-c03-m02",
+      "prompt": "Select all statements about workload identity federation and managed identities that the module presents as correct.",
+      "kind": "msq",
+      "choices": [
+        "A federated credential should be scoped to the exact repository and branch or environment, not the whole organization or all branches",
+        "With workload identity federation, no secret is ever stored, transmitted, or rotated, and the short-lived OIDC token expires in minutes",
+        "DefaultAzureCredential tries a chain of sources and resolves to a managed identity in Azure and developer sign-in locally, with no secret in either case",
+        "After adding OIDC federation, the original service-principal client secret should be kept in place as a backup credential"
+      ],
+      "correct_answers": [
+        "A federated credential should be scoped to the exact repository and branch or environment, not the whole organization or all branches",
+        "With workload identity federation, no secret is ever stored, transmitted, or rotated, and the short-lived OIDC token expires in minutes",
+        "DefaultAzureCredential tries a chain of sources and resolves to a managed identity in Azure and developer sign-in locally, with no secret in either case"
+      ]
+    },
+    {
+      "id": "do-c03-m02-c05",
+      "module_id": "do-c03-m02",
+      "prompt": "The module contrasts a managed identity with workload identity federation. Which statement correctly distinguishes the runtime problem each one solves?",
+      "kind": "mcq",
+      "choices": [
+        "A managed identity gives the running app/resource an identity so it holds no credential, while workload identity federation lets a pipeline running outside Azure authenticate by presenting a short-lived OIDC token",
+        "A managed identity authenticates pipelines on GitHub or Azure DevOps, while workload identity federation authenticates the running application inside Azure",
+        "Both require a client secret to be stored, but the managed identity rotates it automatically while federation does not",
+        "A managed identity is used only for system-assigned scenarios, while workload identity federation is used only for user-assigned identities"
+      ],
+      "correct_answers": [
+        "A managed identity gives the running app/resource an identity so it holds no credential, while workload identity federation lets a pipeline running outside Azure authenticate by presenting a short-lived OIDC token"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "do-c03-m02-l01",
+      "module_id": "do-c03-m02",
+      "prompt": "Explain why the module argues that the mature answer to the Meridian Freight incident is 'have no secret to store' rather than 'store the secret more carefully.' Walk through how workload identity federation achieves this for a deploy pipeline.",
+      "reference_answer": "The Meridian incident happened because a long-lived service-principal secret was pasted into a pipeline variable and printed to a retained build log by `set -x`; any stored secret remains a leak surface that can be printed, snapshotted, or exfiltrated, so protecting it more carefully never removes the underlying risk. Workload identity federation removes the secret entirely: you register a federated credential on an Entra app registration or user-assigned managed identity that trusts OIDC tokens from the pipeline platform, scoped to a specific repository and branch or environment. At run time the pipeline requests a short-lived OIDC token from its own platform asserting which repo/branch job it is, presents it to Entra, and Entra checks it against the federated credential's subject claim before issuing a normal Azure access token. No secret is ever stored, transmitted, or rotated, and the token expires in minutes, so there is nothing for a stray `set -x` to print. The trust lives in a verifiable claim rather than in possession of a credential."
+    },
+    {
+      "id": "do-c03-m02-l02",
+      "module_id": "do-c03-m02",
+      "prompt": "Compare using DefaultAzureCredential with a managed identity versus reading a Key Vault connection string from an environment variable for the running booking API. Why does the module prefer the former for runtime access?",
+      "reference_answer": "DefaultAzureCredential lets the application authenticate as its managed identity with no stored credential at all: it tries a chain of sources (environment variables, managed identity, developer sign-in) and resolves to the app's managed identity in Azure and the developer's sign-in locally, so the same code works in both places without a secret. The app then uses that credential with a SecretClient to read its secret (e.g. booking-db-connection) from Key Vault. Reading a credential from an environment variable instead keeps a secret around that can still be printed, snapshotted, or exfiltrated, recreating exactly the leak surface the module is trying to eliminate. The unifying goal is to have no secret to protect rather than to protect a secret more carefully, which is why the managed-identity pattern is preferred and called the cleanest pattern for runtime access."
+    },
+    {
+      "id": "do-c03-m02-l03",
+      "module_id": "do-c03-m02",
+      "prompt": "A team adds OIDC federation to their pipeline but a security scan still flags a stored credential, and you also notice the deploy identity has Owner on the subscription. Walk through the two pitfalls at play and how to remediate each.",
+      "reference_answer": "First, the team most likely left the original service-principal client secret on the app registration; adding a better authentication path does not retire the worse one, so the leak surface OIDC was meant to remove still exists and remains a valid credential until deleted. Remediate by deleting the old client secret once federation works, so there is no long-lived credential left to leak. Second, granting the deploy identity Owner on the subscription is an over-broad blast radius, not a convenience; the principle is least privilege. Remediate by assigning the narrowest role and scope that lets the job do its work rather than a broad subscription-wide Owner role. A related pitfall the module warns about is over-broad federated subjects: the federated credential's subject should be scoped to the exact repository and branch or environment so no other workflow can impersonate the deploy identity."
+    }
+  ]
+}
