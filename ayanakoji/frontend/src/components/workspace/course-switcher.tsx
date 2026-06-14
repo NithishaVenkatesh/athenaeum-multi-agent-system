@@ -67,7 +67,10 @@ export function CourseSwitcher() {
                   key={course.id}
                   value={`${course.chat_name} ${course.id}`}
                   onSelect={() => go(`/chat/${course.id}`)}
-                  className="group/item"
+                  // This list has no selection checkmark, so suppress CommandItem's
+                  // trailing invisible CheckIcon — it otherwise reserves ~16px at the
+                  // right edge and pushes the rename pencil off the item's true edge.
+                  className="group/item [&>svg:last-child]:hidden"
                 >
                   <MessagesSquare className="text-muted-foreground" />
                   <span className="flex-1 truncate">{course.chat_name}</span>
@@ -80,7 +83,7 @@ export function CourseSwitcher() {
                       event.preventDefault();
                       openRename(course);
                     }}
-                    className="text-muted-foreground hover:text-foreground hover:bg-background rounded-md p-1 opacity-70 transition hover:opacity-100 focus-visible:opacity-100"
+                    className="text-muted-foreground hover:text-foreground hover:bg-background -mr-1 rounded-md p-1 opacity-70 transition hover:opacity-100 focus-visible:opacity-100"
                   >
                     <Pencil className="size-3.5" />
                   </button>
