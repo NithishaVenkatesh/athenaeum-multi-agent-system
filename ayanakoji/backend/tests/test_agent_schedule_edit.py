@@ -129,6 +129,32 @@ def test_no_edit_text_returns_none() -> None:
     assert adj is None
 
 
+def test_multi_week_skip_keeps_every_week() -> None:
+    """R1: 'skip weeks 2 and 3' must keep BOTH weeks, not just the first."""
+    adj = parse_adjustment("I'm busy, skip weeks 2 and 3", today=TODAY)
+    assert adj is not None
+    assert adj.skip_weeks == frozenset({2, 3})
+
+
+def _skip(text: str) -> frozenset[int]:
+    adj = parse_adjustment(text, today=TODAY)
+    assert adj is not None
+    return adj.skip_weeks
+
+
+def test_week_list_and_range_skip() -> None:
+    assert _skip("away weeks 2, 3 and 4") == frozenset({2, 3, 4})
+    assert _skip("I'm occupied weeks 2-4") == frozenset({2, 3, 4})
+    assert _skip("skip week 2 and week 5") == frozenset({2, 5})
+
+
+def test_start_in_week_is_not_a_skip() -> None:
+    """A plain 'start in week 2' (no busy cue) must not be read as a skip."""
+    adj = parse_adjustment("let's start in week 2", today=TODAY)
+    skip = adj.skip_weeks if adj is not None else frozenset()
+    assert skip == frozenset()
+
+
 def test_remove_week_parses_skip_weeks_and_drops_that_week() -> None:
     adj = parse_adjustment(
         "remove the schedules from week 2 as I am occupied, move to later slots", today=TODAY

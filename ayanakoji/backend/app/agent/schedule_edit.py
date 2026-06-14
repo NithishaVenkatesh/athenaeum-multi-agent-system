@@ -75,11 +75,17 @@ _ALL_WEEKDAYS = frozenset(_WEEKDAYS.values())
 _BUSY = (
     r"(skip|avoid|remove|free\s+up|busy|occupied|unavailable|can'?t|cannot|drop|off|away|out|no)"
 )
-_SKIP_WEEK = re.compile(
-    rf"\b{_BUSY}\b[^.]{{0,30}}?\bweeks?\s+(\d+)\b"
-    rf"|\bweeks?\s+(\d+)\b[^.]{{0,30}}?\b{_BUSY}\b",
-    re.IGNORECASE,
+_BUSY_CUE = re.compile(rf"\b{_BUSY}\b", re.IGNORECASE)
+# A "week N" mention, possibly a list ("weeks 2 and 3", "weeks 2, 3 and 4") or a
+# range ("weeks 2-4"); the numbers are extracted/expanded in _parse_skip_weeks so a
+# multi-week skip keeps every week, not just the first (R1).
+_WEEK_LIST = re.compile(
+    r"\bweeks?\s+(\d+(?:\s*(?:,|and|&|\+|to|through|thru|-|–|—)\s*\d+)*)", re.IGNORECASE
 )
+_WEEK_RANGE = re.compile(r"(\d+)\s*(?:to|through|thru|-|–|—)\s*(\d+)")
+# How far a busy/skip cue may sit from a week mention and still bind to it as a skip.
+_BUSY_PROXIMITY = 30
+_MAX_WEEK_SPAN = 52  # never expand an absurd range
 
 # Speed adjectives, only honored as a pace change when clearly *about* the pace.
 _PACE_SLOWER = (" slower", " slow it down", " ease up", " lighter", " more relaxed",
@@ -209,13 +215,29 @@ def _parse_exam_date(text: str, today: date) -> date | None:
     return _resolve_month_day(month, day, today)
 
 
-def _parse_skip_weeks(text: str) -> frozenset[int]:
-    """Plan-week numbers the learner says they're occupied in (e.g. 'busy in week 2')."""
+def _expand_week_list(spec: str) -> set[int]:
+    """Every week number in a list/range spec ('2 and 3' → {2,3}; '2-4' → {2,3,4})."""
     weeks: set[int] = set()
-    for m in _SKIP_WEEK.finditer(text):
-        num = m.group(2) or m.group(3)
-        if num is not None:
-            weeks.add(int(num))
+    for lo, hi in _WEEK_RANGE.findall(spec):
+        a, b = int(lo), int(hi)
+        if a <= b <= a + _MAX_WEEK_SPAN:
+            weeks.update(range(a, b + 1))
+    weeks.update(int(n) for n in re.findall(r"\d+", spec))
+    return weeks
+
+
+def _parse_skip_weeks(text: str) -> frozenset[int]:
+    """Plan-week numbers the learner says they're occupied in.
+
+    Handles a single week ('busy in week 2'), a list ('skip weeks 2 and 3',
+    'weeks 2, 3 and 4'), and a range ('away weeks 2-4'). A week mention only counts as
+    a skip when a busy/skip cue sits near it, so 'start in week 2' is never dropped.
+    """
+    weeks: set[int] = set()
+    for m in _WEEK_LIST.finditer(text):
+        window = text[max(0, m.start() - _BUSY_PROXIMITY) : m.end() + _BUSY_PROXIMITY]
+        if _BUSY_CUE.search(window):
+            weeks |= _expand_week_list(m.group(1))
     return frozenset(w for w in weeks if w >= 1)
 
 
