@@ -7,12 +7,17 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+# Upper bound on a single learner turn. Generous enough to paste a stack trace or
+# a config block, bounded so one message can't blow the model context, balloon the
+# stored transcript blob, or be used as a cheap cost/DoS amplifier (critique C2).
+MAX_MESSAGE_CHARS = 8000
+
 
 class CourseCreate(BaseModel):
     """Open a new chat (course) from the learner's first message."""
 
     persona_id: str = Field(min_length=1)
-    content: str = Field(min_length=1)
+    content: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
 
 
 class CoursePatch(BaseModel):
@@ -25,7 +30,7 @@ class CoursePatch(BaseModel):
 class MessageIn(BaseModel):
     """A learner turn appended to the conversation."""
 
-    content: str = Field(min_length=1)
+    content: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
 
 
 class AcceptCourse(BaseModel):

@@ -245,6 +245,35 @@ def test_post_message_to_missing_course_404(client: TestClient) -> None:
     assert client.post("/api/courses/nope/messages", json={"content": "hi"}).status_code == 404
 
 
+def test_oversized_message_is_rejected_422(client: TestClient) -> None:
+    """A message past MAX_MESSAGE_CHARS is rejected at the boundary, never stored (C2)."""
+    from app.courses.schemas import MAX_MESSAGE_CHARS
+
+    course_id = _create(client)["id"]
+    huge = "a" * (MAX_MESSAGE_CHARS + 1)
+    assert (
+        client.post(f"/api/courses/{course_id}/messages", json={"content": huge}).status_code
+        == 422
+    )
+    # A message exactly at the limit is accepted (stream opens, status 200).
+    at_limit = "b" * MAX_MESSAGE_CHARS
+    with client.stream(
+        "POST", f"/api/courses/{course_id}/messages", json={"content": at_limit}
+    ) as resp:
+        assert resp.status_code == 200
+
+
+def test_oversized_create_is_rejected_422(client: TestClient) -> None:
+    """Opening a chat with an over-long first message is rejected too (C2)."""
+    from app.courses.schemas import MAX_MESSAGE_CHARS
+
+    resp = client.post(
+        "/api/courses",
+        json={"persona_id": "EMP-001", "content": "x" * (MAX_MESSAGE_CHARS + 1)},
+    )
+    assert resp.status_code == 422
+
+
 def test_assessments_empty_but_present_for_new_course(client: TestClient) -> None:
     course_id = _create(client)["id"]
     resp = client.get(f"/api/courses/{course_id}/assessments")
