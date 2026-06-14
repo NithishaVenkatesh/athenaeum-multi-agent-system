@@ -1,0 +1,104 @@
+{
+  "course_id": "ai-c01",
+  "module_id": "ai-c01-m04",
+  "module_title": "Evaluation, monitoring, and responsible AI",
+  "choices": [
+    {
+      "id": "ai-c01-m04-c01",
+      "module_id": "ai-c01-m04",
+      "kind": "mcq",
+      "prompt": "In the module, what is the defining characteristic of a generative-evaluation \"test set\" that makes it superior to manual spot checks?",
+      "choices": [
+        "A fixed, representative list of questions paired with expected answers or behaviors that you run on every change",
+        "A large random sample of live production traffic captured automatically by Azure Monitor",
+        "A one-time batch of hand-graded answers reviewed by a human before launch",
+        "A rotating set of new questions generated freshly for each model version to avoid overfitting"
+      ],
+      "correct_answers": [
+        "A fixed, representative list of questions paired with expected answers or behaviors that you run on every change"
+      ]
+    },
+    {
+      "id": "ai-c01-m04-c02",
+      "module_id": "ai-c01-m04",
+      "kind": "mcq",
+      "prompt": "A customer reports the assistant gave a confident but factually wrong answer. According to the module, which stage should you check first, and how do the metrics localize the fault?",
+      "choices": [
+        "Retrieval first — a low retrieval-quality score with reasonable groundedness on the wrong passage points to retrieval, while high retrieval quality with low groundedness points to the generation/prompt step",
+        "Generation first — a low relevance score always means the model itself hallucinated and must be replaced",
+        "The content filter first — a wrong answer usually means a filter mangled the completion",
+        "Monitoring first — token-usage spikes in Azure Monitor identify which answers were fabricated"
+      ],
+      "correct_answers": [
+        "Retrieval first — a low retrieval-quality score with reasonable groundedness on the wrong passage points to retrieval, while high retrieval quality with low groundedness points to the generation/prompt step"
+      ]
+    },
+    {
+      "id": "ai-c01-m04-c03",
+      "module_id": "ai-c01-m04",
+      "kind": "mcq",
+      "prompt": "The module distinguishes Azure OpenAI content filters from blocklists. Which statement correctly captures that distinction?",
+      "choices": [
+        "Filters screen broad categories like hate, violence, sexual, and self-harm across severity levels, while blocklists block exact terms or patterns specific to your context",
+        "Filters block your competitor's name, while blocklists screen the broad harm categories by severity",
+        "Filters apply only to the prompt, while blocklists apply only to the generated completion",
+        "Filters are configured per deployment, while blocklists run globally and cannot be customized"
+      ],
+      "correct_answers": [
+        "Filters screen broad categories like hate, violence, sexual, and self-harm across severity levels, while blocklists block exact terms or patterns specific to your context"
+      ]
+    },
+    {
+      "id": "ai-c01-m04-c04",
+      "module_id": "ai-c01-m04",
+      "kind": "mcq",
+      "prompt": "In the walkthrough code, what does a `finish_reason` value of `\"content_filter\"` indicate, and why does the module warn against ignoring it?",
+      "choices": [
+        "The response was filtered and carries structured per-category results; code reading message.content without branching on finish_reason mishandles filtered or truncated responses",
+        "The request was blocked by a prompt shield and must be retried with a different model deployment",
+        "The LLM-as-judge returned a groundedness score below the rubric threshold and the answer was discarded",
+        "The Azure Monitor diagnostic pipeline dropped the log event, so the completion should be regenerated"
+      ],
+      "correct_answers": [
+        "The response was filtered and carries structured per-category results; code reading message.content without branching on finish_reason mishandles filtered or truncated responses"
+      ]
+    },
+    {
+      "id": "ai-c01-m04-c05",
+      "module_id": "ai-c01-m04",
+      "kind": "msq",
+      "prompt": "According to the module, which of the following are true about prompt injection and prompt shields? (Select all that apply.)",
+      "choices": [
+        "Prompt injection can be indirect, hiding malicious instructions inside a retrieved document in a RAG pipeline",
+        "Prompt shields detect injection and jailbreak attempts in user input and in documents",
+        "Prompt shields are a complete defense, so least-privilege design becomes unnecessary once they are enabled",
+        "Safety comes from filters and shields plus least-privilege design, so a successful injection still cannot cause real harm"
+      ],
+      "correct_answers": [
+        "Prompt injection can be indirect, hiding malicious instructions inside a retrieved document in a RAG pipeline",
+        "Prompt shields detect injection and jailbreak attempts in user input and in documents",
+        "Safety comes from filters and shields plus least-privilege design, so a successful injection still cannot cause real harm"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "ai-c01-m04-l01",
+      "module_id": "ai-c01-m04",
+      "prompt": "Two prompt versions both \"look good\" in manual testing. Walk through how you would decide objectively which is better, and explain what makes the comparison trustworthy.",
+      "reference_answer": "Run both prompt versions over the same fixed, representative test set of questions paired with expected answers or behaviors, and compare consistent scores such as mean groundedness and relevance. Because grading thousands of free-text answers by hand does not scale, use an LLM-as-judge that scores each answer against the question and context using a rubric, or Azure AI Foundry's built-in evaluators for those dimensions. The comparison is trustworthy because identical inputs plus a consistent scoring rubric isolate the prompt change as the only variable, turning subjective impressions into a measurable delta. A drop in the mean score is a regression you catch before customers do, which is the whole point of running the test set on every change."
+    },
+    {
+      "id": "ai-c01-m04-l02",
+      "module_id": "ai-c01-m04",
+      "prompt": "Your assistant has prompt shields enabled, yet a security reviewer insists it must also never have permission to issue discounts. Explain why the reviewer is right that shields alone are insufficient, and what principle closes the gap.",
+      "reference_answer": "Prompt shields detect injection and jailbreak attempts in user input and in documents, but they reduce rather than eliminate injection risk — a novel or indirect attack (for example, malicious instructions hidden in a retrieved RAG document) may still slip through. Because no single control is absolute, the module insists on least-privilege design: the assistant should never have the authority to issue a discount code in the first place, so even a successful injection cannot cause real harm. Safety is defense-in-depth, combining content filters, blocklists, and prompt shields with least-privilege design, never resting on one control alone. That is why the reviewer is right that shields plus least-privilege together, not shields by themselves, are required."
+    },
+    {
+      "id": "ai-c01-m04-l03",
+      "module_id": "ai-c01-m04",
+      "prompt": "Walk through how you would set up production monitoring for the assistant using Azure Monitor, and explain what each signal tells you and why you should instrument before launch.",
+      "reference_answer": "Azure OpenAI integrates with Azure Monitor, so you route diagnostic logs and metrics — request volume, latency, token usage, errors, and filtered-content events — to a Log Analytics workspace where you can query or alert on them. Watching token usage protects your budget; watching filtered-content and shield-triggered events tells you when you are under adversarial pressure; and watching latency and errors tells you whether the service is healthy. You instrument before launch rather than after the first incident because a generative feature degrades quietly as documents change, models update, and users find new edge cases, so without diagnostics quality and safety regress silently. In code, you should also log the structured content_filter_results and alert when finish_reason is content_filter so filtered responses are surfaced rather than silently mishandled."
+    }
+  ]
+}
