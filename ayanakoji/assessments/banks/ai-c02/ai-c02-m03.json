@@ -1,0 +1,103 @@
+{
+  "course_id": "ai-c02",
+  "module_id": "ai-c02-m03",
+  "module_title": "Document Intelligence",
+  "choices": [
+    {
+      "id": "ai-c02-m03-c01",
+      "module_id": "ai-c02-m03",
+      "prompt": "According to the module, what is the layer of analysis that sits underneath every Document Intelligence model?",
+      "kind": "mcq",
+      "choices": [
+        "Layout analysis: OCR plus structural understanding that locates words, lines, selection marks, and tables, each with a bounding region and confidence score",
+        "A neural language model that summarizes the document into a single string before extraction",
+        "A composed classifier that always routes the document to the correct prebuilt model",
+        "A translation engine that normalizes every document into a common language first"
+      ],
+      "correct_answers": [
+        "Layout analysis: OCR plus structural understanding that locates words, lines, selection marks, and tables, each with a bounding region and confidence score"
+      ]
+    },
+    {
+      "id": "ai-c02-m03-c02",
+      "module_id": "ai-c02-m03",
+      "prompt": "Larkspur receives standard supplier invoices and its own bespoke warranty claim forms with fields like ClaimReason and PurchaseStore. Which approach does the module recommend for each?",
+      "kind": "mcq",
+      "choices": [
+        "Use the prebuilt invoice model for the standard invoices and a custom extraction model for the bespoke warranty form",
+        "Train a custom extraction model for both, since organization-specific accuracy always beats prebuilt schemas",
+        "Use the prebuilt invoice model for both, relabeling its fields to match the warranty form",
+        "Use a composed model alone for the invoices and the general document model for the warranty form"
+      ],
+      "correct_answers": [
+        "Use the prebuilt invoice model for the standard invoices and a custom extraction model for the bespoke warranty form"
+      ]
+    },
+    {
+      "id": "ai-c02-m03-c03",
+      "module_id": "ai-c02-m03",
+      "prompt": "Your code calls begin_analyze_document and immediately inspects the response object, but the fields are empty. Based on the module, what went wrong?",
+      "kind": "mcq",
+      "choices": [
+        "Analysis is a long-running asynchronous operation; you must call .result() on the returned poller to wait for completion before reading fields",
+        "The endpoint was missing, so the client silently returned an empty document collection",
+        "Prebuilt models cannot return fields by URL source, only from uploaded file bytes",
+        "The confidence threshold was set too high, so every field was filtered out of the response"
+      ],
+      "correct_answers": [
+        "Analysis is a long-running asynchronous operation; you must call .result() on the returned poller to wait for completion before reading fields"
+      ]
+    },
+    {
+      "id": "ai-c02-m03-c04",
+      "module_id": "ai-c02-m03",
+      "prompt": "Which statements about template versus neural custom models are correct according to the module? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Template models learn from consistent layouts and need only a few examples; they are fast and precise when every form looks the same",
+        "Neural models handle varied layouts and structured-plus-unstructured content at the cost of needing more training data and time",
+        "Template models are best when the same logical document arrives in many visual shapes",
+        "Neural models require no labeling because they infer field positions automatically"
+      ],
+      "correct_answers": [
+        "Template models learn from consistent layouts and need only a few examples; they are fast and precise when every form looks the same",
+        "Neural models handle varied layouts and structured-plus-unstructured content at the cost of needing more training data and time"
+      ]
+    },
+    {
+      "id": "ai-c02-m03-c05",
+      "module_id": "ai-c02-m03",
+      "prompt": "The intake folder mixes invoices, receipts, and warranty claims with no labels indicating type. Which design lets you process the whole stream with a single runtime call, and how does it work?",
+      "kind": "mcq",
+      "choices": [
+        "A composed model that bundles several models behind one model ID and puts a classifier in front to identify each document type and run the matching sub-model",
+        "A single neural custom model trained on all three document types at once, returning a merged field set",
+        "Three separate prebuilt model calls run in parallel, then the highest-confidence result is selected",
+        "Layout analysis alone, since it returns tables and selection marks that uniquely identify each document type"
+      ],
+      "correct_answers": [
+        "A composed model that bundles several models behind one model ID and puts a classifier in front to identify each document type and run the matching sub-model"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "ai-c02-m03-l01",
+      "module_id": "ai-c02-m03",
+      "prompt": "Explain how confidence scores function as a quality gate in a Document Intelligence pipeline, and why the module warns against gating only on the overall document rather than on individual fields.",
+      "reference_answer": "Each field returned by a prebuilt or custom model carries a confidence score, which acts as the quality gate for automation: a high-confidence value such as a 0.98 InvoiceTotal can post automatically to finance, while a low-confidence one such as 0.62 routes to a human review queue with the field highlighted. This is the same thresholding discipline used throughout the course. The module warns that a document can return high confidence overall while one critical field, like the total, is low confidence, so you must gate on the specific fields you actually act on rather than just the document-level result. Ignoring per-field confidence risks auto-posting a wrong total, so the correct practice is to inspect and threshold each acted-upon field and route low-confidence ones to review."
+    },
+    {
+      "id": "ai-c02-m03-l02",
+      "module_id": "ai-c02-m03",
+      "prompt": "Describe the train, test, and publish lifecycle of a custom extraction model and explain how versioning by model ID enables safe rollouts and rollback.",
+      "reference_answer": "To build a custom extraction model you upload a handful of example documents to storage, label the fields you care about by drawing on them in Document Intelligence Studio, and train; the service learns field positions and patterns from your labels. The lifecycle mirrors the CLU lifecycle, but the unit of versioning is the model ID: you train a model, give it an ID, test it against documents it has never seen, and only then treat it as published for runtime use. Because every model has its own ID, you can train an improved version such as warranty-claim-v2, validate it, and switch your application to call it without touching warranty-claim-v1. This gives a clean rollback path: if the new model underperforms, you simply point the app back at the previous model ID."
+    },
+    {
+      "id": "ai-c02-m03-l03",
+      "module_id": "ai-c02-m03",
+      "prompt": "Walk through how the prebuilt invoice walkthrough extracts fields at runtime, naming the specific call, model ID, and how the same pattern extends to custom and composed models.",
+      "reference_answer": "You provision a Document Intelligence resource, assign your identity a reader role (or use a key locally), and point the DocumentIntelligenceClient at a supplier invoice reachable by URL. You call begin_analyze_document with the model ID prebuilt-invoice and a urlSource; because analysis is a long-running asynchronous operation, you receive a poller and call .result() to wait for completion. Each returned field exposes a typed value such as valueString, valueCurrency, or valueDate plus a confidence score, so the automation reads InvoiceTotal and posts above threshold or routes below it to review. The same pattern extends by changing the model ID: pass your own custom model's ID for the warranty form, or the composed model's ID for the mixed intake stream so the single call self-routes to the correct extractor."
+    }
+  ]
+}
