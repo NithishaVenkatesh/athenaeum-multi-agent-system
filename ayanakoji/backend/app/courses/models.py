@@ -122,3 +122,15 @@ class LlmQuestion(SQLModel, table=True):
     messages: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON)
     submitted: bool = Field(default=False)
     is_correct: bool | None = Field(default=None)
+
+
+# The table names that belong in the learner-workspace database (athenaeum.db).
+# Used to scope create_all so the separate assessments database's tables are never
+# created here (they share SQLModel.metadata). Looked up from metadata by name.
+COURSE_TABLE_NAMES = (
+    "course",
+    "coursemodule",
+    "assessment",
+    "choicequestion",
+    "llmquestion",
+)

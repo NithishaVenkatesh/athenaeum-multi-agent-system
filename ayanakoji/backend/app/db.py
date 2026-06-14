@@ -60,10 +60,15 @@ def reset_engine() -> None:
 
 
 def init_db() -> None:
-    """Create all tables on the current engine. Importing the models registers them."""
-    from app.courses import models as _models  # noqa: F401  (registers tables)
+    """Create the learner-workspace tables on the current engine.
 
-    SQLModel.metadata.create_all(get_engine())
+    Scoped to ``COURSE_TABLES`` so the separate assessments database's tables
+    (which share ``SQLModel.metadata``) are never created in ``athenaeum.db``.
+    """
+    from app.courses.models import COURSE_TABLE_NAMES
+
+    tables = [SQLModel.metadata.tables[name] for name in COURSE_TABLE_NAMES]
+    SQLModel.metadata.create_all(get_engine(), tables=tables)
 
 
 def get_session() -> Iterator[Session]:

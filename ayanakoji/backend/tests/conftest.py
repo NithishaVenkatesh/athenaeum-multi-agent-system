@@ -6,6 +6,7 @@ from collections.abc import Iterator
 
 import pytest
 from app import db as db_module
+from app.assessments import engine as assessments_engine
 from app.main import create_app
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine
@@ -16,6 +17,29 @@ from sqlmodel import Session
 def _offline_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Force the deterministic offline LLM path so tests never reach live Azure."""
     monkeypatch.setenv("OFFLINE_LLM", "true")
+
+
+@pytest.fixture(autouse=True)
+def _isolate_assessments_db(tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]:
+    """Point the (separate) assessments engine at a temp file for every test.
+
+    The app lifespan creates the assessments schema on startup, so without this
+    the ``client`` fixture would write a stray ``assessments.db`` in the cwd.
+    """
+    db_file = tmp_path_factory.mktemp("assessments-db") / "assessments.db"
+    assessments_engine.configure_engine(f"sqlite:///{db_file}")
+    assessments_engine.init_db()
+    try:
+        yield
+    finally:
+        assessments_engine.reset_engine()
+
+
+@pytest.fixture
+def assessments_session(_isolate_assessments_db: None) -> Iterator[Session]:
+    """A session bound to the isolated assessments engine."""
+    with Session(assessments_engine.get_engine()) as test_session:
+        yield test_session
 
 
 @pytest.fixture

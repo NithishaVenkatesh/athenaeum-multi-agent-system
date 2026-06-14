@@ -58,6 +58,16 @@ class Settings(BaseSettings):
     # SQLite by default — zero infra, file-based, fully offline. Override per env.
     database_url: str = "sqlite:///./athenaeum.db"
 
+    # --- Assessment question banks (separate DB from the learner workspace) ---
+    # Authored per-module question banks live in their own SQLite file so the
+    # static question bank never mingles with a learner's live attempt data.
+    assessments_database_url: str = "sqlite:///./assessments.db"
+
+    # --- Azure Blob mirror for the question banks (credential-gated) ---
+    # Account name only; auth is DefaultAzureCredential (no secrets in repo).
+    azure_storage_account: str | None = None
+    assessment_blob_container: str = "assessment-banks"
+
     # Force the deterministic offline LLM path even when Foundry creds are present
     # (used by CI/E2E/smoke so the chat works without live Azure calls).
     offline_llm: bool = False

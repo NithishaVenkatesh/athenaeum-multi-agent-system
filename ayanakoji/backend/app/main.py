@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from app import __version__
+from app.assessments.engine import init_db as assessments_init_db
 from app.catalog.router import router as catalog_router
 from app.config import get_settings
 from app.courses.router import router as courses_router
@@ -41,8 +42,9 @@ class PingResponse(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Create the workspace database schema on startup (idempotent ``create_all``)."""
+    """Create both database schemas on startup (idempotent ``create_all``)."""
     init_db()
+    assessments_init_db()
     yield
 
 
