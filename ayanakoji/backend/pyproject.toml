@@ -66,6 +66,14 @@ plugins = ["pydantic.mypy"]
 module = ["openai.*", "azure.*", "jsonschema.*"]
 ignore_missing_imports = true
 
+# azure-ai-evaluation ships a py.typed marker but untyped public functions, so when it IS
+# installed mypy flags every evaluator call as an untyped-call. Skip following it: treat
+# the evaluators as Any (they live only in the omitted cloud adapter).
+[[tool.mypy.overrides]]
+module = ["azure.ai.evaluation.*"]
+follow_imports = "skip"
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 addopts = "-q --cov=app --cov-report=term-missing --cov-fail-under=80"
 testpaths = ["tests"]

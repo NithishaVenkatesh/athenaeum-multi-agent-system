@@ -346,12 +346,27 @@ def verify_grounding(
 ) -> GroundingVerdict:
     """Verify the answer's cited claims are actually supported by their sources.
 
-    The deterministic lexical floor catches a citation lifted onto a topic-disjoint claim.
-    The live Azure groundedness / relevance / retrieval NLI evaluators (layered in by
-    ``app.agent.grounding_verifier``) are the deeper check; this selector chooses them when
-    available and degrades to the lexical floor on any failure, so verification never
-    blocks the answer. ``query`` / ``settings`` are consumed by the Azure path.
+    Runs only when the answer cites an approved source (an uncited answer is already
+    handled by the streaming guard's no-citation disclaimer, and the expensive judges are
+    not worth spending on it). The live Azure groundedness / relevance / retrieval NLI
+    evaluators are the deeper, entailment-aware check; this selector chooses them when
+    available and degrades to the deterministic lexical floor on any failure, so
+    verification never blocks the answer.
     """
+    cited = any(s.ref.lower() in answer.lower() for s in sources)
+    if not cited:
+        return GroundingVerdict(
+            grounded=True,
+            reason="no approved citation to verify",
+            provider="deterministic lexical overlap",
+        )
+    if settings.evaluation_available:
+        try:
+            from app.agent.grounding_verifier import azure_grounding
+
+            return azure_grounding(query, answer, sources, settings)
+        except Exception:  # noqa: BLE001 — any eval failure degrades to the lexical floor
+            pass
     return lexical_groundedness(answer, sources)
 
 
