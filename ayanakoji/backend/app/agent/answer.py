@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from app.agent.contracts import (
+    ActionEvent,
     CourseProgress,
     CourseSuggestion,
     GroundingSource,
@@ -30,6 +31,7 @@ from app.agent.contracts import (
     PhaseName,
     PhaseStatus,
     PhaseTelemetry,
+    PracticeEvent,
     ProgressSnapshot,
     Route,
     RouteDecision,
@@ -69,6 +71,12 @@ class AgentReply:
     pace_request: PaceRequestEvent | None = None
     skill_gate: SkillGateRequestEvent | None = None
     new_chat: NewChatEvent | None = None
+    # The assessor's generated practice round (client-safe; the answer key lives in
+    # the live PracticeQuestion objects, excluded from serialization). Persisted to
+    # Course.practice_active by the courses layer.
+    practice: PracticeEvent | None = None
+    # CTA buttons (take the evaluation / go to the module / practise again).
+    actions: ActionEvent | None = None
     # Scheduling constraints the agent inferred this turn (persisted by the courses
     # layer so they stick across re-plans).
     plan_constraints: dict[str, object] | None = None

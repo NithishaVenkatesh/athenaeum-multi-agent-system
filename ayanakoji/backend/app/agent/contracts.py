@@ -37,6 +37,9 @@ class Route(StrEnum):
     WORK_IQ = "work_iq"  # the learner's own schedule / workload / capacity
     UPCOMING = "upcoming"  # "what's my next module / session" → next scheduled module + deadline
     PROGRESS = "progress"  # "how much have I completed / how many left" → own completion status
+    PRACTISE_MODULE = "practise_module"  # "quiz me on this module" → assessor practice round
+    TAKE_EVALUATION = "take_evaluation"  # "I'm ready for the test" → CTA to the module evaluation
+    GO_TO_MODULE = "go_to_module"  # "open / study the module" → CTA to the module page
     GENERAL = "general"  # off-topic → helpful answer + steer back to learning
 
 
@@ -364,6 +367,47 @@ class DoneEvent(BaseModel):
     suggested: bool = False
 
 
+class PracticeQuestion(BaseModel):
+    """One generated practice MCQ.
+
+    ``correct`` and ``explanation`` are the answer key: ``exclude=True`` keeps them
+    out of every serialization, so the client never receives them. They remain
+    readable on the live object so the submit endpoint can grade server-side.
+    """
+
+    id: str
+    prompt: str
+    kind: Literal["mcq"] = "mcq"
+    choices: list[str]
+    correct: str = Field(exclude=True)
+    explanation: str = Field(default="", exclude=True)
+
+
+class PracticeEvent(BaseModel):
+    """A generated practice round for the learner's current module (rendered as a card)."""
+
+    type: Literal["practice"] = "practice"
+    module_id: str
+    title: str
+    questions: list[PracticeQuestion]
+
+
+class Action(BaseModel):
+    """One CTA button in chat. The frontend builds the URL from the kind + module_id."""
+
+    kind: Literal["take_evaluation", "go_to_module", "practice_again"]
+    label: str
+    module_id: str | None = None
+
+
+class ActionEvent(BaseModel):
+    """One or more CTA buttons rendered beneath an assistant turn."""
+
+    type: Literal["action"] = "action"
+    prompt: str | None = None
+    actions: list[Action] = Field(min_length=1)
+
+
 PipelineEvent = (
     PhaseEvent
     | TokenEvent
@@ -372,6 +416,8 @@ PipelineEvent = (
     | PaceRequestEvent
     | SkillGateRequestEvent
     | NewChatEvent
+    | PracticeEvent
+    | ActionEvent
     | BlockedEvent
     | ErrorEvent
     | DoneEvent
