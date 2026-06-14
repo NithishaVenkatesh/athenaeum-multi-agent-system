@@ -1,0 +1,103 @@
+{
+  "course_id": "ai-c03",
+  "module_id": "ai-c03-m04",
+  "module_title": "Knowledge mining with Azure AI Search",
+  "choices": [
+    {
+      "id": "ai-c03-m04-c01",
+      "module_id": "ai-c03-m04",
+      "prompt": "In Azure AI Search's four-object model, which object is responsible for telling the service where your content lives (for example a Blob Storage container, a Cosmos DB collection, or a SQL table)?",
+      "kind": "mcq",
+      "choices": [
+        "The data source",
+        "The index",
+        "The skillset",
+        "The indexer"
+      ],
+      "correct_answers": [
+        "The data source"
+      ]
+    },
+    {
+      "id": "ai-c03-m04-c02",
+      "module_id": "ai-c03-m04",
+      "prompt": "A scanned PDF contract is, to a raw crawler, just a blob of bytes. Driftwood wants the same document to arrive in the index with extracted text, key phrases, and detected entities as real, queryable fields. According to the module, which object performs this AI enrichment during ingestion, and which object loads the results into the index?",
+      "kind": "mcq",
+      "choices": [
+        "The skillset enriches during ingestion, and the indexer maps the output into index fields",
+        "The indexer enriches during ingestion, and the data source loads the results",
+        "The index enriches the document, and the skillset stores the results",
+        "The data source runs OCR, and the skillset loads the extracted fields"
+      ],
+      "correct_answers": [
+        "The skillset enriches during ingestion, and the indexer maps the output into index fields"
+      ]
+    },
+    {
+      "id": "ai-c03-m04-c03",
+      "module_id": "ai-c03-m04",
+      "prompt": "Support agents report that searching \"waterproof cover swap\" returns nothing, even though a manual clearly explains replacing the rain fly. The index currently uses plain keyword search. Based on the module, which approaches would address this vocabulary-gap problem by matching on meaning rather than exact terms? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Add semantic ranking to re-rank the top keyword results by meaning",
+        "Add vector search so queries match by vector similarity independent of wording",
+        "Mark the content field as filterable so it can be narrowed by SKU",
+        "Rely on stricter exact-term keyword matching to force the words to align"
+      ],
+      "correct_answers": [
+        "Add semantic ranking to re-rank the top keyword results by meaning",
+        "Add vector search so queries match by vector similarity independent of wording"
+      ]
+    },
+    {
+      "id": "ai-c03-m04-c04",
+      "module_id": "ai-c03-m04",
+      "prompt": "In the walkthrough, the index defines `product` as a `SimpleField` marked filterable and facetable but NOT searchable, while `content` is a `SearchableField`. Why is the `product` field deliberately not made searchable?",
+      "kind": "mcq",
+      "choices": [
+        "Because you'd never run free-text relevance scoring on a SKU label, and it only needs to be used for filtering and faceting",
+        "Because searchable and filterable attributes cannot coexist on the same field",
+        "Because making it searchable would prevent the indexer from ever loading it",
+        "Because only one field per index is allowed to be searchable at a time"
+      ],
+      "correct_answers": [
+        "Because you'd never run free-text relevance scoring on a SKU label, and it only needs to be used for filtering and faceting"
+      ]
+    },
+    {
+      "id": "ai-c03-m04-c05",
+      "module_id": "ai-c03-m04",
+      "prompt": "The module describes hybrid search as typically giving the best results. According to the text, what does hybrid search actually do, and why is it recommended over pure vector search?",
+      "kind": "mcq",
+      "choices": [
+        "It runs keyword and vector queries together and fuses the rankings, combining exact-term precision with semantic recall so it won't miss verbatim part numbers and SKUs",
+        "It replaces the keyword engine entirely with embeddings so all matching is semantic",
+        "It runs OCR and key-phrase extraction at query time to enrich the user's question",
+        "It schedules two indexers so the index is rebuilt twice as often for freshness"
+      ],
+      "correct_answers": [
+        "It runs keyword and vector queries together and fuses the rankings, combining exact-term precision with semantic recall so it won't miss verbatim part numbers and SKUs"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "ai-c03-m04-l01",
+      "module_id": "ai-c03-m04",
+      "prompt": "Explain the division of labor among the four core objects of an Azure AI Search solution, using the module's 'where / shape / enrichment / process' mental model. Also note the alternative to using an indexer and when you'd choose it.",
+      "reference_answer": "Azure AI Search is composed of four cooperating objects. The data source is the *where* — it tells the service where content lives, such as a Blob Storage container, a Cosmos DB collection, or a SQL table. The index is the *shape* — the target schema of fields documents are stored and queried against, each declaring attributes like searchable, filterable, sortable, facetable, or retrievable. The skillset is the *enrichment* — an optional AI pipeline that runs during ingestion, calling skills like OCR, key-phrase extraction, or entity recognition to add fields the raw document lacked. The indexer is the *process* — on a schedule or on demand it crawls the data source, runs documents through the skillset, maps results to index fields, and loads them. As an alternative, you can push documents directly into an index via the API without an indexer, which you'd do when your application already has the data in hand rather than crawling a store."
+    },
+    {
+      "id": "ai-c03-m04-l02",
+      "module_id": "ai-c03-m04",
+      "prompt": "Contrast keyword search, semantic ranking, and vector search as described in the module. Explain how each matches content and how embeddings fit into vector search.",
+      "reference_answer": "Classic full-text keyword search matches terms: a query finds documents containing those words, ranked by a keyword-scoring algorithm — fast and precise when the user's words match the document's words, but brittle when they don't. Semantic ranking improves on this by applying a language model to re-rank the top keyword results by meaning and can surface concise captions and answers, so a phrase like \"swap the tent's waterproof cover\" can rank a \"rain fly\" document highly even without exact word overlap. Vector search goes further: you store an embedding (a numeric vector) for each chunk of content and query by vector similarity, finding semantically near matches independent of wording, which is the backbone of RAG. You generate the embeddings (for example with an Azure OpenAI embedding model) and store them in a vector field, and the index declares that field's dimensions and the similarity metric, with exact configuration details to confirm in the docs for your model."
+    },
+    {
+      "id": "ai-c03-m04-l03",
+      "module_id": "ai-c03-m04",
+      "prompt": "A product manager asks to let users filter results by warranty length, a field that was stored as searchable-only at launch. Explain why this can't be flipped on after the fact, what it costs, and what the lesson is for schema design.",
+      "reference_answer": "Field attributes like filterable, searchable, sortable, and facetable are largely fixed at index creation and are essentially not mutable in place. Making the warranty field filterable therefore can't be done by simply flipping a switch; it requires defining a new or rebuilt index and re-ingesting all the documents, which costs the effort and time of a full rebuild and re-indexing run. The lesson, which the module lists as a common pitfall, is to model your query patterns before defining the schema — decide up front which fields need to be searchable, filterable, sortable, or facetable, because getting these attributes right at design time avoids an expensive rebuild later."
+    }
+  ]
+}
