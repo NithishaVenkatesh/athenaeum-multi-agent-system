@@ -1,0 +1,106 @@
+{
+  "course_id": "do-c03",
+  "module_id": "do-c03-m03",
+  "module_title": "Security and compliance scanning",
+  "choices": [
+    {
+      "id": "do-c03-m03-c01",
+      "module_id": "do-c03-m03",
+      "kind": "mcq",
+      "prompt": "According to the module, which scanning surface is responsible for flagging an open-source component whose license is incompatible with your distribution model?",
+      "choices": [
+        "Licensing scanning, which is a compliance risk rather than a security one",
+        "Dependency (SCA) scanning, which checks components against vulnerability databases",
+        "Code (SAST) scanning, which analyzes source for vulnerable patterns",
+        "Secret scanning, which looks for credentials committed to the repository"
+      ],
+      "correct_answers": [
+        "Licensing scanning, which is a compliance risk rather than a security one"
+      ]
+    },
+    {
+      "id": "do-c03-m03-c02",
+      "module_id": "do-c03-m03",
+      "kind": "mcq",
+      "prompt": "An intern pastes a real storage key into a test fixture and runs `git push`. According to the module, what behavior does secret scanning with push protection enabled produce?",
+      "choices": [
+        "The commit containing the recognized secret pattern is blocked at push, before the secret reaches the remote",
+        "The secret is allowed into history but Defender for Cloud rotates it automatically",
+        "Dependabot opens a pull request to remove the secret from the latest commit",
+        "CodeQL flags the secret as an unresolved alert that must be cleared before merge"
+      ],
+      "correct_answers": [
+        "The commit containing the recognized secret pattern is blocked at push, before the secret reaches the remote"
+      ]
+    },
+    {
+      "id": "do-c03-m03-c03",
+      "module_id": "do-c03-m03",
+      "kind": "mcq",
+      "prompt": "In the module's framing, what specific capability does Microsoft Defender for Cloud's DevOps security add that individual repository settings do not?",
+      "choices": [
+        "A posture layer that connects to GitHub and Azure DevOps orgs and aggregates findings into recommendations and a security score across the whole portfolio",
+        "A CodeQL engine that queries each repository's code as if it were a database",
+        "Push protection that blocks recognized secret patterns before they reach the remote",
+        "Automatic update pull requests for vulnerable transitive dependencies"
+      ],
+      "correct_answers": [
+        "A posture layer that connects to GitHub and Azure DevOps orgs and aggregates findings into recommendations and a security score across the whole portfolio"
+      ]
+    },
+    {
+      "id": "do-c03-m03-c04",
+      "module_id": "do-c03-m03",
+      "kind": "msq",
+      "prompt": "Per the module's shift-left mapping of each scanning gate to a lifecycle point, which of the following placements are stated correctly?",
+      "choices": [
+        "Secret push protection runs at push, before the secret is even in the remote",
+        "Dependency review and SAST run on the pull request, so a reviewer sees findings inline",
+        "Container and full SCA scans run in the build, gating the artifact",
+        "Defender for Cloud runs only at push to block secrets before they land"
+      ],
+      "correct_answers": [
+        "Secret push protection runs at push, before the secret is even in the remote",
+        "Dependency review and SAST run on the pull request, so a reviewer sees findings inline",
+        "Container and full SCA scans run in the build, gating the artifact"
+      ]
+    },
+    {
+      "id": "do-c03-m03-c05",
+      "module_id": "do-c03-m03",
+      "kind": "msq",
+      "prompt": "The module lists several common pitfalls in security scanning. Which of the following are described as pitfalls to avoid?",
+      "choices": [
+        "Producing findings that nobody is required to act on, instead of tying critical findings to branch policies and release gates",
+        "Scanning only direct dependencies and missing vulnerabilities that arrive transitively",
+        "Scanning only the application source while the container base OS layer carries critical CVEs",
+        "Failing the build job on HIGH or CRITICAL container findings so a vulnerable image never reaches the registry"
+      ],
+      "correct_answers": [
+        "Producing findings that nobody is required to act on, instead of tying critical findings to branch policies and release gates",
+        "Scanning only direct dependencies and missing vulnerabilities that arrive transitively",
+        "Scanning only the application source while the container base OS layer carries critical CVEs"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "do-c03-m03-l01",
+      "module_id": "do-c03-m03",
+      "prompt": "Secret scanning finds an AWS-style storage key that was committed three weeks ago. Explain why simply deleting it from the latest commit is insufficient, what you must actually do, and how push protection would have prevented the situation entirely.",
+      "reference_answer": "The key was exposed in git history the moment it was pushed, so it must be treated as compromised: exposure, not current presence, is what triggers remediation. Deleting it from the latest commit leaves a still-valid credential sitting in the commit log, so the correct action is to rotate it — revoke and reissue the credential — and then remove it from history. The deeper point is that a secret found in history is already compromised and must be rotated, not just deleted. Enabling push protection prevents this entirely by blocking the commit at git push when it contains a recognized secret pattern, so the credential never reaches the remote in the first place."
+    },
+    {
+      "id": "do-c03-m03-l02",
+      "module_id": "do-c03-m03",
+      "prompt": "A teammate argues that because CodeQL code scanning already runs nightly, there is no value in also running it as a gate on pull requests. Walk through why the PR gate is still worthwhile, grounding your answer in the module's shift-left reasoning.",
+      "reference_answer": "A nightly run only finds the issue after it has already merged, when fixing it is more expensive and the flaw may already be sitting in a build. Running CodeQL on the pull request surfaces the finding inline before merge, where it is just a review comment rather than a 2 a.m. incident. This is the shift-left discipline: moving detection as early in the SDLC as possible makes the finding cheaper and shrinks the blast radius. It also lets the gate have teeth — a branch protection rule on main can require the CodeQL check to pass, so a pull request with an unresolved critical alert does not merge."
+    },
+    {
+      "id": "do-c03-m03-l03",
+      "module_id": "do-c03-m03",
+      "prompt": "Compare dependency (SCA) scanning and container image scanning as the module presents them in the rate-quote pipeline. Explain what each catches, why both are needed, and how the pipeline gives the container gate teeth.",
+      "reference_answer": "Dependency (SCA) scanning inspects your open-source components against vulnerability databases and is how you learn a transitive package has a known CVE; in the module GitHub's Dependabot raises alerts when a vulnerable dependency enters the graph and can open update pull requests automatically. Container image scanning, shown with Trivy, inspects the built image's layers because the application code can be clean while the base OS layer carries critical CVEs — so you must scan the built image, not only the source, and rebuild on base-image updates. Both are needed because they cover different surfaces, and the module stresses evaluating the full resolved dependency graph rather than only the top-level manifest. The container gate gets teeth by setting Trivy to severity HIGH,CRITICAL with exit-code 1, so a non-zero exit fails the job and blocks promotion, backed by a branch protection rule on main that requires the image scan to pass before a vulnerable image can reach the registry."
+    }
+  ]
+}
