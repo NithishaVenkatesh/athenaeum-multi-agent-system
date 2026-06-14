@@ -1,0 +1,11 @@
+{"id": "ground_functions_triggers", "layer": "grounding", "input": "azure functions triggers and bindings", "expected": {"grounded": true}, "category": "in_catalog"}
+{"id": "ground_cosmos_partition", "layer": "grounding", "input": "cosmos db partition keys", "expected": {"grounded": true}, "category": "in_catalog"}
+{"id": "ground_computer_vision", "layer": "grounding", "input": "computer vision", "expected": {"grounded": true, "course": "ai-c03"}, "category": "in_catalog"}
+{"id": "ground_managed_identity", "layer": "grounding", "input": "managed identity and authentication", "expected": {"grounded": true}, "category": "in_catalog"}
+{"id": "ground_ml_curiosity", "layer": "grounding", "input": "machine learning model training", "expected": {"grounded": true, "course": "ai-"}, "category": "in_catalog_regression"}
+{"id": "ground_cicd", "layer": "grounding", "input": "ci/cd pipelines", "expected": {"grounded": true}, "category": "in_catalog_regression"}
+{"id": "ground_football", "layer": "grounding", "input": "best football transfers this season", "expected": {"grounded": false}, "category": "off_catalog"}
+{"id": "ground_running_shoes", "layer": "grounding", "input": "best running shoes for marathons", "expected": {"grounded": false}, "category": "off_catalog"}
+{"id": "ground_climate", "layer": "grounding", "input": "climate change effects on agriculture", "expected": {"grounded": false}, "category": "off_catalog"}
+{"id": "ground_sourdough", "layer": "grounding", "input": "how to bake sourdough bread at home", "expected": {"grounded": false}, "category": "off_catalog"}
+{"id": "ground_quantum", "layer": "grounding", "input": "quantum teleportation cryptography protocols", "expected": {"grounded": false}, "category": "off_catalog"}
