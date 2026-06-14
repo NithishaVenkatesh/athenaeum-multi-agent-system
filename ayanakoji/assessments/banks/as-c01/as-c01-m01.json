@@ -1,0 +1,106 @@
+{
+  "course_id": "as-c01",
+  "module_id": "as-c01-m01",
+  "module_title": "Designing compute solutions",
+  "choices": [
+    {
+      "id": "as-c01-m01-c01",
+      "module_id": "as-c01-m01",
+      "prompt": "According to the module, what are the four requirements that drive almost every compute decision?",
+      "kind": "mcq",
+      "choices": [
+        "State, control surface, load shape, and time bound",
+        "Latency, throughput, region, and compliance",
+        "CPU, memory, storage, and network bandwidth",
+        "Cost, security, availability, and scalability"
+      ],
+      "correct_answers": [
+        "State, control surface, load shape, and time bound"
+      ]
+    },
+    {
+      "id": "as-c01-m01-c02",
+      "module_id": "as-c01-m01",
+      "prompt": "A partner-sale webhook fires only intermittently (twice an hour), is stateless, and needs no host management. Per the module's decision matrix, which compute model fits best?",
+      "kind": "mcq",
+      "choices": [
+        "Azure Functions (Consumption)",
+        "Azure Virtual Machine",
+        "Azure Kubernetes Service (AKS)",
+        "Azure Batch"
+      ],
+      "correct_answers": [
+        "Azure Functions (Consumption)"
+      ]
+    },
+    {
+      "id": "as-c01-m01-c03",
+      "module_id": "as-c01-m01",
+      "prompt": "In the Container Apps `az containerapp create` command, which setting does the module describe as 'the load-shape decision made executable' that stops you paying for compute when no traffic arrives?",
+      "kind": "mcq",
+      "choices": [
+        "--min-replicas 0",
+        "--max-replicas 20",
+        "--cpu 0.5",
+        "--ingress external"
+      ],
+      "correct_answers": [
+        "--min-replicas 0"
+      ]
+    },
+    {
+      "id": "as-c01-m01-c04",
+      "module_id": "as-c01-m01",
+      "prompt": "Which statements does the module make about matching cost to a workload's load shape? Select all that apply.",
+      "kind": "msq",
+      "choices": [
+        "Steady, predictable load favors reserved capacity such as a reserved VM",
+        "A steady, high-throughput service on per-execution serverless billing can cost more than a reserved VM",
+        "A VM running at 5% utilization is almost pure waste",
+        "Per-execution serverless billing is always cheaper than a reserved VM regardless of duty cycle"
+      ],
+      "correct_answers": [
+        "Steady, predictable load favors reserved capacity such as a reserved VM",
+        "A steady, high-throughput service on per-execution serverless billing can cost more than a reserved VM",
+        "A VM running at 5% utilization is almost pure waste"
+      ]
+    },
+    {
+      "id": "as-c01-m01-c05",
+      "module_id": "as-c01-m01",
+      "prompt": "The module contrasts Azure Container Apps with AKS for the stateless pricing API. Which reasons does it give for choosing Container Apps over AKS here? Select all that apply.",
+      "kind": "msq",
+      "choices": [
+        "Container Apps provides autoscaling and scale-to-zero without managing Kubernetes",
+        "The workload needs no custom controllers or fine-grained pod control",
+        "AKS is powerful but expensive to operate, adding a standing operational cost",
+        "Container Apps gives full Kubernetes control for fine-grained pod management"
+      ],
+      "correct_answers": [
+        "Container Apps provides autoscaling and scale-to-zero without managing Kubernetes",
+        "The workload needs no custom controllers or fine-grained pod control",
+        "AKS is powerful but expensive to operate, adding a standing operational cost"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "as-c01-m01-l01",
+      "module_id": "as-c01-m01",
+      "prompt": "Explain why the legacy .NET monolith that writes filesystem-based session state lands on an Azure Virtual Machine in the decision matrix, rather than on a scale-to-zero model like Azure Container Apps or Functions.",
+      "reference_answer": "The monolith is stateful in place: it writes session files to local disk (e.g. /tmp), so killing and recreating instances would lose that state. Scale-to-zero and aggressive autoscaling models like Container Apps and Functions rely on instances being freely killed and replaced, which only works for stateless workloads. The monolith also has OS-level dependencies, requiring control of the full OS that a VM provides. The module notes you must either externalize the state (to a database, cache, or blob) first, or keep it on a VM until you do, treating the VM as a candidate for later modernization rather than a forever home."
+    },
+    {
+      "id": "as-c01-m01-l02",
+      "module_id": "as-c01-m01",
+      "prompt": "A job must render 200,000 PDF tickets before a 6 a.m. cutoff and is embarrassingly parallel. Walk through why Azure Batch fits this better than scaling up a single large always-on VM.",
+      "reference_answer": "This workload is deadline-bound (a 6 a.m. cutoff) and highly parallel, which the module identifies as the canonical Azure Batch shape. Batch schedules the job across a pool of many compute nodes, runs the tasks in parallel, and then tears the pool down afterward, meeting the deadline through breadth rather than a single tall machine. A single large VM would rely on serial throughput that would likely miss the SLA, and it would sit idle and wasteful the rest of the day. Batch is purpose-built for this 'render 200,000 PDFs by 6 a.m.' pattern that would be wasteful on always-on infrastructure."
+    },
+    {
+      "id": "as-c01-m01-l03",
+      "module_id": "as-c01-m01",
+      "prompt": "Compare a steady reporting service running near-continuously at high CPU against a spiky, intermittent webhook in terms of which billing model is cheaper, and explain the principle the module uses to reason about this.",
+      "reference_answer": "The module's principle is that cost follows the load shape, not the service logo, so you must sanity-check any recommendation against the workload's real duty cycle. A steady, high-throughput reporting service running near-continuously pays an elasticity premium it never uses on per-execution serverless billing, so reserved VM capacity is usually cheaper for it. A spiky, intermittent webhook is the opposite: it fires rarely, so consumption-based serverless like Azure Functions on the Consumption plan pays only per invocation and scales to zero between bursts, avoiding paying for an idle server 24/7. The rule of thumb is steady and predictable favors reserved capacity, while spiky and intermittent favors consumption."
+    }
+  ]
+}
