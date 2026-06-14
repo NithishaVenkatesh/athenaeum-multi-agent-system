@@ -1,0 +1,104 @@
+{
+  "course_id": "as-c01",
+  "module_id": "as-c01-m04",
+  "module_title": "Designing application architecture",
+  "choices": [
+    {
+      "id": "as-c01-m04-c01",
+      "module_id": "as-c01-m04",
+      "prompt": "According to the module, what fundamentally distinguishes a 'message' from an 'event'?",
+      "kind": "mcq",
+      "choices": [
+        "A message is a command with intent that the sender expects to be handled; an event is a notification that something happened, and the publisher expects nothing back.",
+        "A message is high-volume telemetry; an event is a single low-volume command.",
+        "A message is always cached, while an event is always persisted to a database.",
+        "A message uses HTTP polling; an event always uses partitioned logs for delivery."
+      ],
+      "correct_answers": [
+        "A message is a command with intent that the sender expects to be handled; an event is a notification that something happened, and the publisher expects nothing back."
+      ]
+    },
+    {
+      "id": "as-c01-m04-c02",
+      "module_id": "as-c01-m04",
+      "prompt": "Solstice needs to ingest millions of clickstream and IoT events per second into a partitioned log that consumers read from. Which Azure service does the module recommend for this firehose of telemetry?",
+      "kind": "mcq",
+      "choices": [
+        "Azure Event Hubs",
+        "Azure Service Bus",
+        "Azure Event Grid",
+        "Azure Cache for Redis"
+      ],
+      "correct_answers": [
+        "Azure Event Hubs"
+      ]
+    },
+    {
+      "id": "as-c01-m04-c03",
+      "module_id": "as-c01-m04",
+      "prompt": "The checkout service must trigger a receipt email without blocking, and the receipt must not be lost if the email service is briefly down. Which service fits, and which TWO of its features deliver that guarantee per the module?",
+      "kind": "msq",
+      "choices": [
+        "Azure Service Bus durable queues that let checkout enqueue and return immediately",
+        "Dead-letter queues with at-least-once delivery and retries so a message survives a brief outage",
+        "Event Grid fire-and-forget pub/sub fan-out to many subscribers",
+        "A Redis TTL that evicts the receipt after it is read"
+      ],
+      "correct_answers": [
+        "Azure Service Bus durable queues that let checkout enqueue and return immediately",
+        "Dead-letter queues with at-least-once delivery and retries so a message survives a brief outage"
+      ]
+    },
+    {
+      "id": "as-c01-m04-c04",
+      "module_id": "as-c01-m04",
+      "prompt": "A product catalog is read thousands of times per second but changes only a few times a day. Per the module, what is the one design risk that adopting Azure Cache for Redis introduces?",
+      "kind": "mcq",
+      "choices": [
+        "Staleness, because the cache is a second copy of the truth, so you must decide how stale a read may be and how to invalidate it.",
+        "Loss of guaranteed delivery, because cached reads are fire-and-forget.",
+        "Message ordering breaks, because Redis cannot use sessions.",
+        "The database can no longer absorb traffic spikes during a flash sale."
+      ],
+      "correct_answers": [
+        "Staleness, because the cache is a second copy of the truth, so you must decide how stale a read may be and how to invalidate it."
+      ]
+    },
+    {
+      "id": "as-c01-m04-c05",
+      "module_id": "as-c01-m04",
+      "prompt": "Which statements about API Management (APIM) and automated deployment are correct according to the module? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "APIM consolidates auth, rate limiting (e.g., 100 calls a minute), versioning, and throttling/transformation policies into one governed façade.",
+        "Infrastructure as code using Bicep or ARM templates lets an environment be recreated identically, reviewed in a pull request, and rolled back.",
+        "Exposing every microservice directly to clients is preferred because it keeps cross-cutting logic close to each service.",
+        "Deploying by hand through portal clicks is the recommended approach because it is the most reproducible and reviewable."
+      ],
+      "correct_answers": [
+        "APIM consolidates auth, rate limiting (e.g., 100 calls a minute), versioning, and throttling/transformation policies into one governed façade.",
+        "Infrastructure as code using Bicep or ARM templates lets an environment be recreated identically, reviewed in a pull request, and rolled back."
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "as-c01-m04-l01",
+      "module_id": "as-c01-m04",
+      "prompt": "Compare Azure Service Bus, Event Grid, and Event Hubs and explain the rule of thumb the module gives for choosing among them. Give a concrete integration scenario that fits each.",
+      "reference_answer": "The three serve opposite semantics. Service Bus is transactional command messaging built for a message that must be handled (exactly once if possible) with delivery guarantees, ordering via sessions, retries, and dead-letter queues for poison messages — e.g., dropping a 'send receipt' or 'process payment' command onto a durable queue. Event Grid is the lightweight publish/subscribe router for discrete reactive notifications where the publisher does not care who listens and expects nothing back, fanning one event (like 'a blob was created' or 'an order was placed') out to many subscribers. Event Hubs is built for high-volume telemetry streams — millions of events per second from clickstreams or IoT — that consumers read from a partitioned log. The rule of thumb: a command that must be handled goes to Service Bus; a discrete 'react to this' notification goes to Event Grid; a firehose of telemetry goes to Event Hubs."
+    },
+    {
+      "id": "as-c01-m04-l02",
+      "module_id": "as-c01-m04",
+      "prompt": "Walk through how you would decouple Solstice's checkout service from its email service using the module's approach, and explain the role of maxDeliveryCount, lockDuration, and DefaultAzureCredential.",
+      "reference_answer": "Place a Service Bus queue between checkout (the producer) and email (the consumer): checkout enqueues a 'send receipt' message and returns immediately, while the email service drains the queue at its own pace, so a slow or briefly down email service no longer stalls the sale. You declare the namespace and queue as Bicep code so the change is reviewable. maxDeliveryCount (e.g., 5) is the resilience decision made explicit — after five failed processing attempts the message is moved to the dead-letter queue for an operator to inspect instead of poisoning the consumer forever. lockDuration (e.g., PT30S) gives the consumer a window to finish before the message becomes visible to another receiver, preventing duplicate sends under normal operation. DefaultAzureCredential lets production run on a managed identity with no connection string or secret in code, the credential-free pattern the security course builds on."
+    },
+    {
+      "id": "as-c01-m04-l03",
+      "module_id": "as-c01-m04",
+      "prompt": "Explain why a cache is the right pattern for Solstice's product catalog, the two key design questions it raises, and why automated deployment with Bicep/ARM is treated as part of a finished design.",
+      "reference_answer": "When the same data is read far more often than it changes, every read hitting the database is wasted work and added latency, so a cache like Azure Cache for Redis stores the rendered answer in memory close to the consumer — the catalog is written with a TTL and thousands of reads per second are served in sub-millisecond time while the database handles only the occasional miss and refresh; it also absorbs traffic spikes so a flash sale becomes a flood of cache hits rather than a database overload. The two design questions are what to cache (read-heavy, change-tolerant data) and how to invalidate it (a TTL or explicit eviction on write), because the cache is a second copy of the truth and you must decide how stale a read may be. Automated deployment matters because a design that can only be deployed by hand is not finished: codifying infrastructure in Bicep or ARM templates makes environments reproducible identically, reviewable in a pull request, and rollback-able, and it is the bridge that later governance, resilience, and security controls assume."
+    }
+  ]
+}
