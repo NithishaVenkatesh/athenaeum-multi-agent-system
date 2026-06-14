@@ -389,7 +389,7 @@ class PracticeEvent(BaseModel):
     type: Literal["practice"] = "practice"
     module_id: str
     title: str
-    questions: list[PracticeQuestion]
+    questions: list[PracticeQuestion] = Field(min_length=1)
 
 
 class Action(BaseModel):

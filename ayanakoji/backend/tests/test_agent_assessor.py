@@ -42,6 +42,10 @@ def test_route_enum_has_assessor_intents() -> None:
     assert Route.PRACTISE_MODULE.value == "practise_module"
     assert Route.TAKE_EVALUATION.value == "take_evaluation"
     assert Route.GO_TO_MODULE.value == "go_to_module"
+    # Round-trip from the wire string back to the enum member (router dispatch path).
+    assert Route("practise_module") is Route.PRACTISE_MODULE
+    assert Route("take_evaluation") is Route.TAKE_EVALUATION
+    assert Route("go_to_module") is Route.GO_TO_MODULE
 
 
 def test_practice_event_hides_answer_key_from_the_wire() -> None:
