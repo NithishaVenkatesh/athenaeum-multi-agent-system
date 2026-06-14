@@ -1,0 +1,103 @@
+{
+  "course_id": "de-c01",
+  "module_id": "de-c01-m03",
+  "module_title": "Delta Lake and the lakehouse pattern",
+  "choices": [
+    {
+      "id": "de-c01-m03-c01",
+      "module_id": "de-c01-m03",
+      "kind": "mcq",
+      "prompt": "According to the module, what is a Delta table actually made of on object storage?",
+      "choices": [
+        "Parquet data files plus a transaction log directory named _delta_log that records which files were added or removed in each commit",
+        "A single self-describing ORC file containing both the data and its full version history inline",
+        "A relational warehouse table whose rows are streamed out to Parquet only on export",
+        "A directory of Parquet files where readers list the folder directly to discover the current valid file set"
+      ],
+      "correct_answers": [
+        "Parquet data files plus a transaction log directory named _delta_log that records which files were added or removed in each commit"
+      ]
+    },
+    {
+      "id": "de-c01-m03-c02",
+      "module_id": "de-c01-m03",
+      "kind": "mcq",
+      "prompt": "Northwind's nightly Delta overwrite job crashes after writing only some of its new Parquet files but before appending its commit to the log. What do concurrent dashboard queries see, and why?",
+      "choices": [
+        "The previous complete version of the table, because the new files are not referenced by any commit until the writer atomically appends the commit, leaving the half-written files as ignored orphans",
+        "Partial data with no error, exactly as plain Parquet would behave, because the files already exist in the folder",
+        "An empty table, because the crash rolled back and deleted both the old and the new Parquet files",
+        "A blend of old and new rows, because Delta merges whatever files are present in the directory at read time"
+      ],
+      "correct_answers": [
+        "The previous complete version of the table, because the new files are not referenced by any commit until the writer atomically appends the commit, leaving the half-written files as ignored orphans"
+      ]
+    },
+    {
+      "id": "de-c01-m03-c03",
+      "module_id": "de-c01-m03",
+      "kind": "mcq",
+      "prompt": "You restored a 5 TB Delta table to a prior good version and it completed in seconds. Per the module, why can a RESTORE be so fast?",
+      "choices": [
+        "RESTORE only writes a new commit whose valid file set equals the target version's; the underlying Parquet still exists, so it is a metadata operation on the log rather than a data rewrite",
+        "RESTORE streams the 5 TB back from a compressed backup snapshot kept by VACUUM",
+        "RESTORE rewrites only the partitions that changed, which is usually a small fraction of 5 TB",
+        "RESTORE swaps the table to a warehouse replica that already holds the prior version"
+      ],
+      "correct_answers": [
+        "RESTORE only writes a new commit whose valid file set equals the target version's; the underlying Parquet still exists, so it is a metadata operation on the log rather than a data rewrite"
+      ]
+    },
+    {
+      "id": "de-c01-m03-c04",
+      "module_id": "de-c01-m03",
+      "kind": "msq",
+      "prompt": "Based on the module, which statements about Delta Lake time travel are correct?",
+      "choices": [
+        "You can read the table as of a past version or timestamp (e.g. VERSION AS OF 41) as the live table viewed at a past point, with no copy made",
+        "Time travel is bounded by a retention window because a VACUUM operation eventually deletes files no longer referenced",
+        "Time travel protects against an account deletion or region outage and serves as disaster recovery",
+        "Old versions remain queryable forever regardless of any maintenance operation"
+      ],
+      "correct_answers": [
+        "You can read the table as of a past version or timestamp (e.g. VERSION AS OF 41) as the live table viewed at a past point, with no copy made",
+        "Time travel is bounded by a retention window because a VACUUM operation eventually deletes files no longer referenced"
+      ]
+    },
+    {
+      "id": "de-c01-m03-c05",
+      "module_id": "de-c01-m03",
+      "kind": "mcq",
+      "prompt": "A teammate wants to recover last week's data by copying old Parquet files back into a Delta table's folder with raw file tools. Why does the module warn against this, and what should they do instead?",
+      "choices": [
+        "It bypasses the transaction log so the log no longer matches the files on disk and corrupts the table; instead they should recover through the Delta API using time travel / RESTORE TABLE ... TO VERSION AS OF",
+        "It is fine as long as the file names are unique, since Delta auto-detects new Parquet files added to the folder",
+        "It is dangerous only because it duplicates storage; instead they should run VACUUM first to clear room before copying",
+        "It bypasses schema enforcement; instead they should enable automatic schema merge before copying the files"
+      ],
+      "correct_answers": [
+        "It bypasses the transaction log so the log no longer matches the files on disk and corrupts the table; instead they should recover through the Delta API using time travel / RESTORE TABLE ... TO VERSION AS OF"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "de-c01-m03-l01",
+      "module_id": "de-c01-m03",
+      "prompt": "Explain how Delta Lake's transaction log turns a multi-file write into an all-or-nothing (ACID) transaction, using Northwind's failed overwrite as the contrast with plain Parquet.",
+      "reference_answer": "With plain Parquet a multi-file write is not atomic: Northwind's writer deleted the old files and wrote new ones directly, so a crash left the folder in a broken in-between state and queries returned partial data with no error for hours. With Delta, the writer never touches the reader's view until it is done: it first writes the new Parquet files, then atomically appends a single JSON commit to the _delta_log saying 'remove old files A, B, C; add new files X, Y, Z.' Until that one commit lands, readers continue to see the old, complete version; if the job crashes before committing, the half-written files are never referenced by any log entry and are ignored as orphans. Because readers learn the current valid set of files from the log rather than listing the folder, the table is always in a consistent state, and that single atomic log append is what makes the multi-file write all-or-nothing."
+    },
+    {
+      "id": "de-c01-m03-l02",
+      "module_id": "de-c01-m03",
+      "prompt": "Walk through how you would use MERGE to upsert a batch of corrected sensor readings into the Delta silver table, and explain what concurrent readers see during the operation.",
+      "reference_answer": "Load the corrections batch, get a DeltaTable handle for the silver path, and call merge with a match condition on the natural key (for example t.device_id = s.device_id AND t.event_date = s.event_date). Use whenMatchedUpdate to fix existing rows (e.g. set moisture to the source value) and whenNotMatchedInsertAll to insert new devices, then execute. MERGE is a single atomic statement that inserts new rows and updates existing ones based on the match condition — an upsert — which Delta does because plain Parquet has no update-in-place. Internally it reads the matching files, computes the changed rows, and commits the result as one transaction, so concurrent readers see either the full before state or the full after state, never a partial result. This atomic upsert is the backbone of incremental loading used in later pipelines."
+    },
+    {
+      "id": "de-c01-m03-l03",
+      "module_id": "de-c01-m03",
+      "prompt": "Compare time travel and RESTORE for recovering from a bad load, and explain why the module insists time travel is not a substitute for a real backup or disaster recovery.",
+      "reference_answer": "Time travel lets you read the table as of any past version or timestamp (e.g. VERSION AS OF 41), viewing the exact file set valid at that commit as the live table with no copy made — useful for debugging, reproducible reports, and auditing. RESTORE builds on the same mechanism to recover: if a bad job corrupts version 42, you RESTORE to version 41, which writes a new commit (version 43) whose valid file set equals version 41's; no Parquet is rewritten, so even a 5 TB restore finishes in seconds because only the log changes. However, time travel is in-table history bounded by a retention window: a VACUUM operation eventually removes files no longer referenced beyond that window, breaking time travel to those versions. It also does nothing against an account deletion or region outage, so it is not disaster recovery — for compliance and DR you must back up deliberately rather than rely on time travel."
+    }
+  ]
+}
