@@ -9,6 +9,7 @@ and persists it. Assessments are modeled but not yet produced (empty list).
 from __future__ import annotations
 
 import json
+import threading
 from collections.abc import Iterator
 from datetime import date
 from typing import Annotated
@@ -213,6 +214,25 @@ def _sse(payload: dict[str, object]) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
 
+# One lock per course id, so two turns for the *same* course (double-click, two
+# tabs) are processed one at a time. Without this, both turns read-modify-write
+# the messages JSON blob and the module table concurrently and silently lose
+# updates / double-book the calendar (critique C4). Different courses never block
+# each other. The dict grows by one small lock per course ever touched (bounded
+# by the catalog size in practice); a process restart clears it.
+_course_locks_guard = threading.Lock()
+_course_locks: dict[str, threading.Lock] = {}
+
+
+def _course_lock(course_id: str) -> threading.Lock:
+    with _course_locks_guard:
+        lock = _course_locks.get(course_id)
+        if lock is None:
+            lock = threading.Lock()
+            _course_locks[course_id] = lock
+        return lock
+
+
 def _taken_courses(
     repo: CourseRepository, persona_id: str, *, exclude_id: str
 ) -> list[TakenCourse]:
@@ -290,10 +310,7 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
     course suggestion, every event is one of the typed ``PipelineEvent`` shapes.
     """
     repo = CourseRepository(session)
-    course = _require(repo.get(course_id), course_id)
-    # Persist the user's turn before streaming so it survives a client disconnect.
-    repo.append_message(course, role="user", content=body.content)
-
+    _require(repo.get(course_id), course_id)
     return StreamingResponse(
         _stream_turn(course_id, body.content),
         media_type="text/event-stream",
@@ -304,18 +321,25 @@ def post_message(course_id: str, body: MessageIn, session: SessionDep) -> Stream
 def _stream_turn(course_id: str, content: str) -> Iterator[str]:
     """SSE event generator for one learner turn (module-level so it is unit-testable).
 
+    Held under a per-course lock so concurrent turns for the same course are
+    serialized (critique C4): the user-append, plan rebuild, and assistant-append
+    are one atomic read-modify-write per turn, never interleaved.
+
     Runs in its own session because the StreamingResponse body is produced after
     the request session's work is done. The assistant turn is persisted in a
     ``finally`` so a mid-stream client disconnect still flushes the partial answer
     and any artifacts produced so far, instead of leaving a user turn with no
     assistant reply (critique C1).
     """
-    with session_scope() as stream_session:
+    with _course_lock(course_id), session_scope() as stream_session:
         stream_repo = CourseRepository(stream_session)
         current = stream_repo.get(course_id)
-        if current is None:  # pragma: no cover - just persisted above
+        if current is None:  # pragma: no cover - guarded by the 404 in post_message
             yield _sse({"type": "error", "message": "course not found"})
             return
+        # Persist the learner's turn first, inside the lock, so it is part of the
+        # same serialized read-modify-write as the assistant reply below.
+        current = stream_repo.append_message(current, role="user", content=content)
 
         taken = _taken_courses(stream_repo, current.persona_id, exclude_id=current.id)
         registered = _registered_courses(stream_repo, current.persona_id, exclude_id=current.id)

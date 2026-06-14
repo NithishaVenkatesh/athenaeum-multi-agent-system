@@ -255,10 +255,8 @@ def test_client_disconnect_persists_partial_assistant_turn() -> None:
     from app.db import session_scope
 
     with session_scope() as setup:
-        repo = CourseRepository(setup)
-        course = repo.create(persona_id="EMP-001", chat_name="hi")
+        course = CourseRepository(setup).create(persona_id="EMP-001", chat_name="hi")
         course_id = course.id
-        repo.append_message(course, role="user", content="hello there")
 
     # Drive the raw SSE generator and close it after the first answer token arrives,
     # simulating the browser going away mid-reply.
@@ -280,6 +278,43 @@ def test_client_disconnect_persists_partial_assistant_turn() -> None:
         assistant = reloaded.messages[-1]
         assert assistant["content"].strip()  # partial answer was saved
         assert assistant.get("meta", {}).get("interrupted") is True
+
+
+def test_concurrent_turns_same_course_lose_no_messages() -> None:
+    """Concurrent turns to one course are serialized; no read-modify-write loses a
+    message off the transcript blob (critique C4)."""
+    import threading
+
+    from app.courses.repository import CourseRepository
+    from app.courses.router import _stream_turn
+    from app.db import session_scope
+
+    with session_scope() as setup:
+        course = CourseRepository(setup).create(persona_id="EMP-001", chat_name="hi")
+        course_id = course.id
+
+    n = 6
+
+    def run_turn(i: int) -> None:
+        # Fully drain the generator (mimics a client reading the whole stream).
+        for _ in _stream_turn(course_id, f"hello number {i}"):
+            pass
+
+    threads = [threading.Thread(target=run_turn, args=(i,)) for i in range(n)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    with session_scope() as check:
+        reloaded = CourseRepository(check).get(course_id)
+        assert reloaded is not None
+        roles = [m["role"] for m in reloaded.messages]
+        # Every turn persisted both halves; nothing was clobbered.
+        assert roles.count("user") == n
+        assert roles.count("assistant") == n
+        user_contents = {m["content"] for m in reloaded.messages if m["role"] == "user"}
+        assert user_contents == {f"hello number {i}" for i in range(n)}
 
 
 def test_oversized_message_is_rejected_422(client: TestClient) -> None:

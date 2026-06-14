@@ -17,18 +17,42 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
-from sqlalchemy import Engine
+from sqlalchemy import Engine, event
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.config import get_settings
 
 _engine: Engine | None = None
 
+# SQLite busy timeout (ms): how long a writer waits on a locked DB before erroring.
+# Concurrent turns to *different* courses, plus the assessments DB, can briefly
+# contend; WAL + this timeout turn transient "database is locked" into a short
+# wait instead of a 500 (critique C4). Same-course turns are serialized in-process.
+_SQLITE_BUSY_TIMEOUT_MS = 30_000
+
 
 def _connect_args(url: str) -> dict[str, Any]:
     # SQLite guards against cross-thread use by default; FastAPI runs sync routes
     # and the streaming generator on worker threads, so relax that for SQLite.
-    return {"check_same_thread": False} if url.startswith("sqlite") else {}
+    # ``timeout`` is the driver-level busy timeout (seconds).
+    if url.startswith("sqlite"):
+        return {"check_same_thread": False, "timeout": _SQLITE_BUSY_TIMEOUT_MS / 1000}
+    return {}
+
+
+def _tune_sqlite(engine: Engine) -> Engine:
+    """Enable WAL + a busy timeout on SQLite connections (no-op for other engines)."""
+    if not engine.url.drivername.startswith("sqlite"):
+        return engine
+
+    @event.listens_for(engine, "connect")
+    def _set_pragmas(dbapi_conn: Any, _record: Any) -> None:  # pragma: no cover - driver cb
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute(f"PRAGMA busy_timeout={_SQLITE_BUSY_TIMEOUT_MS}")
+        cursor.close()
+
+    return engine
 
 
 def configure_engine(url: str, **kwargs: Any) -> Engine:
@@ -36,7 +60,7 @@ def configure_engine(url: str, **kwargs: Any) -> Engine:
     global _engine
     if _engine is not None:
         _engine.dispose()
-    _engine = create_engine(url, connect_args=_connect_args(url), **kwargs)
+    _engine = _tune_sqlite(create_engine(url, connect_args=_connect_args(url), **kwargs))
     return _engine
 
 
@@ -44,9 +68,11 @@ def get_engine() -> Engine:
     """Return the process engine, lazily building it from settings on first use."""
     global _engine
     if _engine is None:
-        _engine = create_engine(
-            get_settings().database_url,
-            connect_args=_connect_args(get_settings().database_url),
+        _engine = _tune_sqlite(
+            create_engine(
+                get_settings().database_url,
+                connect_args=_connect_args(get_settings().database_url),
+            )
         )
     return _engine
 
