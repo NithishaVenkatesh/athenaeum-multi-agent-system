@@ -54,8 +54,24 @@ def test_recommend_flow_offers_profile_based_choices() -> None:
     assert suggestion.options  # personalized options to choose from
 
 
-def test_study_plan_asks_pace_when_unset() -> None:
+def test_study_plan_asks_skill_gate_when_unset() -> None:
     events = list(run_pipeline("build me a study plan", persona_id="EMP-001", catalog_id="cb-c01"))
+    kinds = _types(events)
+    assert "skill_gate_request" in kinds  # first HITL gate: fresher vs skill check
+    assert "pace_request" not in kinds  # pace comes only after the skill gate
+    assert "plan" not in kinds
+    assert events[-1].route is Route.STUDY_PLAN
+
+
+def test_study_plan_asks_pace_after_skill_done() -> None:
+    events = list(
+        run_pipeline(
+            "build me a study plan",
+            persona_id="EMP-001",
+            catalog_id="cb-c01",
+            skill_source="assessment",
+        )
+    )
     kinds = _types(events)
     assert "pace_request" in kinds  # HITL gate before planning
     assert "plan" not in kinds
@@ -73,6 +89,7 @@ def test_study_plan_flow_emits_plan_with_pace() -> None:
             persona_id="EMP-001",
             catalog_id="cb-c01",
             pace=Pace.NORMAL,
+            skill_source="assessment",
             start_date=date(2026, 6, 15),
         )
     )

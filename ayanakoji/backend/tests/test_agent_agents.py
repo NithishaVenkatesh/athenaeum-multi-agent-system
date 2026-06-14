@@ -353,7 +353,11 @@ def test_answer_study_plan_asks_pace_when_unset() -> None:
     vega = get_repository().get_persona("EMP-001")
     assert vega is not None
     reply = answer_study_plan(
-        "build me a study plan", persona_id=vega.employee_id, catalog_id="cb-c01", taken=[]
+        "build me a study plan",
+        persona_id=vega.employee_id,
+        catalog_id="cb-c01",
+        taken=[],
+        skill_source="assessment",
     )
     assert reply.plan is None
     assert reply.pace_request is not None
@@ -374,11 +378,13 @@ def test_answer_study_plan_builds_grounded_plan_with_pace() -> None:
         catalog_id="cb-c01",
         taken=[],
         pace=Pace.NORMAL,
+        skill_source="assessment",
         start_date=date(2026, 6, 15),
     )
     assert reply.plan is not None
     assert reply.plan.catalog_id == "cb-c01"
     assert reply.plan.pace is Pace.NORMAL
+    assert reply.plan.awaiting_approval is True  # preview until approved
     assert reply.plan.weekly_study_hours == 3.0  # grounded in the calendar
     assert all(m.complete_before for m in reply.plan.modules)  # every module has a deadline
     assert reply.telemetry.route.value == "study_plan"

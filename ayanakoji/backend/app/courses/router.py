@@ -428,6 +428,8 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
         exclude_days = frozenset(current.plan_excludes)
         skip_weeks = frozenset(current.plan_skip_weeks)
         exam_date = date.fromisoformat(current.plan_exam_date) if current.plan_exam_date else None
+        skill_source = current.skill_source
+        skill_scores = current.skill_scores or None
         # Recent turns + the pending action (e.g. a pace question) for follow-ups
         # like a bare "yes". The trailing turn is the current message itself.
         history, pending = _conversation_context(current)
@@ -436,6 +438,7 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
         course_state = derive_course_state(
             catalog_id=current.catalog_id,
             pace=pace,
+            skill_source=skill_source,
             module_count=len(existing_modules),
             completed_count=sum(1 for m in existing_modules if m.completed),
         )
@@ -447,6 +450,7 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
         meta_suggestion: dict[str, object] | None = None
         meta_plan: dict[str, object] | None = None
         meta_pace: dict[str, object] | None = None
+        meta_skill_gate: dict[str, object] | None = None
         meta_new_chat: dict[str, object] | None = None
         agent_constraints: dict[str, object] | None = None
         modules_as_dicts: list[dict[str, object]] = [
@@ -470,6 +474,8 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
                 registered=registered,
                 reserved=reserved,
                 pace=pace,
+                skill_source=skill_source,
+                skill_scores=skill_scores,
                 start_date=start_date,
                 exclude_days=exclude_days,
                 skip_weeks=skip_weeks,
@@ -496,6 +502,8 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
                     }
                 elif event.type == "pace_request":
                     meta_pace = payload
+                elif event.type == "skill_gate_request":
+                    meta_skill_gate = payload
                 elif event.type == "new_chat":
                     meta_new_chat = payload
                 yield _sse(payload)
@@ -508,7 +516,10 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
         finally:
             # No `yield` may run here — the generator may be mid-teardown.
             if plan_modules is not None:
-                stream_repo.replace_modules(current.id, plan_modules)
+                # Stage the previewed plan; it becomes real modules only on approval
+                # (POST /plan/approve). The chat path never writes the schedule.
+                current.pending_modules = plan_modules
+                stream_repo.save(current)
             # Persist the constraints the scheduler agent chose so the edit sticks
             # across re-plans (the online replacement for the regex persistence).
             if agent_constraints:
@@ -520,6 +531,7 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
                     "suggestion": meta_suggestion,
                     "plan": meta_plan,
                     "pace_request": meta_pace,
+                    "skill_gate": meta_skill_gate,
                     "new_chat": meta_new_chat,
                 }
                 if not completed:
@@ -535,6 +547,29 @@ def set_pace(course_id: str, body: SetPace, session: SessionDep) -> CourseRead:
     course.pace = body.pace
     course = repo.update(course)
     return _to_read(course, repo)
+
+
+@router.post(
+    "/{course_id}/plan/approve",
+    response_model=list[ModuleRead],
+    summary="Approve the staged study plan: write its modules + deadlines",
+)
+def approve_plan(course_id: str, session: SessionDep) -> list[ModuleRead]:
+    """Promote the previewed plan (``Course.pending_modules``) to real modules.
+
+    This is the only path that writes ``CourseModule`` rows / deadlines — the chat
+    path stages a preview and waits for this explicit approval (the learner's
+    'put it on my schedule' confirmation). Staging is then cleared.
+    """
+    repo = CourseRepository(session)
+    course = _require(repo.get(course_id), course_id)
+    pending = course.pending_modules or []
+    if not pending:
+        raise HTTPException(status_code=409, detail="No plan to approve — build one first.")
+    repo.replace_modules(course_id, pending)
+    course.pending_modules = []
+    repo.save(course)
+    return _to_module_read(repo.list_modules(course_id))
 
 
 def _to_module_read(modules: list[CourseModule]) -> list[ModuleRead]:

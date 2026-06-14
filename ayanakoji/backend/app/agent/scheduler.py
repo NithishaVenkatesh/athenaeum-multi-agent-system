@@ -149,6 +149,7 @@ class SchedulerContext:
     time_window: tuple[int, int] | None = None
     max_session_minutes: int | None = None
     excluded_dates: frozenset[str] = frozenset()
+    skill_scores: dict[str, float] | None = None
 
 
 @dataclass
@@ -238,6 +239,7 @@ def build_plan_from_args(
         time_window=time_window,
         max_session_minutes=max_session,
         extra_skip_dates=extra_dates,
+        skill_scores=ctx.skill_scores,
         settings=settings,
     )
     constraints: dict[str, object] = {

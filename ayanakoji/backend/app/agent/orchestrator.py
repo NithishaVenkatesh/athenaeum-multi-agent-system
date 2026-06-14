@@ -92,6 +92,8 @@ def _dispatch(
     registered: dict[str, tuple[str, str]],
     reserved: frozenset[tuple[str, int, int]],
     pace: Pace | None,
+    skill_source: str | None,
+    skill_scores: dict[str, float] | None,
     start_date: date | None,
     exclude_days: frozenset[str],
     skip_weeks: frozenset[int],
@@ -126,6 +128,8 @@ def _dispatch(
             catalog_id=catalog_id,
             taken=taken,
             pace=pace,
+            skill_source=skill_source,
+            skill_scores=skill_scores,
             start_date=start_date,
             exclude_days=exclude_days,
             skip_weeks=skip_weeks,
@@ -153,6 +157,8 @@ def run_pipeline(
     registered: dict[str, tuple[str, str]] | None = None,
     reserved: frozenset[tuple[str, int, int]] = frozenset(),
     pace: Pace | None = None,
+    skill_source: str | None = None,
+    skill_scores: dict[str, float] | None = None,
     start_date: date | None = None,
     exclude_days: frozenset[str] = frozenset(),
     skip_weeks: frozenset[int] = frozenset(),
@@ -222,6 +228,8 @@ def run_pipeline(
                 registered=registered,
                 reserved=reserved,
                 pace=pace,
+                skill_source=skill_source,
+                skill_scores=skill_scores,
                 start_date=start_date,
                 exclude_days=exclude_days,
                 skip_weeks=skip_weeks,
@@ -249,6 +257,10 @@ def run_pipeline(
         yield ErrorEvent(message=_STREAM_BROKE_MESSAGE)
         yield DoneEvent(route=decision.route)
         return
+
+    # ── Skill-gap HITL gate (ask before pacing) ───────────────────────────────
+    if reply.skill_gate is not None:
+        yield reply.skill_gate
 
     # ── Pace HITL gate (ask before planning) ───────────────────────────────────
     if reply.pace_request is not None:

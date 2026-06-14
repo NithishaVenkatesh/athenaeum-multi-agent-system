@@ -50,6 +50,10 @@ class AssessmentRepository:
         """Fetch a bank LLM question by its authored id (e.g. 'de-c01-m01-l01')."""
         return self._session.get(BankLlmQuestion, question_id)
 
+    def get_choice_question_by_id(self, question_id: str) -> BankChoiceQuestion | None:
+        """Fetch a bank choice question by its authored id (for skill grading)."""
+        return self._session.get(BankChoiceQuestion, question_id)
+
     def assessment_ids_for_course(self, course_id: str) -> list[str]:
         """All bank ids for a course, ordered by module then kind."""
         statement = (

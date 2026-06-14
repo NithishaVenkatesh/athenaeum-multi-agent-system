@@ -31,6 +31,7 @@ from app.agent.contracts import (
     PhaseTelemetry,
     Route,
     RouteDecision,
+    SkillGateRequestEvent,
     StudyPlan,
     SuggestionEvent,
     TakenCourse,
@@ -63,6 +64,7 @@ class AgentReply:
     suggestion: SuggestionEvent | None = None
     plan: StudyPlan | None = None
     pace_request: PaceRequestEvent | None = None
+    skill_gate: SkillGateRequestEvent | None = None
     new_chat: NewChatEvent | None = None
     # Scheduling constraints the agent inferred this turn (persisted by the courses
     # layer so they stick across re-plans).
@@ -963,6 +965,11 @@ _PACE_PROMPT = (
     "normal is balanced, faster is intensive."
 )
 
+_SKILL_PROMPT = (
+    "Are you new to this topic, or do you want a quick skill check so I can tailor the time "
+    "per module?"
+)
+
 
 def _plan_offline_narration(plan: StudyPlan) -> str:
     first = plan.modules[0] if plan.modules else None
@@ -1067,6 +1074,8 @@ def answer_study_plan(
     catalog_id: str | None,
     taken: list[TakenCourse],
     pace: Pace | None = None,
+    skill_source: str | None = None,
+    skill_scores: dict[str, float] | None = None,
     start_date: date | None = None,
     exclude_days: frozenset[str] = frozenset(),
     skip_weeks: frozenset[int] = frozenset(),
@@ -1097,6 +1106,35 @@ def answer_study_plan(
             detail=f"{course.title} ({course.id}) / {persona.codename}",
         ),
     ]
+
+    # Skill gate (before pace): without a skill source we don't know how to weight
+    # each module's time, so ask fresher vs. skill check first.
+    if skill_source is None:
+        steps.append(
+            TraceStep(
+                label="Skill gate",
+                passed=False,
+                detail="No skill check yet — asking fresher vs. quick check",
+            )
+        )
+        return AgentReply(
+            telemetry=_answer_telemetry(
+                summary="Asked the skill-gap check before pacing",
+                reasoning="Course chosen but no skill check; skill gates module weighting.",
+                route=Route.STUDY_PLAN,
+                sources=[],
+                model="offline" if settings.llm_offline else None,
+                tier=None,
+                steps=steps,
+            ),
+            tokens=_offline_stream(
+                f"Before we pace {course.title}, are you new to this topic or want a quick "
+                "skill check?"
+            ),
+            skill_gate=SkillGateRequestEvent(
+                catalog_id=course.id, title=course.title, prompt=_SKILL_PROMPT
+            ),
+        )
 
     # HITL gate: ask the pace before planning.
     if pace is None:
@@ -1144,6 +1182,7 @@ def answer_study_plan(
         skip_weeks=skip_weeks,
         reserved=reserved,
         exam_date=exam_date,
+        skill_scores=skill_scores,
         settings=settings,
     )
 
@@ -1225,7 +1264,7 @@ def answer_study_plan(
                 steps=steps,
             ),
             tokens=_offline_stream(_plan_offline_narration(plan)),
-            plan=plan,
+            plan=plan.model_copy(update={"awaiting_approval": True}),
         )
 
     # Agentic path: an LLM tool-calling agent infers the scheduling constraints
@@ -1252,11 +1291,13 @@ def answer_study_plan(
         time_window=time_window,
         max_session_minutes=max_session,
         excluded_dates=excluded_dates,
+        skill_scores=skill_scores,
     )
     agent = run_scheduler_agent(text, ctx, router, settings=settings)
     # The agent's plan (built from the constraints it inferred) is authoritative;
-    # fall back to the baseline plan if the agent never produced one.
-    final_plan = agent.plan or plan
+    # fall back to the baseline plan if the agent never produced one. It is a
+    # preview until the learner approves it (the chat path never persists modules).
+    final_plan = (agent.plan or plan).model_copy(update={"awaiting_approval": True})
     steps.append(
         TraceStep(
             label="Scheduling agent",

@@ -127,26 +127,35 @@ def test_post_jailbreak_emits_blocked_event(client: TestClient) -> None:
     assert "token" not in types
 
 
-def test_pace_then_plan_persists_modules_and_completion(client: TestClient) -> None:
+def test_skill_then_pace_then_approve_persists_modules_and_completion(client: TestClient) -> None:
     course_id = _create(client, content="How do Azure Functions work?")["id"]
     client.post(f"/api/courses/{course_id}/accept", json={"catalog_id": "cb-c01"})
 
-    # Without pace, asking for a plan returns a pace_request (no plan, no modules yet).
+    # First gate: a plan ask with no skill check returns the skill gate (not pace).
+    resp = client.post(f"/api/courses/{course_id}/messages", json={"content": "build a study plan"})
+    types = [e["type"] for e in _parse_sse(resp.text)]
+    assert "skill_gate_request" in types and "pace_request" not in types and "plan" not in types
+
+    # Skip the check as a fresher, then the pace gate is next.
+    assert client.post(f"/api/courses/{course_id}/skill/fresher").status_code == 200
     resp = client.post(f"/api/courses/{course_id}/messages", json={"content": "build a study plan"})
     types = [e["type"] for e in _parse_sse(resp.text)]
     assert "pace_request" in types and "plan" not in types
     assert client.get(f"/api/courses/{course_id}/modules").json() == []
 
-    # Set pace, then the plan builds and its modules are persisted.
+    # Set pace, then the plan builds as a PREVIEW (staged, not persisted).
     assert client.post(f"/api/courses/{course_id}/pace", json={"pace": "normal"}).status_code == 200
     resp = client.post(f"/api/courses/{course_id}/messages", json={"content": "build a study plan"})
     events = _parse_sse(resp.text)
     plan = next(e for e in events if e["type"] == "plan")["plan"]
     assert plan["pace"] == "normal"
     assert plan["weekly_study_hours"] == 3.0  # grounded in the calendar
+    assert plan["awaiting_approval"] is True
     assert "overestimate_factor" not in plan  # internal — never surfaced
+    assert client.get(f"/api/courses/{course_id}/modules").json() == []  # preview, not saved
 
-    modules = client.get(f"/api/courses/{course_id}/modules").json()
+    # Approve → the modules + deadlines are written.
+    modules = client.post(f"/api/courses/{course_id}/plan/approve").json()
     assert len(modules) == 4
     assert [m["sequence"] for m in modules] == [1, 2, 3, 4]
     assert modules[0]["locked"] is False and modules[1]["locked"] is True  # sequential
@@ -170,6 +179,7 @@ def test_pace_then_plan_persists_modules_and_completion(client: TestClient) -> N
 def test_schedule_edit_shifts_plan_and_persists(client: TestClient) -> None:
     course_id = _create(client, content="azure functions")["id"]
     client.post(f"/api/courses/{course_id}/accept", json={"catalog_id": "cb-c01"})
+    client.post(f"/api/courses/{course_id}/skill/fresher")
     client.post(f"/api/courses/{course_id}/pace", json={"pace": "normal"})
 
     # Baseline plan starts today.
@@ -322,6 +332,8 @@ def test_typing_is_blocked_while_a_pace_choice_is_pending(client: TestClient) ->
     use the pace buttons. Picking a pace unblocks typing (critique HITL)."""
     course_id = _create(client, content="How do Azure Functions work?")["id"]
     client.post(f"/api/courses/{course_id}/accept", json={"catalog_id": "cb-c01"})
+    # The skill gate comes first and does NOT lock typing; the fresher path clears it.
+    client.post(f"/api/courses/{course_id}/skill/fresher")
 
     # Asking for a plan with no pace set surfaces the pace_request gate.
     resp = client.post(f"/api/courses/{course_id}/messages", json={"content": "build a study plan"})

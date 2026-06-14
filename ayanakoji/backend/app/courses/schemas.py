@@ -213,3 +213,68 @@ class LlmSubmitResult(BaseModel):
     score: float
     passed: bool
     questions: list[LlmQuestionResult]
+
+
+# ── Skill-gap check (pre-study, choice-only, feeds scheduling) ────────────────
+
+QUESTIONS_PER_MODULE = 4
+
+
+class SkillCheckQuestion(BaseModel):
+    """One sampled bank choice question — correct answers withheld."""
+
+    id: str = Field(description="Authored bank question id, e.g. 'de-c01-m01-c03'")
+    prompt: str
+    kind: str  # "mcq" | "msq"
+    choices: list[str]
+
+
+class SkillCheckModule(BaseModel):
+    """One tab of the skill check: a module and its sampled questions."""
+
+    module_id: str
+    title: str
+    questions: list[SkillCheckQuestion]
+
+
+class SkillCheckRead(BaseModel):
+    """The full multi-tab skill check for a course."""
+
+    catalog_id: str
+    title: str
+    modules: list[SkillCheckModule]
+
+
+class SkillAnswer(BaseModel):
+    """One submitted answer keyed by the authored bank question id."""
+
+    module_id: str
+    question_id: str
+    selections: list[str]
+
+
+class SkillGradeBody(BaseModel):
+    answers: list[SkillAnswer]
+
+
+class SkillModuleScore(BaseModel):
+    module_id: str
+    title: str
+    correct: int
+    total: int
+    fraction: float = Field(ge=0, le=1, description="correct / total (0..1)")
+
+
+class SkillResultRead(BaseModel):
+    """Per-module + overall skill score; ``fresher`` marks the no-quiz path."""
+
+    catalog_id: str
+    overall_fraction: float = Field(ge=0, le=1)
+    modules: list[SkillModuleScore]
+    fresher: bool = False
+
+
+class SetDeadline(BaseModel):
+    """Set or clear the optional target deadline (ISO date)."""
+
+    deadline: str | None = Field(default=None, description="ISO date YYYY-MM-DD, or null to clear")
