@@ -1,0 +1,105 @@
+{
+  "course_id": "as-c01",
+  "module_id": "as-c01-m03",
+  "module_title": "Designing data storage solutions",
+  "choices": [
+    {
+      "id": "as-c01-m03-c01",
+      "module_id": "as-c01-m03",
+      "prompt": "According to the module, what two factors primarily drive storage selection?",
+      "kind": "mcq",
+      "choices": [
+        "The shape of the data and how it is accessed",
+        "The programming language and the cloud region",
+        "The team's budget and the size of the dataset",
+        "The compliance regime and the encryption standard"
+      ],
+      "correct_answers": [
+        "The shape of the data and how it is accessed"
+      ]
+    },
+    {
+      "id": "as-c01-m03-c02",
+      "module_id": "as-c01-m03",
+      "prompt": "An app stores user profiles whose fields vary by account type, needs very high write throughput, and serves readers on three continents with low latency. According to the module, which store fits and what single distinguishing capability makes it the right choice?",
+      "kind": "mcq",
+      "choices": [
+        "Azure Cosmos DB, because of its turnkey global distribution with single-digit-millisecond reads",
+        "Azure SQL Database, because of its ACID transactions and joins",
+        "Azure Blob Storage, because it stores opaque bytes cheaply at scale",
+        "SQL Managed Instance, because of its closer SQL Server parity"
+      ],
+      "correct_answers": [
+        "Azure Cosmos DB, because of its turnkey global distribution with single-digit-millisecond reads"
+      ]
+    },
+    {
+      "id": "as-c01-m03-c03",
+      "module_id": "as-c01-m03",
+      "prompt": "The module contrasts provisioned and serverless compute for Azure SQL Database. Which statement reflects the module's guidance?",
+      "kind": "mcq",
+      "choices": [
+        "Serverless compute autoscales and can pause during inactivity, fitting intermittent or dev/test databases that would otherwise pay for idle capacity",
+        "Provisioned compute autoscales and pauses during inactivity, making it ideal for dev/test databases",
+        "Serverless compute is best for steady, predictable load because it never pauses",
+        "Provisioned compute is only available in the DTU purchasing model, not the vCore model"
+      ],
+      "correct_answers": [
+        "Serverless compute autoscales and can pause during inactivity, fitting intermittent or dev/test databases that would otherwise pay for idle capacity"
+      ]
+    },
+    {
+      "id": "as-c01-m03-c04",
+      "module_id": "as-c01-m03",
+      "prompt": "Select all statements about Blob Storage access tiers and redundancy that the module explicitly supports.",
+      "kind": "msq",
+      "choices": [
+        "Hot is cheapest to read and most expensive to store, suited to actively served content",
+        "Archive requires a rehydration step (and delay) before an object can be read",
+        "Geo-redundant storage (GRS) replicates to a paired secondary region, surviving a regional outage",
+        "Locally redundant storage (LRS) spreads copies across availability zones, surviving a datacenter failure"
+      ],
+      "correct_answers": [
+        "Hot is cheapest to read and most expensive to store, suited to actively served content",
+        "Archive requires a rehydration step (and delay) before an object can be read",
+        "Geo-redundant storage (GRS) replicates to a paired secondary region, surviving a regional outage"
+      ]
+    },
+    {
+      "id": "as-c01-m03-c05",
+      "module_id": "as-c01-m03",
+      "prompt": "In the walkthrough, which two flags on the `az storage account create` command encode the requirements 'survive a regional outage' and 'set the default tier for actively served blobs'?",
+      "kind": "msq",
+      "choices": [
+        "`--sku Standard_GRS`",
+        "`--access-tier Hot`",
+        "`--sku Standard_LRS`",
+        "`--access-tier Archive`"
+      ],
+      "correct_answers": [
+        "`--sku Standard_GRS`",
+        "`--access-tier Hot`"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "as-c01-m03-l01",
+      "module_id": "as-c01-m03",
+      "prompt": "Solstice Tickets wants to put financial records, clickstream events/profiles, and uploaded venue photos and ticket PDFs into one relational database 'to keep things simple.' Explain why this is a trap and how you would map each data shape to the store built for it.",
+      "reference_answer": "Forcing all three shapes into one relational engine means overpaying for the photos, fighting the schema for the clickstream, and still not getting global low-latency reads. The financial records are relational data with a fixed schema needing ACID transactions and joins, so they belong in Azure SQL Database. The clickstream events and user profiles are semi-structured with an evolving shape, high write throughput, and globally distributed readers, so they fit Azure Cosmos DB with its turnkey global distribution and tunable consistency. The photos and PDFs are unstructured opaque bytes retrieved whole by key, so they belong in Azure Blob Storage, which stores them cheaply at scale. One workload, three stores, each cheaper and better at its job than a single forced choice."
+    },
+    {
+      "id": "as-c01-m03-l02",
+      "module_id": "as-c01-m03",
+      "prompt": "Compare the LRS, ZRS, and GRS redundancy options and walk through how you would choose redundancy for Solstice's irreplaceable financial backups versus easily regenerated thumbnails.",
+      "reference_answer": "Redundancy is a durability-and-availability decision set from the data's value and recovery requirements, not a default. Locally redundant storage (LRS) keeps copies within one datacenter — cheapest, but a regional disaster loses the data. Zone-redundant storage (ZRS) spreads copies across availability zones in one region, surviving a datacenter failure. Geo-redundant storage (GRS) also replicates to a paired secondary region, surviving a regional outage; each step up costs more and buys more resilience. Solstice's irreplaceable financial backups must survive the loss of an entire region, so they warrant geo-redundancy (GRS), whereas easily regenerated thumbnails carry low recovery value and may be fine on LRS."
+    },
+    {
+      "id": "as-c01-m03-l03",
+      "module_id": "as-c01-m03",
+      "prompt": "Walk through the blob access-tier lifecycle you would use for ticket PDFs that are read heavily for two weeks and then almost never, including how to provision it and the catch with the cheapest tier.",
+      "reference_answer": "Tier follows access frequency: actively served content goes in Hot (cheapest to read, most expensive to store), data accessed infrequently moves to Cool (lower storage cost), and rarely or almost-never read data can go to Cold or Archive for the lowest storage cost. So recent ticket PDFs are served from Hot and then aged to Cool and eventually Archive. You provision the account with `az storage account create` using `--access-tier Hot` as the default for actively served blobs, and you can move a concluded event's PDFs with `az storage blob set-tier --tier Cool`; in production you'd automate this with a lifecycle management policy rather than touching each blob. The catch is that Archive requires a rehydration step and delay before an object can be read, so putting actively served content there incurs rehydration delays on every read — it suits truly cold data only."
+    }
+  ]
+}
