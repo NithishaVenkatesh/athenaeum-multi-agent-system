@@ -1,0 +1,106 @@
+{
+  "course_id": "cb-c03",
+  "module_id": "cb-c03-m04",
+  "module_title": "Event- and message-based integration",
+  "choices": [
+    {
+      "id": "cb-c03-m04-c01",
+      "module_id": "cb-c03-m04",
+      "kind": "mcq",
+      "prompt": "According to the module, what is the core distinction that drives which broker you choose for an integration scenario?",
+      "choices": [
+        "Whether the producer is emitting a notification that something happened (an event) versus an instruction a consumer is expected to act on and own (a message)",
+        "Whether the workload runs in a single region or spans multiple regions",
+        "Whether the producer and consumer are written in the same programming language",
+        "Whether the payload is JSON or binary"
+      ],
+      "correct_answers": [
+        "Whether the producer is emitting a notification that something happened (an event) versus an instruction a consumer is expected to act on and own (a message)"
+      ]
+    },
+    {
+      "id": "cb-c03-m04-c02",
+      "module_id": "cb-c03-m04",
+      "kind": "mcq",
+      "prompt": "The warehouse's IoT scanners emit millions of scan events per hour that an analytics pipeline must ingest in order, and a second team also wants to replay them later. Which service does the module prescribe, and why?",
+      "choices": [
+        "Azure Event Hubs, because it is a high-throughput, partitioned streaming service that retains events so multiple independent consumers can read and replay at their own offsets, preserving order within a partition",
+        "Azure Event Grid, because it pushes each discrete event to multiple subscribers with built-in retry",
+        "Azure Service Bus, because its sessions and dead-lettering guarantee exactly-once ordered processing of the stream",
+        "Azure Queue Storage, because it is massively scalable and provides durable at-least-once delivery for the backlog of scans"
+      ],
+      "correct_answers": [
+        "Azure Event Hubs, because it is a high-throughput, partitioned streaming service that retains events so multiple independent consumers can read and replay at their own offsets, preserving order within a partition"
+      ]
+    },
+    {
+      "id": "cb-c03-m04-c03",
+      "module_id": "cb-c03-m04",
+      "kind": "mcq",
+      "prompt": "In the Northwind walkthrough, the delivery service publishes one ShipmentDelivered event to an Event Grid custom topic and returns immediately. How does a new fourth downstream consumer get added later?",
+      "choices": [
+        "It creates its own new event subscription to the topic; the producer code never changes",
+        "The delivery service adds a fourth explicit call to the new consumer's endpoint after publishing",
+        "The event must be re-published to a separate topic dedicated to the new consumer",
+        "Event Grid requires the topic to be deleted and recreated with the additional handler registered"
+      ],
+      "correct_answers": [
+        "It creates its own new event subscription to the topic; the producer code never changes"
+      ]
+    },
+    {
+      "id": "cb-c03-m04-c04",
+      "module_id": "cb-c03-m04",
+      "kind": "msq",
+      "prompt": "The module says you have outgrown Azure Queue Storage and should reach for Service Bus when the scenario requires which of the following richer semantics?",
+      "choices": [
+        "Dead-lettering for messages that cannot be processed",
+        "FIFO ordering via sessions",
+        "Publish/subscribe with topics and subscriptions",
+        "Durable, at-least-once delivery of a simple backlog of work items"
+      ],
+      "correct_answers": [
+        "Dead-lettering for messages that cannot be processed",
+        "FIFO ordering via sessions",
+        "Publish/subscribe with topics and subscriptions"
+      ]
+    },
+    {
+      "id": "cb-c03-m04-c05",
+      "module_id": "cb-c03-m04",
+      "kind": "msq",
+      "prompt": "Based on the module's 'Common pitfalls' and concepts, which statements about delivery guarantees, ordering, and message size are correct?",
+      "choices": [
+        "Most of these services are at-least-once, so consumers must be designed to be idempotent",
+        "Event Hubs preserves order only within a partition, not across the whole stream",
+        "Queue Storage caps messages at 64 KB, so large payloads should use the claim-check pattern (store the blob, pass a reference)",
+        "All four brokers provide exactly-once, strictly ordered delivery by default"
+      ],
+      "correct_answers": [
+        "Most of these services are at-least-once, so consumers must be designed to be idempotent",
+        "Event Hubs preserves order only within a partition, not across the whole stream",
+        "Queue Storage caps messages at 64 KB, so large payloads should use the claim-check pattern (store the blob, pass a reference)"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "cb-c03-m04-l01",
+      "module_id": "cb-c03-m04",
+      "prompt": "Explain why the order-fulfillment workflow (never lose an order, process each exactly once in practice, and quarantine orders it cannot process) should use Azure Service Bus rather than Queue Storage, and name the specific Service Bus features you would rely on.",
+      "reference_answer": "This workflow needs reliable, ordered, transactional message handling, which is exactly what Service Bus provides among the four brokers; Queue Storage only gives basic durable at-least-once delivery without these richer semantics. You would rely on dead-lettering to quarantine orders that repeatedly fail or expire so failures do not vanish silently, and on sessions for FIFO ordering plus duplicate detection to support exactly-once-style processing. Because most of these services are at-least-once, consumers must also be designed to be idempotent and handle redelivery. Operationally you must monitor and drain the dead-letter queue as a first-class task, otherwise quarantined orders are lost. The signal that you have outgrown Queue Storage is precisely needing ordering, dead-lettering, duplicate detection, or transactions."
+    },
+    {
+      "id": "cb-c03-m04-l02",
+      "module_id": "cb-c03-m04",
+      "prompt": "Compare Azure Event Grid and Azure Event Hubs in terms of event shape, volume, and how consumers read, and explain why swapping one for the other is a pitfall.",
+      "reference_answer": "Event Grid is a serverless router for discrete, reactive events at modest per-event volumes: a publisher sends events to a topic, subscribers register with filters, and Event Grid pushes each matching event to handlers like a Function, webhook, or queue with built-in retry. Event Hubs is a high-throughput streaming ingestion service for telemetry and event streams of millions of events, partitioned for parallelism and retained for a window so multiple independent consumers can read at their own pace, tracking position with an offset/checkpoint rather than removing events. The pitfall is mismatching shape and volume: using Event Hubs for discrete reactive events adds needless complexity, while using Event Grid for high-volume streams causes throughput collapse. So the delivery-completed fan-out belongs on Event Grid, and the warehouse scanner firehose belongs on Event Hubs."
+    },
+    {
+      "id": "cb-c03-m04-l03",
+      "module_id": "cb-c03-m04",
+      "prompt": "Walk through how the Northwind delivery service publishes a ShipmentDelivered event with Event Grid and explain how this achieves decoupling and the fan-out to billing, notifications, and analytics.",
+      "reference_answer": "First you create an Event Grid custom topic (for example nw-shipment-events) and capture its publish endpoint and access key, storing the key in Key Vault. The delivery service then publishes a single ShipmentDelivered event using the Event Grid SDK with DefaultAzureCredential, where the topic's managed-identity RBAC role grants publish rights, and the send call is fire-and-forget. The service publishes one event and returns immediately, so it never calls billing, notifications, or analytics directly and is never blocked if any of them is slow. Each downstream system creates its own event subscription to the topic, optionally filtered by event_type, and Event Grid pushes the event to each handler with automatic retry. This is the decoupling payoff: the producer knows nothing about its consumers, and adding a fourth consumer later is purely a new subscription while the producer code never changes."
+    }
+  ]
+}
