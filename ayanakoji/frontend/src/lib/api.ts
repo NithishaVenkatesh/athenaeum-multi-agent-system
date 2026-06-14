@@ -78,6 +78,8 @@ export interface MessageMeta {
   skill_gate?: SkillGateRequest | null;
   skill_result?: SkillResult | null;
   new_chat?: NewChat | null;
+  practice?: Practice | null;
+  actions?: { prompt: string | null; actions: Action[] } | null;
 }
 
 export interface ChatMessage {
@@ -366,6 +368,25 @@ export interface SkillAnswer {
   selections: string[];
 }
 
+export interface PracticeQuestion {
+  id: string;
+  prompt: string;
+  kind: "mcq";
+  choices: string[];
+}
+
+export interface Practice {
+  module_id: string;
+  title: string;
+  questions: PracticeQuestion[];
+}
+
+export interface Action {
+  kind: "take_evaluation" | "go_to_module" | "practice_again";
+  label: string;
+  module_id: string | null;
+}
+
 export type PipelineEvent =
   | { type: "phase"; phase: PhaseTelemetry }
   | { type: "token"; token: string }
@@ -392,6 +413,8 @@ export type PipelineEvent =
       target_course_id?: string | null;
       target_title?: string | null;
     }
+  | { type: "practice"; module_id: string; title: string; questions: PracticeQuestion[] }
+  | { type: "action"; prompt: string | null; actions: Action[] }
   | { type: "blocked"; reason: string }
   | { type: "error"; message: string }
   | { type: "done"; route: Route | null; suggested: boolean };
@@ -404,6 +427,8 @@ export interface StreamHandlers {
   onPaceRequest?: (request: PaceRequest) => void;
   onSkillGate?: (request: SkillGateRequest) => void;
   onNewChat?: (newChat: NewChat) => void;
+  onPractice?: (practice: Practice) => void;
+  onAction?: (actions: Action[]) => void;
   onBlocked?: (reason: string) => void;
   onError?: (message: string) => void;
   onDone?: (info: { route: Route | null; suggested: boolean }) => void;
@@ -497,6 +522,16 @@ function dispatchEvent(event: PipelineEvent, handlers: StreamHandlers): void {
         target_title: event.target_title,
       });
       break;
+    case "practice":
+      handlers.onPractice?.({
+        module_id: event.module_id,
+        title: event.title,
+        questions: event.questions,
+      });
+      break;
+    case "action":
+      handlers.onAction?.(event.actions);
+      break;
     case "blocked":
       handlers.onBlocked?.(event.reason);
       break;
@@ -537,6 +572,53 @@ export async function streamFeedback(
   const decoder = new TextDecoder();
   let buffer = "";
 
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const events = buffer.split("\n\n");
+    buffer = events.pop() ?? "";
+    for (const event of events) {
+      const line = event.trim();
+      if (!line.startsWith("data:")) continue;
+      const payload = JSON.parse(line.slice(5).trim()) as PipelineEvent;
+      dispatchEvent(payload, handlers);
+    }
+  }
+}
+
+/**
+ * Submit a practice round's selections and stream the assessor's review.
+ *
+ * Grading runs server-side against the round's answer key (stored on the course),
+ * so the client only ever sends its selections. Reuses the shared SSE dispatcher;
+ * the review arrives as tokens, then a CTA `action` event.
+ */
+export async function streamPractice(
+  courseId: string,
+  selections: Record<string, string[]>,
+  handlers: StreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/courses/${courseId}/practice/submit`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+      },
+      body: JSON.stringify({ selections }),
+      signal,
+    },
+  );
+  if (!response.ok || !response.body) {
+    throw new Error(`Practice stream failed: ${response.status}`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
