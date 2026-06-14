@@ -90,3 +90,8 @@ def test_submit_without_active_round_returns_409(client, session) -> None:
     course_id = _make_course_with_module(session)
     resp = client.post(f"/api/courses/{course_id}/practice/submit", json={"selections": {}})
     assert resp.status_code == 409
+
+
+def test_submit_missing_course_returns_404(client) -> None:
+    resp = client.post("/api/courses/nonexistent-id/practice/submit", json={"selections": {}})
+    assert resp.status_code == 404

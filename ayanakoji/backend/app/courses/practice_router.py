@@ -70,10 +70,10 @@ def _stream_practice_review(
             module_id=module_id, module_title=module_title, material=material, grade=grade
         )
 
-        yield _sse(PhaseEvent(phase=reply.telemetry).model_dump(mode="json"))
         parts: list[str] = []
         completed = False
         try:
+            yield _sse(PhaseEvent(phase=reply.telemetry).model_dump(mode="json"))
             for token in reply.tokens:
                 parts.append(token)
                 yield _sse(TokenEvent(token=token).model_dump(mode="json"))
