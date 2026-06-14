@@ -1,0 +1,104 @@
+{
+  "course_id": "de-c02",
+  "module_id": "de-c02-m02",
+  "module_title": "Transforming with T-SQL and Synapse",
+  "choices": [
+    {
+      "id": "de-c02-m02-c01",
+      "module_id": "de-c02-m02",
+      "kind": "mcq",
+      "prompt": "A Synapse dedicated SQL pool is described as a massively parallel processing (MPP) engine where a table is split across distributions and a query runs as many parallel tasks. Given this design, which kind of operation does the module say the engine handles well, and why?",
+      "choices": [
+        "Set-based operations like INSERT ... SELECT, UPDATE ... FROM, and MERGE, because each distribution works its slice in parallel",
+        "Row-by-row cursor loops, because each row is dispatched to its own distribution for isolation",
+        "Single-threaded transactions, because serializing work guarantees consistency across distributions",
+        "Iterative procedural logic, because the engine replays each iteration on every distribution simultaneously"
+      ],
+      "correct_answers": [
+        "Set-based operations like INSERT ... SELECT, UPDATE ... FROM, and MERGE, because each distribution works its slice in parallel"
+      ]
+    },
+    {
+      "id": "de-c02-m02-c02",
+      "module_id": "de-c02-m02",
+      "kind": "mcq",
+      "prompt": "A nightly job loads 50 million rows into a dedicated SQL pool using a loop of INSERT statements and runs for hours. According to the module, what load pattern should replace it and why is it faster?",
+      "choices": [
+        "External tables plus CTAS (or COPY INTO), because they read files in parallel directly from storage and load minimally-logged",
+        "A single MERGE statement against the source files, because MERGE skips logging entirely on an MPP engine",
+        "A cursor that batches the INSERTs in groups of 10,000, because batching converts row-by-row work into set-based work",
+        "Streaming the rows through the client with a faster driver, because client-side parallelism bypasses the distributions"
+      ],
+      "correct_answers": [
+        "External tables plus CTAS (or COPY INTO), because they read files in parallel directly from storage and load minimally-logged"
+      ]
+    },
+    {
+      "id": "de-c02-m02-c03",
+      "module_id": "de-c02-m02",
+      "kind": "mcq",
+      "prompt": "The morning join of two large fact tables shows a large SHUFFLE_MOVE in the query plan. Per the module, what physical design change removes the shuffle?",
+      "choices": [
+        "Hash-distribute both tables on the column they join on, so matching rows already live on the same distribution",
+        "Replicate both large fact tables so every distribution has a full copy and no movement is needed",
+        "Add a clustered columnstore index to both tables so the optimizer caches the join result",
+        "Rewrite the join as a cursor so rows are compared one pair at a time without movement"
+      ],
+      "correct_answers": [
+        "Hash-distribute both tables on the column they join on, so matching rows already live on the same distribution"
+      ]
+    },
+    {
+      "id": "de-c02-m02-c04",
+      "module_id": "de-c02-m02",
+      "kind": "mcq",
+      "prompt": "In the walkthrough, the outer OPENJSON extracts a header property defined as `items NVARCHAR(MAX) '$.items' AS JSON`. What is the specific purpose of the `AS JSON` modifier, and what happens if it is omitted?",
+      "choices": [
+        "It keeps the nested array as a JSON blob so a second OPENJSON can shred it; without it, the inner array cannot be handed to a second OPENJSON and the nested shred fails or returns nulls",
+        "It validates that the document is well-formed JSON before parsing; without it, OPENJSON raises a parse error on the whole document",
+        "It forces the column to be stored compressed; without it, the staging table grows too large to CTAS",
+        "It converts the array into a comma-separated string; without it, CROSS APPLY produces one row per character instead of per element"
+      ],
+      "correct_answers": [
+        "It keeps the nested array as a JSON blob so a second OPENJSON can shred it; without it, the inner array cannot be handed to a second OPENJSON and the nested shred fails or returns nulls"
+      ]
+    },
+    {
+      "id": "de-c02-m02-c05",
+      "module_id": "de-c02-m02",
+      "kind": "msq",
+      "prompt": "According to the module, which statements about CTAS (CREATE TABLE ... AS SELECT) as a load pattern in a dedicated SQL pool are true? Select all that apply.",
+      "choices": [
+        "CTAS creates a new physical table and populates it in one parallel, minimally-logged operation",
+        "CTAS lets you set the table's distribution and index at creation time",
+        "CTAS streams rows one statement at a time through the client, which is why it is preferred over INSERT",
+        "The idiom is external table → SELECT with your transforms → CTAS into the target with the right distribution"
+      ],
+      "correct_answers": [
+        "CTAS creates a new physical table and populates it in one parallel, minimally-logged operation",
+        "CTAS lets you set the table's distribution and index at creation time",
+        "The idiom is external table → SELECT with your transforms → CTAS into the target with the right distribution"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "de-c02-m02-l01",
+      "module_id": "de-c02-m02",
+      "prompt": "Explain why row-by-row cursors are an anti-pattern in a Synapse dedicated SQL pool, and describe how the MPP architecture changes the way you should express transformations.",
+      "reference_answer": "A dedicated SQL pool is a massively parallel processing (MPP) engine: the table is split across distributions and a query runs as many parallel tasks, one per distribution, so each distribution works its slice simultaneously. Set-based operations like INSERT ... SELECT, UPDATE ... FROM, and MERGE exploit this parallelism, while cursors and row-by-row loops serialize work the engine wants to parallelize and can run orders of magnitude slower. The correct approach is to express the transformation as a single set-based statement rather than iterating. So instead of a cursor you rewrite the logic as MERGE, UPDATE ... FROM, or CTAS to let every distribution process its rows in parallel."
+    },
+    {
+      "id": "de-c02-m02-l02",
+      "module_id": "de-c02-m02",
+      "prompt": "Walk through how you would load JSON supplier delivery documents (a header plus a nested items array) from the lake into a curated, hash-distributed fact table, naming each T-SQL mechanism you would use and what it does.",
+      "reference_answer": "First define an external table that points at the JSON files in the lake (via the PolyBase-style external table mechanism or COPY INTO) so the engine reads them in parallel directly from storage. Then shred the JSON with OPENJSON: an outer OPENJSON with a WITH clause extracts the typed header columns and pulls the items array out as a JSON blob using AS JSON, and a CROSS APPLY OPENJSON over that array explodes it into one row per line item with its own WITH schema casting each value. Finally use CTAS (CREATE TABLE ... AS SELECT) to materialize the result into the gold fact table in one parallel, minimally-logged operation, setting DISTRIBUTION = HASH(product_id) so it hashes on the join key and adding a clustered columnstore index so the dashboards' analytical scans are fast. Hash-distributing on product_id (the column joined to the product dimension) means later joins avoid a shuffle."
+    },
+    {
+      "id": "de-c02-m02-l03",
+      "module_id": "de-c02-m02",
+      "prompt": "Some product names arrive as mojibake (for example 'café' shows up as 'cafÃ©'). Explain why this happens and compare the durable fix the module recommends against patching the strings with REPLACE chains.",
+      "reference_answer": "A file is just bytes, and turning bytes into characters requires the correct code page; when a UTF-8 file is read as Latin-1 (or vice versa), accented characters decode wrong and become mojibake. The fix lives at load time: tell the loader the source encoding so it decodes correctly, since COPY INTO and external file formats accept an encoding setting, and when the source is genuinely mixed the durable answer is to standardize on UTF-8 upstream. Patching the symptoms with REPLACE chains is brittle whack-a-mole that never covers every character. The module's guidance is to fix the decode, not each symptom."
+    }
+  ]
+}
