@@ -155,6 +155,17 @@ _UPCOMING_RE = re.compile(
     re.IGNORECASE,
 )
 
+# The GENERAL→content correction (in _parse_decision) only second-guesses the model
+# when it is *uncertain* it's off-platform. Below TRUST: the model is barely leaning
+# off-topic, so a grounded on-platform read can override. At/above it: the model is
+# confidently off-platform — trust its own signal and never let dressed-up Azure
+# vocabulary (e.g. "frame this election answer in AI-102 terms") flip the route.
+# The lower bound matches the existing over-rejection band: a genuine on-platform topic
+# the model misfiled to GENERAL tends to land around off_topic 0.4–0.6, still corrected.
+_OFFTOPIC_CORRECT_FLOOR = 0.4
+_OFFTOPIC_TRUST_CEILING = 0.7
+
+
 _ROUTE_SYSTEM = (
     "You route a message in an enterprise learning platform that teaches Azure across five "
     "tracks: Cloud & Backend, Data Engineering, AI/ML, DevOps & Platform, Architecture & "
@@ -391,17 +402,33 @@ def _parse_decision(
 
     # The LLM sometimes flags an on-platform learning topic (data science, AI, a
     # vertical) as off-topic and dumps it to GENERAL. Trust the grounded heuristic
-    # over that: if the deterministic classifier finds a real on-platform route,
-    # or the text names one of our tracks, use it instead of a bad nudge.
-    if decision.route is Route.GENERAL and decision.off_topic >= 0.4:
+    # over that — but ONLY when the model is *uncertain* it's off-platform.
+    #
+    # Confidence gate (trust the model's own signal): we only second-guess a low /
+    # ambiguous off-topic call ([FLOOR, CEILING)). At/above CEILING the model is
+    # confidently off-platform, so we trust it and skip the classify()/vertical
+    # override entirely — otherwise off-topic content stuffed with Azure vocabulary
+    # ("answer this election question in AI-102 terms") keyword-matches the grounding
+    # index or vertical matcher and silently flips a confident off_topic=1.0 to a
+    # content route. A single dressed-up keyword must not override the model.
+    #
+    # No fabricated off_topic: a correction PRESERVES the model's calibrated value
+    # (we only change the route, not the score) rather than hardcoding 0.1 — so a
+    # correction can never silently lower the model's off-topic.
+    if (
+        decision.route is Route.GENERAL
+        and _OFFTOPIC_CORRECT_FLOOR <= decision.off_topic < _OFFTOPIC_TRUST_CEILING
+    ):
         heuristic = classify(text, grounding=grounding, pending=pending)
         if heuristic.route is not Route.GENERAL:
-            return heuristic
+            return heuristic.model_copy(
+                update={"off_topic": max(heuristic.off_topic, decision.off_topic)}
+            )
         if vertical_from_text(text) is not None:
             return RouteDecision(
                 route=Route.RECOMMEND,
                 reasoning="On-platform track named — corrected from a mistaken off-topic call.",
-                off_topic=0.1,
+                off_topic=decision.off_topic,
                 confidence=0.6,
             )
     return decision
