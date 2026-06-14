@@ -72,16 +72,6 @@ def _offline_stream(text: str) -> Iterator[str]:
         yield word + " "
 
 
-def _collect(handle: StreamHandle) -> str:
-    """Drain a model stream to a single string so a grounding guard can run on it.
-
-    Grounded routes (foundry, study plan) buffer the full narration, validate it
-    against the deterministic sources, then re-stream the cleaned text. Correctness
-    beats live tokens where a fabricated citation or number would otherwise leak.
-    """
-    return "".join(handle.tokens).strip()
-
-
 def _answer_telemetry(
     *,
     summary: str,
@@ -947,20 +937,6 @@ def _plan_offline_narration(plan: StudyPlan) -> str:
     )
 
 
-def _plan_facts(plan: StudyPlan) -> str:
-    mods = "; ".join(
-        f"#{m.sequence} {m.title} ({m.estimated_minutes} min, by {m.complete_before})"
-        for m in plan.modules
-    )
-    sess = ", ".join(f"{s.day} {s.start}-{s.end} ({s.source})" for s in plan.sessions)
-    return (
-        f"course={plan.title} ({plan.cert}); pace={plan.pace.value}; "
-        f"weekly_hours={plan.weekly_study_hours}; total_hours={plan.total_hours}; "
-        f"weeks={plan.weeks}; capacity_reason={plan.capacity_reason}; "
-        f"sessions=[{sess}]; modules=[{mods}]"
-    )
-
-
 def _need_course_reply(
     persona: Persona | None, taken: list[TakenCourse], *, offline: bool
 ) -> AgentReply:
@@ -1201,39 +1177,47 @@ def answer_study_plan(
             plan=plan,
         )
 
+    # Agentic path: an LLM tool-calling agent infers the scheduling constraints
+    # from free text (open vocabulary, no regex) and calls a deterministic tool to
+    # build the plan — so the model adapts while every number stays auditable.
+    from app.agent.scheduler import SchedulerContext, run_scheduler_agent
+
     router = router or ModelRouter(settings)
-    system = (
-        "You are Athenaeum's study coach presenting a study plan. The plan below was computed "
-        "deterministically from the learner's real calendar, narrate it warmly in 3-4 "
-        "sentences. Quote ONLY the numbers and dates given; never invent figures. Note that the "
-        "study time comes from slots already in their week and modules are done in order with a "
-        "complete-by date each. Do not use em dashes; use commas or periods. End by "
-        "encouraging them to start module 1.\n\nPLAN: " + _plan_facts(plan)
+    ctx = SchedulerContext(
+        persona=persona,
+        catalog_id=course.id,
+        title=course.title,
+        cert=course.primary_cert,
+        today=start_date or date.today(),
+        reserved=reserved,
+        pace=pace,
+        start_date=start_date,
+        exclude_days=exclude_days,
+        skip_weeks=skip_weeks,
+        exam_date=exam_date,
     )
-    handle = router.stream(
-        Capability.WORKHORSE,
-        [{"role": "system", "content": system}, {"role": "user", "content": text}],
-        max_tokens=500,
-    )
+    agent = run_scheduler_agent(text, ctx, router, settings=settings)
+    # The agent's plan (built from the constraints it inferred) is authoritative;
+    # fall back to the baseline plan if the agent never produced one.
+    final_plan = agent.plan or plan
     steps.append(TraceStep(
-        label="LLM narration",
-        passed=True,
-        detail="WORKHORSE capability · max 500 tokens · deterministic plan injected",
-        model=handle.model,
+        label="Scheduling agent",
+        passed=agent.plan is not None,
+        detail=f"Tool-driven plan; constraints={agent.constraints}",
+        model=agent.model,
     ))
-    # Buffer the narration and number-guard it: if the model invented any figure not
-    # in the deterministic plan, fall back to the provably-grounded offline narration.
-    narration = _collect(handle)
-    is_grounded = bool(narration) and plan_narration_is_grounded(narration, plan)
-    if not narration or not is_grounded:
-        narration = _plan_offline_narration(plan)
+    # Number-guard the narration against the plan the agent actually built.
+    narration = agent.narration
+    is_grounded = bool(narration) and plan_narration_is_grounded(narration, final_plan)
+    if not is_grounded:
+        narration = _plan_offline_narration(final_plan)
     steps.append(TraceStep(
         label="Number guard",
         passed=is_grounded,
         detail=(
-            "All figures verified against the deterministic plan"
+            "All figures verified against the agent's plan"
             if is_grounded
-            else "Invented figures detected — fell back to grounded narration"
+            else "Ungrounded figures — fell back to the provably-grounded narration"
         ),
     ))
     return AgentReply(
@@ -1242,10 +1226,10 @@ def answer_study_plan(
             reasoning=reasoning,
             route=Route.STUDY_PLAN,
             sources=[],
-            model=handle.model,
-            tier=handle.tier,
+            model=agent.model,
+            tier=agent.tier,
             steps=steps,
         ),
         tokens=_offline_stream(narration),
-        plan=plan,
+        plan=final_plan,
     )
