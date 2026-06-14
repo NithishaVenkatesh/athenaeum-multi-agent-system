@@ -1,0 +1,104 @@
+{
+  "course_id": "do-c01",
+  "module_id": "do-c01-m02",
+  "module_title": "Pull requests, policies, and protection",
+  "choices": [
+    {
+      "id": "do-c01-m02-c01",
+      "module_id": "do-c01-m02",
+      "prompt": "According to the module, what is the defining characteristic that turns a pull request into an enforced gate rather than mere etiquette?",
+      "kind": "mcq",
+      "choices": [
+        "The rules live server-side, attached to the target branch, and apply to everyone including admins if configured",
+        "A `.git/hooks` script that runs on each developer's machine before they push",
+        "A convention documented in the team wiki that everyone agrees to follow",
+        "A pull-request template that reminds reviewers to read the diff carefully"
+      ],
+      "correct_answers": [
+        "The rules live server-side, attached to the target branch, and apply to everyone including admins if configured"
+      ]
+    },
+    {
+      "id": "do-c01-m02-c02",
+      "module_id": "do-c01-m02",
+      "prompt": "A reviewer approves a clean diff, then the author pushes three more commits \"to address feedback\" before merging. Which policy ensures those new commits are not merged unreviewed?",
+      "kind": "mcq",
+      "choices": [
+        "Dismiss stale approvals when new commits are pushed",
+        "Require the branch to be up to date with its target before merging",
+        "Require a minimum of two approving reviews instead of one",
+        "Require that specific status checks pass before merging"
+      ],
+      "correct_answers": [
+        "Dismiss stale approvals when new commits are pushed"
+      ]
+    },
+    {
+      "id": "do-c01-m02-c03",
+      "module_id": "do-c01-m02",
+      "prompt": "The module says requiring a branch to be \"up to date with main before merge\" (GitHub's `strict`) protects against a specific failure that passing the build on the branch alone does not. What failure is that?",
+      "kind": "mcq",
+      "choices": [
+        "Two PRs each pass CI in isolation but break `main` when combined",
+        "A reviewer approves an early diff and later commits ship unreviewed",
+        "An administrator bypasses the gate and pushes directly to `main`",
+        "A code owner for a sensitive path is never added to the review"
+      ],
+      "correct_answers": [
+        "Two PRs each pass CI in isolation but break `main` when combined"
+      ]
+    },
+    {
+      "id": "do-c01-m02-c04",
+      "module_id": "do-c01-m02",
+      "prompt": "Per the module, which building blocks of branch protection / branch policies are described as common across both Azure Repos and GitHub? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Require a minimum number of approving reviews",
+        "Disallow direct pushes so all changes flow through pull requests",
+        "Require that specific status checks pass before merging",
+        "Automatically delete the source branch after a successful merge"
+      ],
+      "correct_answers": [
+        "Require a minimum number of approving reviews",
+        "Disallow direct pushes so all changes flow through pull requests",
+        "Require that specific status checks pass before merging"
+      ]
+    },
+    {
+      "id": "do-c01-m02-c05",
+      "module_id": "do-c01-m02",
+      "prompt": "In Meridian's GitHub protection rule, which field activates the ownership declared in the `CODEOWNERS` file so platform and billing teams are pulled into matching reviews?",
+      "kind": "mcq",
+      "choices": [
+        "`require_code_owner_reviews`",
+        "`required_approving_review_count`",
+        "`enforce_admins`",
+        "`required_status_checks` with `strict: true`"
+      ],
+      "correct_answers": [
+        "`require_code_owner_reviews`"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "do-c01-m02-l01",
+      "module_id": "do-c01-m02",
+      "prompt": "Explain why the module insists that quality must come from server-side branch protection (or branch policies) rather than from team convention or client-side Git hooks. Reference the specific weaknesses of the alternatives.",
+      "reference_answer": "A pull request is only a request; by itself it enforces nothing, and a motivated engineer can merge their own unreviewed branch in seconds. The module's core point is that humans drift but policy does not: branch protection (GitHub's term) and branch policies (Azure Repos' term) live on the server, attached to the target branch like `main`, and refuse to open the merge until conditions are met. Conventions in a wiki get erased by the next deadline, and `.git/hooks` scripts run on each developer's machine so any developer can skip them. Server-side rules instead apply to everyone, including administrators when `enforce_admins` (or its Azure equivalent) is on, so the safe path becomes the only path."
+    },
+    {
+      "id": "do-c01-m02-l02",
+      "module_id": "do-c01-m02",
+      "prompt": "Walk through how Meridian encodes its `main` protection rule on GitHub, naming the CODEOWNERS step and what each key field in the API call enforces.",
+      "reference_answer": "First Meridian declares ownership in a `.github/CODEOWNERS` file mapping paths to teams, for example `/infra/` to @meridian/platform and `/src/billing/` to @meridian/billing-leads, so owners are auto-requested on matching changes. Then it PUTs a protection rule to `repos/meridian/storefront/branches/main/protection` via `gh api`. In that payload, `required_status_checks` with `strict: true` forces the branch to be up to date before merge and `contexts` makes `ci/build` and `ci/test` mandatory; `require_code_owner_reviews: true` activates the CODEOWNERS ownership; `dismiss_stale_reviews: true` resets approval when new commits land; `required_approving_review_count: 1` sets the review floor; `enforce_admins: true` stops even admins from bypassing; and `allow_force_pushes: false` plus `allow_deletions: false` protect the history of `main`. The module also warns that field names and options evolve, so you should verify the current schema in the GitHub branch-protection docs before scripting it for production."
+    },
+    {
+      "id": "do-c01-m02-l03",
+      "module_id": "do-c01-m02",
+      "prompt": "Compare how you would protect a billing-logic or production-infrastructure change versus a one-line documentation typo, and explain the design principle behind treating them differently.",
+      "reference_answer": "The module's principle is proportionality: apply heavier restrictions where a mistake is expensive and lighter ones where it is cheap, so no single uniform gate is either too loose for the dangerous parts or too heavy for the trivial ones. A change to billing logic or production infrastructure might require two approvals, a passing security scan, and a code owner, whereas a documentation typo might require just one approval and the standard build. You implement this by scoping policies, with different required reviewers and check requirements on different paths (via CODEOWNERS or required-reviewer-by-path), plus branch-name patterns so the strictest rules guard `main` and release branches while a sandbox branch stays permissive. The payoff is a gate strangers can pass safely without making a one-line doc fix feel like shipping to a nuclear reactor; uniform heavy policy instead makes people route around the process or stop contributing small fixes."
+    }
+  ]
+}
