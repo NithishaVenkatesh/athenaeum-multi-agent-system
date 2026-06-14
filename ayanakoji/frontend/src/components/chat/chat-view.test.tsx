@@ -175,6 +175,9 @@ describe("ChatView", () => {
     await waitFor(() =>
       expect(screen.getByText(/now your course workspace/i)).toBeInTheDocument(),
     );
+    // The next step is the skill check, so the button names that, not "build plan".
+    expect(screen.getByRole("button", { name: /analyze skill/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /build my study plan/i })).toBeNull();
   });
 
   it("renders a calendar-grounded plan card from a plan event", async () => {

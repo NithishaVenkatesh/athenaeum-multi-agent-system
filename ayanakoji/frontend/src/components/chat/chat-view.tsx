@@ -519,7 +519,7 @@ export function ChatView({
                     className="text-xs"
                     onClick={() => handleSend("Build me a study plan for this course")}
                   >
-                    Build my study plan
+                    Analyze skill
                   </Button>
                 )}
                 {turn.skillGate && !turn.skillCheck && !turn.skillResult && (
