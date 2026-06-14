@@ -205,3 +205,217 @@ def generate_practice(
         sources=[source],
         practice=PracticeEvent(module_id=module_id, title=module_title, questions=questions),
     )
+
+
+# ---------------------------------------------------------------------------
+# Task 4: grading, verdict, review, CTA replies, dispatch
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PracticeGrade:
+    """Deterministic grading of one practice round."""
+
+    correct: int
+    total: int
+    verdict: str  # "ready" | "not_yet" | "study"
+    missed: list[str]  # prompts of the questions answered wrong
+
+
+def _verdict_for(correct: int) -> str:
+    if correct >= READY_MIN_CORRECT:
+        return "ready"
+    if correct <= STUDY_MAX_CORRECT:
+        return "study"
+    return "not_yet"
+
+
+def grade_practice(
+    questions: list[dict[str, object]], selections: dict[str, list[str]]
+) -> PracticeGrade:
+    """Grade selections against the server-side key: a single exact correct pick wins."""
+    correct = 0
+    missed: list[str] = []
+    for q in questions:
+        qid = str(q.get("id"))
+        picks = selections.get(qid, []) or []
+        if len(picks) == 1 and picks[0] == q.get("correct"):
+            correct += 1
+        else:
+            missed.append(str(q.get("prompt", qid)))
+    total = len(questions)
+    return PracticeGrade(correct=correct, total=total, verdict=_verdict_for(correct), missed=missed)
+
+
+def _practice_actions(verdict: str, module_id: str) -> ActionEvent:
+    again = Action(kind="practice_again", label="Practise again", module_id=module_id)
+    if verdict == "ready":
+        return ActionEvent(
+            prompt="You are ready. Take the module evaluation whenever you want.",
+            actions=[
+                Action(kind="take_evaluation", label="Take the evaluation", module_id=module_id),
+                again,
+            ],
+        )
+    return ActionEvent(
+        prompt="Spend a little more time on the module, then come back.",
+        actions=[
+            Action(kind="go_to_module", label="Go to the module", module_id=module_id),
+            again,
+        ],
+    )
+
+
+def _review_offline(module_title: str, grade: PracticeGrade) -> str:
+    score = f"{grade.correct}/{grade.total}"
+    missed = "; ".join(grade.missed[:3])
+    if grade.verdict == "ready":
+        return (
+            f"(offline mode) Nice work, you got {score} on this practice for {module_title}. You "
+            "clearly understand the core ideas. When you are ready, take the module evaluation."
+        )
+    if grade.verdict == "not_yet":
+        return (
+            f"(offline mode) You got {score} on this practice for {module_title}. You are close. "
+            f"Review these before the evaluation: {missed}. Then practise again or open the module."
+        )
+    return (
+        f"(offline mode) You got {score} on this practice for {module_title}. Let us build the "
+        f"foundation first. Revisit the module, especially: {missed}. Practise again when ready."
+    )
+
+
+def review_practice(
+    *,
+    module_id: str,
+    module_title: str,
+    material: str,
+    grade: PracticeGrade,
+    router: ModelRouter | None = None,
+    settings: Settings | None = None,
+) -> AgentReply:
+    """Honest, motivating review of a practice round, with the verdict's CTA."""
+    settings = settings or get_settings()
+    source = GroundingSource(ref=module_id, title=module_title, snippet=material[:200], kind="course")
+    reasoning = f"Practice review for {module_id}: {grade.correct}/{grade.total} → {grade.verdict}"
+
+    if settings.llm_offline:
+        tokens: Iterator[str] = _offline_stream(_review_offline(module_title, grade))
+        model: str | None = "offline"
+    else:
+        missed = "; ".join(grade.missed) or "(none)"
+        tone = (
+            "They passed; congratulate them honestly and invite them to take the evaluation."
+            if grade.verdict == "ready"
+            else "They are not ready yet; be honest about the gaps but motivating, and steer them "
+            "back to study the module before the evaluation."
+        )
+        system = (
+            "You are Athenaeum's honest, encouraging course tutor reviewing a short practice the "
+            f"learner just took for the module below. They scored {grade.correct}/{grade.total}. "
+            f"{tone} Ground every point in the MODULE material; name the concepts they missed and "
+            "what to revisit, in 3 to 4 sentences. Never invent content. Do not use em dashes; use "
+            "commas or periods." + _NO_LEAK + _NO_OVERRIDE
+            + f"\n\nMODULE [{module_id}] {module_title}:\n{material}\n\nMISSED QUESTIONS:\n{missed}"
+        )
+        active = router or ModelRouter(settings)
+        stream_handle = active.stream(
+            Capability.WORKHORSE,
+            [
+                {"role": "system", "content": system},
+                {"role": "user", "content": f"Review my practice; I scored {grade.correct}/{grade.total}."},
+            ],
+            max_tokens=500,
+        )
+        tokens = stream_handle.tokens
+        model = stream_handle.model
+
+    return AgentReply(
+        telemetry=_answer_telemetry(
+            summary="Reviewed your practice and gave a verdict",
+            reasoning=reasoning,
+            route=Route.PRACTISE_MODULE,
+            sources=[source],
+            model=model,
+            tier=None,
+        ),
+        tokens=tokens,
+        sources=[source],
+        actions=_practice_actions(grade.verdict, module_id),
+    )
+
+
+def _cta_reply(module_id: str, module_title: str, route: Route) -> AgentReply:
+    """A short deterministic reply that surfaces a single CTA button."""
+    if route is Route.TAKE_EVALUATION:
+        msg = (
+            f'Great, you can take the evaluation for "{module_title}" whenever you are ready. Use '
+            "the button below to start it."
+        )
+        action = Action(kind="take_evaluation", label="Take the evaluation", module_id=module_id)
+        summary = "Pointed the learner to the evaluation"
+    else:
+        msg = f'Sure, here is the module "{module_title}". Use the button below to open it and study.'
+        action = Action(kind="go_to_module", label="Go to the module", module_id=module_id)
+        summary = "Pointed the learner to the module"
+    return AgentReply(
+        telemetry=_answer_telemetry(
+            summary=summary,
+            reasoning=f"CTA for {module_id}",
+            route=route,
+            sources=[],
+            model=None,
+            tier=None,
+        ),
+        tokens=_offline_stream(msg),
+        actions=ActionEvent(actions=[action]),
+    )
+
+
+def _no_current_module(modules: list[dict[str, object]] | None) -> AgentReply:
+    """Graceful reply (no card, no button) when the hard module gate is not met."""
+    if not modules:
+        msg = (
+            "You do not have an active module yet. Pick a course and I will build your study plan, "
+            "then you can practise the module you are on."
+        )
+        reasoning = "No plan modules: nothing to practise."
+    else:
+        msg = (
+            "You have completed every module in this course. There is nothing left to practise "
+            "here, consider the certification exam or ask me for your next course."
+        )
+        reasoning = "All modules complete."
+    return AgentReply(
+        telemetry=_answer_telemetry(
+            summary="No current module to practise",
+            reasoning=reasoning,
+            route=Route.PRACTISE_MODULE,
+            sources=[],
+            model=None,
+            tier=None,
+        ),
+        tokens=_offline_stream(msg),
+    )
+
+
+def answer_assessor(
+    text: str,
+    route: Route,
+    *,
+    modules: list[dict[str, object]] | None,
+    router: ModelRouter | None = None,
+    settings: Settings | None = None,
+) -> AgentReply:
+    """Dispatch the three assessor routes behind the hard current-module gate."""
+    settings = settings or get_settings()
+    current = resolve_current_module(modules)
+    if current is None:
+        return _no_current_module(modules)
+    module_id = str(current["module_id"])
+    module_title = str(current.get("title", "")) or module_id
+    if route is Route.PRACTISE_MODULE:
+        return generate_practice(
+            module_id=module_id, module_title=module_title, router=router, settings=settings
+        )
+    return _cta_reply(module_id, module_title, route)

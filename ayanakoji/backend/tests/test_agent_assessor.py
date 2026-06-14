@@ -224,3 +224,114 @@ def test_generate_practice_online_malformed_choices_returns_cta(monkeypatch) -> 
     )
     assert reply.practice is None
     assert reply.actions is not None and reply.actions.actions[0].kind == "go_to_module"
+
+
+# ---------------------------------------------------------------------------
+# Task 4: grade, verdict, review, CTA replies, dispatch
+# ---------------------------------------------------------------------------
+
+
+def _questions() -> list[dict[str, object]]:
+    return [
+        {"id": f"p{i}", "prompt": f"Q{i}", "choices": ["w", "x", "y", "z"], "correct": "w"}
+        for i in range(1, 6)
+    ]
+
+
+@pytest.mark.parametrize(
+    "n_correct,verdict",
+    [(5, "ready"), (4, "ready"), (3, "not_yet"), (2, "not_yet"), (1, "study"), (0, "study")],
+)
+def test_grade_practice_verdict_mapping(n_correct: int, verdict: str) -> None:
+    from app.agent.assessor import grade_practice
+
+    qs = _questions()
+    selections = {q["id"]: (["w"] if i < n_correct else ["x"]) for i, q in enumerate(qs)}
+    grade = grade_practice(qs, selections)
+    assert grade.correct == n_correct
+    assert grade.total == 5
+    assert grade.verdict == verdict
+
+
+def test_grade_practice_multiselect_is_wrong() -> None:
+    from app.agent.assessor import grade_practice
+
+    qs = _questions()
+    # Picking the correct plus an extra is not a clean single-correct answer.
+    selections = {qs[0]["id"]: ["w", "x"]}
+    grade = grade_practice(qs, selections)
+    assert grade.correct == 0
+    assert qs[0]["prompt"] in grade.missed
+
+
+def test_review_practice_ready_offers_take_evaluation() -> None:
+    from app.agent.assessor import PracticeGrade, review_practice
+
+    grade = PracticeGrade(correct=5, total=5, verdict="ready", missed=[])
+    reply = review_practice(
+        module_id="cb-c01-m01", module_title="Functions", material="Body.", grade=grade
+    )
+    kinds = [a.kind for a in reply.actions.actions]
+    assert "take_evaluation" in kinds
+    assert "5/5" in _drain(reply)
+
+
+def test_review_practice_study_offers_go_to_module() -> None:
+    from app.agent.assessor import PracticeGrade, review_practice
+
+    grade = PracticeGrade(correct=1, total=5, verdict="study", missed=["Q2", "Q3"])
+    reply = review_practice(
+        module_id="cb-c01-m01", module_title="Functions", material="Body.", grade=grade
+    )
+    kinds = [a.kind for a in reply.actions.actions]
+    assert "go_to_module" in kinds
+    assert "take_evaluation" not in kinds
+
+
+def test_answer_assessor_practise_with_module(monkeypatch) -> None:
+    from app.agent import assessor
+    from app.catalog.content import ModuleContent
+
+    monkeypatch.setattr(
+        assessor,
+        "get_module_content",
+        lambda mid: ModuleContent(module_id=mid, title="Functions", body="Body."),
+    )
+    modules = [{"module_id": "cb-c01-m01", "title": "Functions", "completed": False}]
+    reply = assessor.answer_assessor("quiz me", Route.PRACTISE_MODULE, modules=modules)
+    assert reply.practice is not None and reply.practice.module_id == "cb-c01-m01"
+
+
+def test_answer_assessor_take_evaluation_cta() -> None:
+    from app.agent import assessor
+
+    modules = [{"module_id": "cb-c01-m01", "title": "Functions", "completed": False}]
+    reply = assessor.answer_assessor("I'm ready for the test", Route.TAKE_EVALUATION, modules=modules)
+    assert reply.practice is None
+    assert reply.actions is not None and reply.actions.actions[0].kind == "take_evaluation"
+    assert reply.actions.actions[0].module_id == "cb-c01-m01"
+
+
+def test_answer_assessor_go_to_module_cta() -> None:
+    from app.agent import assessor
+
+    modules = [{"module_id": "cb-c01-m01", "title": "Functions", "completed": False}]
+    reply = assessor.answer_assessor("take me to the module", Route.GO_TO_MODULE, modules=modules)
+    assert reply.actions is not None and reply.actions.actions[0].kind == "go_to_module"
+
+
+def test_answer_assessor_no_plan_is_graceful_no_card() -> None:
+    from app.agent import assessor
+
+    reply = assessor.answer_assessor("quiz me", Route.PRACTISE_MODULE, modules=[])
+    assert reply.practice is None and reply.actions is None
+    assert "pick a course" in _drain(reply).lower()
+
+
+def test_answer_assessor_all_complete_is_graceful_no_card() -> None:
+    from app.agent import assessor
+
+    modules = [{"module_id": "m1", "title": "One", "completed": True}]
+    reply = assessor.answer_assessor("quiz me", Route.PRACTISE_MODULE, modules=modules)
+    assert reply.practice is None and reply.actions is None
+    assert "completed every module" in _drain(reply).lower()
