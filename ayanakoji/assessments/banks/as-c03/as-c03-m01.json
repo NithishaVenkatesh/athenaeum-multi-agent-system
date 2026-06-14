@@ -1,0 +1,106 @@
+{
+  "course_id": "as-c03",
+  "module_id": "as-c03-m01",
+  "module_title": "Zero-Trust strategy, MCRA, and MCSB",
+  "choices": [
+    {
+      "id": "as-c03-m01-c01",
+      "module_id": "as-c03-m01",
+      "prompt": "According to the module, what are the three operating principles of Zero Trust?",
+      "kind": "mcq",
+      "choices": [
+        "Verify explicitly, use least-privilege access, and assume breach",
+        "Trust the network, enforce MFA, and patch quickly",
+        "Encrypt everything, deploy a SIEM, and segment the VPN",
+        "Authenticate once, authorize broadly, and monitor the perimeter"
+      ],
+      "correct_answers": [
+        "Verify explicitly, use least-privilege access, and assume breach"
+      ]
+    },
+    {
+      "id": "as-c03-m01-c02",
+      "module_id": "as-c03-m01",
+      "prompt": "The module contrasts the roles of the MCRA and the MCSB in a security design. Which statement correctly captures the difference?",
+      "kind": "mcq",
+      "choices": [
+        "The MCRA is a map of how capabilities relate so you can find architectural gaps, while the MCSB is a ruler of concrete controls you measure the design against",
+        "The MCRA is a control catalog mapped to industry standards, while the MCSB is a set of architecture diagrams",
+        "The MCRA is a target topology to clone, while the MCSB is an optional supplement for auditors",
+        "The MCRA sequences remediation by risk, while the MCSB defines the three Zero-Trust principles"
+      ],
+      "correct_answers": [
+        "The MCRA is a map of how capabilities relate so you can find architectural gaps, while the MCSB is a ruler of concrete controls you measure the design against"
+      ]
+    },
+    {
+      "id": "as-c03-m01-c03",
+      "module_id": "as-c03-m01",
+      "prompt": "Why does the module argue that identity becomes the primary control plane in a Zero-Trust design, justifying an identity-first RaMP phase?",
+      "kind": "mcq",
+      "choices": [
+        "Identity is the one place every request must pass through, so closing the most-used attack path delivers the largest risk reduction first",
+        "Identity systems are the cheapest controls to deploy across an acquired network",
+        "Network firewalls are deprecated in Zero Trust and cannot be configured",
+        "Auditors require identity controls before any other MCSB domain can be mapped"
+      ],
+      "correct_answers": [
+        "Identity is the one place every request must pass through, so closing the most-used attack path delivers the largest risk reduction first"
+      ]
+    },
+    {
+      "id": "as-c03-m01-c04",
+      "module_id": "as-c03-m01",
+      "prompt": "You inherit a Conditional Access policy named \"Require MFA — All Users.\" Per the module, which checks must you perform before claiming the organization actually enforces MFA? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Confirm the policy's state is enabled rather than left in report-only mode",
+        "Verify the assignment scope truly includes all users with no broad exclusions",
+        "Confirm the policy requires a phishing-resistant method rather than any second factor",
+        "Confirm the policy is documented in the MCRA diagram before enabling it"
+      ],
+      "correct_answers": [
+        "Confirm the policy's state is enabled rather than left in report-only mode",
+        "Verify the assignment scope truly includes all users with no broad exclusions",
+        "Confirm the policy requires a phishing-resistant method rather than any second factor"
+      ]
+    },
+    {
+      "id": "as-c03-m01-c05",
+      "module_id": "as-c03-m01",
+      "prompt": "Which of the following are described in the module as common pitfalls when building a Zero-Trust strategy? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Leading with products instead of resiliency goals",
+        "Treating the MCRA as a target topology to copy rather than a reference to map your estate against",
+        "Boiling the ocean by attempting every Zero-Trust initiative simultaneously instead of sequencing with a RaMP",
+        "Deriving each control from a stated resiliency goal and breach assumption"
+      ],
+      "correct_answers": [
+        "Leading with products instead of resiliency goals",
+        "Treating the MCRA as a target topology to copy rather than a reference to map your estate against",
+        "Boiling the ocean by attempting every Zero-Trust initiative simultaneously instead of sequencing with a RaMP"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "as-c03-m01-l01",
+      "module_id": "as-c03-m01",
+      "prompt": "The Meridian Harbour board does not want a product shopping list. Explain how the module says a security strategy should be built so it ties to business resiliency, and illustrate the derivation chain using the dispatch example.",
+      "reference_answer": "The module insists a strategy must start from business resiliency rather than technology: you first ask what the business needs to keep running and the cost of it stopping. For Meridian Harbour, a logistics firm cannot move freight if dispatch is down, so dispatch availability and the integrity of shipment data become resiliency goals. From those goals you pair a breach assumption (for example, one dispatcher account will eventually be phished) and derive a concrete security outcome such as 'an attacker who phishes one dispatcher cannot reach the shipment database.' Only after the goal, breach assumption, and outcome are stated do you choose controls. This ordering is what makes the spend defensible, and it is reinforced by defense in depth — independent layers that each must be defeated — so there is no single point of failure when a control like the identity provider is compromised."
+    },
+    {
+      "id": "as-c03-m01-l02",
+      "module_id": "as-c03-m01",
+      "prompt": "Describe what a rapid modernization plan (RaMP) is and how the module's Meridian Harbour RaMP sequences its phases. Why does each phase include a success metric?",
+      "reference_answer": "A RaMP is an opinionated, risk-ordered sequencing of Zero-Trust initiatives so the highest-leverage, breach-stopping work happens first instead of trying to do everything at once and stalling. In the Meridian example, Phase 1 secures identity and access (phishing-resistant MFA via Conditional Access, blocking legacy authentication, requiring compliant or hybrid-joined devices) because identity is the primary control plane and the most-used attack path. Phase 2 protects privileged access and critical data (just-in-time admin elevation via PIM, classifying and encrypting the shipment database) to limit blast radius once an account is compromised. Phase 3 adds detection, posture, and segmentation to operationalize assume-breach. Each phase carries a measurable success metric — such as '100% of interactive sign-ins covered by Conditional Access' or 'Zero standing global-admin assignments' — so each phase delivers a verifiable risk reduction that a board will fund, turning a strategy into a roadmap rather than a vague improvement."
+    },
+    {
+      "id": "as-c03-m01-l03",
+      "module_id": "as-c03-m01",
+      "prompt": "A teammate proposes documenting the Meridian design using only the MCRA. Explain why the module says a strong design references both the MCRA and the MCSB, and how each is used in the Phase 1 artifact.",
+      "reference_answer": "The module treats the MCRA and MCSB as complementary: the MCRA is the map and the MCSB is the ruler. The MCRA is a set of architecture diagrams showing how security capabilities — identity, security operations, infrastructure protection, data protection — relate across the estate; you lay your current and proposed capabilities over it to find gaps and confirm the design hangs together, giving narrative coherence. The MCSB is a control framework cataloging concrete controls grouped into domains (network security, identity management, data protection, logging and threat detection, posture and vulnerability management, and more), each mapped to industry standards, so for every control you can state whether you meet it. Skipping the MCSB mapping leaves 'we do Zero Trust' as an assertion no auditor accepts. In the Phase 1 artifact this is made auditable by citing MCSB control IDs such as IM-1, IM-6, and IM-7 in the identity management domain, giving line-item evidence to accompany the MCRA narrative."
+    }
+  ]
+}
