@@ -19,6 +19,7 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from typing import Protocol
 
 from app.agent.contracts import CourseSuggestion, GroundingSource, TraceStep
 from app.catalog.loader import default_catalog_path
@@ -28,6 +29,8 @@ from app.config import Settings, get_settings
 # The offline lexical backend mirrors the Foundry IQ knowledge base's index; the live
 # adapter (``grounding_azure``) flips these to the Azure agentic-retrieve labels.
 LEXICAL_PROVIDER = "Foundry-IQ-pattern · offline lexical retrieval"
+AZURE_KB_PROVIDER = "Foundry IQ · Azure AI Search agentic retrieve"
+AZURE_HYBRID_PROVIDER = "Foundry IQ · Azure AI Search hybrid (vector+semantic)"
 
 # Tokens that carry no retrieval signal (wrapped for readability).
 _STOPWORD_TEXT = """
@@ -474,3 +477,66 @@ class CourseGrounding:
 def get_grounding() -> CourseGrounding:
     """Default course-grounding provider bound to the configured catalog (cached)."""
     return CourseGrounding()
+
+
+# ── Retriever selection: live Foundry IQ when configured, else offline lexical ──
+
+
+class GroundedRetriever(Protocol):
+    """The retrieval surface ``answer_foundry`` grounds on (lexical or live Azure)."""
+
+    def retrieve(
+        self, query: str, *, catalog_id: str | None = ..., k: int = ...
+    ) -> RetrievalResult: ...
+
+
+class FallbackRetriever:
+    """A live retriever with a deterministic lexical fallback — never fails a turn.
+
+    The live agentic-retrieve adapter can fail transiently (network, throttling, a
+    preview-SDK shape drift). Rather than 500 the chat, any failure degrades to the
+    offline lexical grounding, and the trace says so — honest, never silent.
+    """
+
+    def __init__(self, primary: GroundedRetriever, fallback: GroundedRetriever) -> None:
+        self._primary = primary
+        self._fallback = fallback
+
+    def retrieve(
+        self, query: str, *, catalog_id: str | None = None, k: int = _TOP_K
+    ) -> RetrievalResult:
+        try:
+            return self._primary.retrieve(query, catalog_id=catalog_id, k=k)
+        except Exception as exc:  # noqa: BLE001 — any live failure must degrade, not 500
+            result = self._fallback.retrieve(query, catalog_id=catalog_id, k=k)
+            note = TraceStep(
+                label="Live retrieval fallback",
+                passed=None,
+                detail=(
+                    f"Azure agentic retrieve unavailable ({type(exc).__name__}); "
+                    "fell back to offline lexical grounding"
+                ),
+            )
+            activity = RetrievalActivity(
+                provider=result.activity.provider,
+                live=False,
+                steps=(note, *result.activity.steps),
+            )
+            return RetrievalResult(sources=result.sources, activity=activity)
+
+
+def get_retriever(settings: Settings | None = None) -> GroundedRetriever:
+    """The retriever ``answer_foundry`` should use this turn.
+
+    Live Foundry IQ (Azure AI Search agentic retrieve) when it is configured + toggled
+    on + online, wrapped so any live failure degrades to the cached offline lexical
+    grounding; otherwise the offline lexical retriever directly. The router and the
+    course-suggestion tool keep using the cheap lexical ``get_grounding`` regardless, so
+    only the grounded answer pays for a live call.
+    """
+    settings = settings or get_settings()
+    if settings.foundry_iq_enabled:
+        from app.agent.grounding_azure import AzureKnowledgeRetriever
+
+        return FallbackRetriever(AzureKnowledgeRetriever(settings), get_grounding())
+    return get_grounding()

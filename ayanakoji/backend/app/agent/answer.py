@@ -41,7 +41,12 @@ from app.agent.contracts import (
     TakenCourse,
     TraceStep,
 )
-from app.agent.grounding import CourseGrounding, get_grounding
+from app.agent.grounding import (
+    CourseGrounding,
+    GroundedRetriever,
+    get_grounding,
+    get_retriever,
+)
 from app.agent.guards import plan_narration_is_grounded, stream_grounded
 from app.agent.llm import Capability, ModelRouter, StreamHandle
 from app.agent.recommend import (
@@ -317,21 +322,26 @@ def answer_foundry(
     catalog_id: str | None = None,
     router: ModelRouter | None = None,
     grounding: CourseGrounding | None = None,
+    retriever: GroundedRetriever | None = None,
     settings: Settings | None = None,
 ) -> AgentReply:
     """Grounded, cited answer over approved content + a 'pursue this course?' suggestion."""
     settings = settings or get_settings()
     grounding = grounding or get_grounding()
+    # The retriever backs the ANSWER (live Foundry IQ when configured, else lexical, with
+    # graceful fallback); the cheap lexical ``grounding`` still backs the course-suggestion
+    # tool so only the grounded answer pays for a live call.
+    retriever = retriever or get_retriever(settings)
     # Curiosity is allowed (H2): try the learner's current course first, but if a
     # locked chat has nothing on the topic, widen to the whole catalog so an
     # off-syllabus question still gets a grounded answer (framed as outside this
     # course); if even that finds nothing, answer helpfully with a clear note,
     # never a flat "not covered" dead-end.
-    scoped = grounding.retrieve(text, catalog_id=catalog_id)
+    scoped = retriever.retrieve(text, catalog_id=catalog_id)
     if scoped.sources:
         sources, mode, activity = scoped.sources, "in_course", scoped.activity
     elif catalog_id is not None:
-        widened = grounding.retrieve(text, catalog_id=None)
+        widened = retriever.retrieve(text, catalog_id=None)
         sources, activity = widened.sources, widened.activity
         mode = "other_course" if sources else "open"
     else:
