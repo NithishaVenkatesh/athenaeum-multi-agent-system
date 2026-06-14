@@ -179,7 +179,9 @@ _PRACTISE_RE = re.compile(
 _TAKE_EVAL_RE = re.compile(
     r"\b(ready|prepared)\s+(for|to\s+take)\s+(the\s+)?(test|exam|evaluation|assessment|quiz)\b"
     r"|\b(take|start|do|begin|attempt)\s+(the\s+)?(test|exam|evaluation|assessment)\b"
-    r"|\bi'?m\s+ready\b.*\b(test|exam|evaluation|assessment)\b"
+    # Scoped to the ready-sentence so it can't span into a later informational question
+    # ("I'm ready for a break. What's on the exam?"); branch 1 covers "ready for the test".
+    r"|\bi'?m\s+ready\s+(?:to\s+take\s+)?(?:the\s+)?(test|exam|evaluation|assessment)\b"
     r"|\bevaluate\s+me\b",
     re.IGNORECASE,
 )
