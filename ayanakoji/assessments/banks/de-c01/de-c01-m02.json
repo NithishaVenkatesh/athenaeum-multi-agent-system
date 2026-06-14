@@ -1,0 +1,106 @@
+{
+  "course_id": "de-c01",
+  "module_id": "de-c01-m02",
+  "module_title": "Data Lake Storage Gen2 and the exploration layer",
+  "choices": [
+    {
+      "id": "de-c01-m02-c01",
+      "module_id": "de-c01-m02",
+      "kind": "mcq",
+      "prompt": "According to the module, what single change makes a storage account a Data Lake Storage Gen2 account rather than plain Blob Storage?",
+      "choices": [
+        "Enabling the hierarchical namespace",
+        "Choosing the Standard_LRS SKU instead of premium",
+        "Creating three separate containers for bronze, silver, and gold",
+        "Switching the addressing driver from abfss:// to https://"
+      ],
+      "correct_answers": [
+        "Enabling the hierarchical namespace"
+      ]
+    },
+    {
+      "id": "de-c01-m02-c02",
+      "module_id": "de-c01-m02",
+      "kind": "mcq",
+      "prompt": "An analyst needs to run a one-off ad-hoc count over a 2 GB Parquet folder today, and a colleague suggests spinning up a Spark cluster. Based on the module's engine-selection guidance, what should you recommend?",
+      "choices": [
+        "Use serverless SQL with OPENROWSET, since it queries the file in place, bills only for the data scanned, and needs no cluster to provision or keep warm",
+        "Use Spark as suggested, because distributed compute is always faster for any Parquet read",
+        "Copy the folder into a gold container first, then query the copy with serverless SQL",
+        "Provision a dedicated SQL pool so the cluster stays warm for future queries"
+      ],
+      "correct_answers": [
+        "Use serverless SQL with OPENROWSET, since it queries the file in place, bills only for the data scanned, and needs no cluster to provision or keep warm"
+      ]
+    },
+    {
+      "id": "de-c01-m02-c03",
+      "module_id": "de-c01-m02",
+      "kind": "mcq",
+      "prompt": "In the module's medallion layout, which zone is described as data exactly as it arrived, append-only and never edited, serving as the replay-and-audit source of truth?",
+      "choices": [
+        "Bronze (raw)",
+        "Silver (cleansed/curated)",
+        "Gold (serving)",
+        "The exploration view layer"
+      ],
+      "correct_answers": [
+        "Bronze (raw)"
+      ]
+    },
+    {
+      "id": "de-c01-m02-c04",
+      "module_id": "de-c01-m02",
+      "kind": "msq",
+      "prompt": "Per the module, which statements about the hierarchical namespace and its benefits for analytics are correct?",
+      "choices": [
+        "Renaming or deleting a folder becomes a single atomic metadata operation rather than a copy-and-delete of every object underneath",
+        "It enables POSIX-style access control lists on directories so a team can be granted read access to one zone without exposing the rest",
+        "It must be set with --hns true at account creation because you cannot toggle it casually after the fact",
+        "It converts the storage into a flat key-value bucket optimized for random object access"
+      ],
+      "correct_answers": [
+        "Renaming or deleting a folder becomes a single atomic metadata operation rather than a copy-and-delete of every object underneath",
+        "It enables POSIX-style access control lists on directories so a team can be granted read access to one zone without exposing the rest",
+        "It must be set with --hns true at account creation because you cannot toggle it casually after the fact"
+      ]
+    },
+    {
+      "id": "de-c01-m02-c05",
+      "module_id": "de-c01-m02",
+      "kind": "msq",
+      "prompt": "According to the module, what does the exploration layer of views accomplish?",
+      "choices": [
+        "It lets analysts query a name like vw_sensor_readings instead of an abfss:// path with partition folders",
+        "It acts as an abstraction boundary so that when files are repartitioned or moved, you update the view definition and queries keep working",
+        "It points at silver and gold paths and names columns sensibly while hiding the physical folder structure",
+        "It physically copies the curated data into a separate serving silo so analysts query an isolated snapshot"
+      ],
+      "correct_answers": [
+        "It lets analysts query a name like vw_sensor_readings instead of an abfss:// path with partition folders",
+        "It acts as an abstraction boundary so that when files are repartitioned or moved, you update the view definition and queries keep working",
+        "It points at silver and gold paths and names columns sensibly while hiding the physical folder structure"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "de-c01-m02-l01",
+      "module_id": "de-c01-m02",
+      "prompt": "Explain why enabling the hierarchical namespace matters for a pipeline that writes to a staging directory and then promotes it to a final location, and what breaks if you instead create a plain Blob account with --hns false.",
+      "reference_answer": "With the hierarchical namespace enabled, the storage becomes a real directory tree instead of a flat key-value bucket, so promoting the staging directory to its final location is a single atomic metadata rename rather than a copy-and-delete of every object underneath it. That atomicity makes commit operations fast and safe: there is no window in which consumers see half-moved data, which is exactly what analytics jobs need since they constantly write to temporary directories and then promote them. The namespace also enables POSIX-style ACLs on directories, letting you grant a team read access to one zone without exposing the rest. If you create a plain Blob account (or --hns false), you lose the atomic directory rename and the directory-level ACLs, which quietly breaks commit performance and fine-grained security. Because you cannot toggle the flag casually after the fact, you must set --hns true at account creation."
+    },
+    {
+      "id": "de-c01-m02-l02",
+      "module_id": "de-c01-m02",
+      "prompt": "Compare serverless SQL and Spark as the two query engines over the same lake files, and walk through how you would decide which to use for a given task.",
+      "reference_answer": "Both engines read the same files in the same zones with no data movement, giving one source of truth seen through two lenses. Serverless SQL runs T-SQL directly over files using OPENROWSET and bills per terabyte of data scanned rather than for a running cluster, so it is ideal for analysts who think in SQL, ad-hoc exploration, and building logical views without provisioning anything; it is not built for heavy iterative transformation or machine-learning workloads. Spark (Azure Databricks or Synapse Spark) is a full distributed compute engine with Python, Scala, SQL, and rich libraries, suited to transforming at scale, multi-step pipelines, complex logic, and writing back partitioned outputs, but it costs more to keep a cluster warm. The decision rule is to match the engine to the task: reach for serverless SQL to read and explore, and for Spark to transform and write. Concretely, a one-line SELECT or a one-off ad-hoc read goes to serverless SQL, while a heavy multi-stage transform goes to Spark."
+    },
+    {
+      "id": "de-c01-m02-l03",
+      "module_id": "de-c01-m02",
+      "prompt": "You reorganize the curated sensor files to a new path. Analysts who queried vw_sensor_readings report no breakage, while one analyst who hardcoded the old abfss:// path is broken. Walk through the design principle that explains the difference and how the exploration layer enforces it.",
+      "reference_answer": "The exploration layer is a set of views over the governed zones that acts as an abstraction boundary, much like an API in front of a database: analysts query a clean name such as vw_sensor_readings rather than a physical abfss:// path with partition folders. Because the view hides the physical folder structure, when you move or repartition the files you simply update the view definition and the consumers' queries keep working. The analyst who hardcoded the old abfss:// path coupled themselves directly to the physical storage layout, so any reorganization broke their query. This is also a listed pitfall: exposing raw paths to analysts means every storage reorganization breaks their queries, which is why you put a view layer in between so paths stay an implementation detail. The benefit is self-service over governed data without copying it and without engineers in the loop."
+    }
+  ]
+}
