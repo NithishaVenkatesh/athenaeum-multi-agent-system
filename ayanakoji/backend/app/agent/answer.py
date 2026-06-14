@@ -137,7 +137,9 @@ def _nudge_for(off_topic: float) -> str:
 # Function words stripped when echoing the learner's topic, so the offline reply
 # references *what they asked* instead of repeating one template (C1: input-sensitive).
 _TOPIC_STOP = frozenset(
-    ["a", "an", "the", "of", "to", "in", "on", "for", "with", "and", "or", "but", "is", "are", "be", "do", "does", "how", "what", "when", "where", "which", "who", "why", "this", "that", "these", "those", "i", "you", "we", "they", "it", "my", "your", "me", "us", "them", "can", "could", "should", "would", "will", "tell", "me", "about", "into", "over", "under", "as", "at", "by", "from", "get", "got", "explain", "show", "learn", "study", "know", "please"]
+    "a an the of to in on for with and or but is are be do does how what when where which who why "
+    "this that these those i you we they it my your me us them can could should would will tell "
+    "about into over under as at by from get got explain show learn study know please".split()
 )
 
 
@@ -425,6 +427,140 @@ def answer_foundry(
         tokens=stream_grounded(handle.tokens, sources),
         sources=sources,
         suggestion=suggestion,
+    )
+
+
+# ── Assessment feedback (first-party; grounded in one module, no topic gate) ─────
+
+
+def _feedback_offline(
+    *, module_title: str, module_id: str, label: str, score: float | None, performance: str
+) -> str:
+    score_txt = f"{score:.0f}/10" if score is not None else "your attempt"
+    head = (
+        f"(offline mode) Here's feedback on your {label} for {module_title}. You scored "
+        f"{score_txt}. "
+    )
+    body = (
+        f"{performance} "
+        if performance
+        else "Revisit the module's core ideas and try the questions again. "
+    )
+    tail = (
+        f"Work back through the module material to close these gaps, then retake when you're "
+        f"ready [{module_id}]."
+    )
+    return head + body + tail
+
+
+def answer_feedback(
+    *,
+    module_id: str,
+    module_title: str,
+    course_title: str,
+    material: str,
+    kind: str,
+    score: float | None,
+    passed: bool | None,
+    performance: str,
+    router: ModelRouter | None = None,
+    settings: Settings | None = None,
+) -> AgentReply:
+    """Encouraging, grounded feedback on a learner's assessment attempt for one module.
+
+    First-party path: the learner is enrolled and just took this module's test, so the
+    request is always in-scope. It never runs through the topic gate (which would reject
+    generic words like "quiz"/"failed" as ungrounded), and it grounds on the module's own
+    material plus the learner's actual answers, so the feedback is specific and cited.
+    """
+    settings = settings or get_settings()
+    label = "quiz" if kind == "choices" else "oral exam"
+    source = GroundingSource(
+        ref=module_id,
+        title=f"{course_title}: {module_title}" if course_title else module_title,
+        snippet=material,
+        kind="course",
+    )
+    sources = [source]
+    score_txt = f"{score:.0f}/10" if score is not None else "not yet scored"
+    reasoning = (
+        f"Feedback on the {label} for {module_id} (scored {score_txt}); grounded in the module."
+    )
+    steps: list[TraceStep] = [
+        TraceStep(label="Assessment lookup", passed=True, detail=f"{label} attempt · {score_txt}"),
+        TraceStep(
+            label="Grounding",
+            passed=True,
+            detail=f"Grounded in module material [{module_id}] {module_title}",
+        ),
+    ]
+
+    if settings.llm_offline:
+        reply = _feedback_offline(
+            module_title=module_title,
+            module_id=module_id,
+            label=label,
+            score=score,
+            performance=performance,
+        )
+        steps.append(
+            TraceStep(label="LLM generation", passed=True, detail="offline mode", model="offline")
+        )
+        return AgentReply(
+            telemetry=_answer_telemetry(
+                summary="Gave feedback on your assessment",
+                reasoning=reasoning,
+                route=Route.FOUNDRY_IQ,
+                sources=sources,
+                model="offline",
+                tier=None,
+                steps=steps,
+            ),
+            tokens=_offline_stream(reply),
+            sources=sources,
+        )
+
+    router = router or ModelRouter(settings)
+    system = (
+        "You are Athenaeum's encouraging course tutor. Give the learner feedback on the "
+        f"{label} they just took for the module below. Ground every point in the MODULE "
+        f"material; cite the module id in square brackets like [{module_id}]. Name the concepts "
+        "they missed and what to revisit, in 3 to 5 sentences, warm and specific, ending with a "
+        "nudge to retake when ready. Never invent content or other citations. Do not use em "
+        "dashes; use commas or periods." + _NO_LEAK + f"\n\nMODULE [{module_id}] {module_title}:\n"
+        f"{material}\n\nLEARNER PERFORMANCE:\n{performance or '(no per-question detail available)'}"
+    )
+    handle = router.stream(
+        Capability.WORKHORSE,
+        [
+            {"role": "system", "content": system},
+            {
+                "role": "user",
+                "content": f"Please give me feedback on my {label} for {module_title}.",
+            },
+        ],
+        max_tokens=600,
+    )
+    steps.append(
+        TraceStep(
+            label="LLM generation",
+            passed=True,
+            detail="WORKHORSE capability · max 600 tokens · grounded in module material",
+            model=handle.model,
+        )
+    )
+    return AgentReply(
+        telemetry=_answer_telemetry(
+            summary="Gave feedback on your assessment",
+            reasoning=reasoning,
+            route=Route.FOUNDRY_IQ,
+            sources=sources,
+            model=handle.model,
+            tier=handle.tier,
+            steps=steps,
+        ),
+        tokens=stream_grounded(handle.tokens, sources),
+        sources=sources,
     )
 
 
