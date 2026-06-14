@@ -1,0 +1,106 @@
+{
+  "course_id": "de-c02",
+  "module_id": "de-c02-m04",
+  "module_title": "Incremental loads, upserts, and error handling",
+  "choices": [
+    {
+      "id": "de-c02-m04-c01",
+      "module_id": "de-c02-m04",
+      "prompt": "According to the module, what is a watermark in the context of an incremental load?",
+      "kind": "mcq",
+      "choices": [
+        "A stored high-water mark, usually the maximum value of a monotonically increasing column from the last load, used to read only rows greater than it",
+        "A cryptographic hash embedded in each row to detect tampering during transfer",
+        "A reject threshold that quarantines malformed rows during a bulk load",
+        "A snapshot of the entire target table taken before each nightly reload"
+      ],
+      "correct_answers": [
+        "A stored high-water mark, usually the maximum value of a monotonically increasing column from the last load, used to read only rows greater than it"
+      ]
+    },
+    {
+      "id": "de-c02-m04-c02",
+      "module_id": "de-c02-m04",
+      "prompt": "A pipeline advances the watermark first and then runs the load. The load fails partway through. Per the module, what is the consequence on the next run?",
+      "kind": "mcq",
+      "choices": [
+        "The next run reads the already-advanced watermark and skips the failed slice, so that data is never loaded",
+        "The next run re-stages the same delta and the MERGE duplicates the rows",
+        "The next run throws a validation error because the watermark and row count disagree",
+        "The next run reloads the entire sales history from the beginning"
+      ],
+      "correct_answers": [
+        "The next run reads the already-advanced watermark and skips the failed slice, so that data is never loaded"
+      ]
+    },
+    {
+      "id": "de-c02-m04-c03",
+      "module_id": "de-c02-m04",
+      "prompt": "Why does the module say a keyed MERGE makes a pipeline safe to re-run where an INSERT does not?",
+      "kind": "mcq",
+      "choices": [
+        "MERGE matches incoming rows against existing ones by key and updates in place when matched, so a second run reconciles to the same state, while INSERT blindly adds rows and duplicates them on a re-run",
+        "MERGE locks the target table so no second run can execute concurrently, while INSERT allows overlapping runs",
+        "MERGE automatically advances the watermark on success, while INSERT leaves the watermark untouched",
+        "MERGE only writes rows that pass validation, while INSERT writes rows regardless of nulls"
+      ],
+      "correct_answers": [
+        "MERGE matches incoming rows against existing ones by key and updates in place when matched, so a second run reconciles to the same state, while INSERT blindly adds rows and duplicates them on a re-run"
+      ]
+    },
+    {
+      "id": "de-c02-m04-c04",
+      "module_id": "de-c02-m04",
+      "prompt": "Which of the following are validation checks the module explicitly recommends running before advancing the watermark and exposing the data? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Checking that the row count landed within an expected range, since zero rows or ten times normal is suspicious",
+        "Checking for nulls in columns that must never be null",
+        "Checking that the keys you upserted actually exist now",
+        "Recomputing a cryptographic checksum of the source file against a vendor-supplied manifest"
+      ],
+      "correct_answers": [
+        "Checking that the row count landed within an expected range, since zero rows or ten times normal is suspicious",
+        "Checking for nulls in columns that must never be null",
+        "Checking that the keys you upserted actually exist now"
+      ]
+    },
+    {
+      "id": "de-c02-m04-c05",
+      "module_id": "de-c02-m04",
+      "prompt": "The module distinguishes activity-level retries from structural exception handling. Which statements correctly describe structural handling as defined in the module? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "A failure path that logs the error and alerts",
+        "A quarantine location (via reject thresholds) where rejected rows are written instead of crashing the whole batch",
+        "Making each step safe to repeat so a half-run pipeline leaves a recoverable state (non-destructive failure)",
+        "Automatically absorbing transient network blips without any structural routing"
+      ],
+      "correct_answers": [
+        "A failure path that logs the error and alerts",
+        "A quarantine location (via reject thresholds) where rejected rows are written instead of crashing the whole batch",
+        "Making each step safe to repeat so a half-run pipeline leaves a recoverable state (non-destructive failure)"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "de-c02-m04-l01",
+      "module_id": "de-c02-m04",
+      "prompt": "Explain what makes a column a sound watermark for an incremental load, and why choosing created_at instead of updated_at causes a specific data-correctness bug. Reference the failure mode the module describes.",
+      "reference_answer": "A sound watermark column must increase whenever a row is inserted or updated and must never go backwards, because each run reads only rows greater than the stored watermark and then advances the watermark to the new maximum on success. An updated_at column set by the source on every write is ideal because it bumps on both inserts and updates. A created_at column only changes when a row is first inserted, so edits to existing rows keep their old timestamp and fall below the watermark; those changed records never reload and the gold data silently drifts out of sync. The fix is to use a column the source bumps on every insert and update, such as updated_at, so the watermark increases on any change rather than only on creation."
+    },
+    {
+      "id": "de-c02-m04-l02",
+      "module_id": "de-c02-m04",
+      "prompt": "Walk through how the watermark-after-success ordering plus a keyed MERGE together guarantee non-destructive recovery when step 3 (the MERGE) or step 4 (validation) throws in Greenfork's restartable load. Name the specific steps and why each matters.",
+      "reference_answer": "In the walkthrough the steps are ordered: read the watermark from meta.load_control, stage only rows with updated_at greater than the watermark, MERGE the delta into gold.fact_sales keyed on transaction_id, validate (e.g. THROW if any NULL prices exist), and only then UPDATE the watermark to the new MAX(updated_at). If the MERGE in step 3 or the validation THROW in step 4 fails, step 5 never runs, so the watermark stays put. The next run therefore re-stages the same delta and re-MERGEs it, and because MERGE is keyed on the business key it updates the same rows in place (WHEN MATCHED) rather than duplicating them, so the replay is idempotent. This is the non-destructive failure principle: a half-run pipeline leaves the system in a state the next run can cleanly recover from, combining incremental staging with idempotent upsert and watermark-after-success."
+    },
+    {
+      "id": "de-c02-m04-l03",
+      "module_id": "de-c02-m04",
+      "prompt": "Greenfork's original nightly pipeline reloads the entire sales history and appends, and once a half-finished re-run double-counted sales so the business distrusts the numbers. Explain why the full-reload append approach is both inefficient and unsafe, and what three habits the module prescribes to fix it.",
+      "reference_answer": "A full reload is wrong at scale because its cost grows linearly with history and it reprocesses data that has not changed, pushing the run past the 02:00–06:00 window. Appending is unsafe because a re-run appends the same batch again, so a load that failed halfway and was re-run double-counts rows and corrupts the totals. The module prescribes three habits: load incrementally using a watermark so each run touches only new or changed rows; upsert with a keyed MERGE so re-runs are idempotent and reconcile rather than duplicate; and validate the load (row counts, null/invariant checks) and advance the watermark only on success so failures recover non-destructively. Combined with activity retries and failure paths from the Data Factory module, these turn a fragile nightly job into one that runs unattended and earns the business's trust."
+    }
+  ]
+}
