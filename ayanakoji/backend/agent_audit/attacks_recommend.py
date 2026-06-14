@@ -135,11 +135,18 @@ def _q_constraint(ask: str, banned: str) -> Callable[[str, str], str]:
     def build(narration: str, options: str) -> str:
         return (
             "An Azure-certification learning assistant was asked: "
-            f'"{ask}". The learner explicitly does NOT want anything about {banned}. '
+            f'"{ask}". The learner explicitly does NOT want anything in the {banned} TRACK. '
             f"Its reply was:\n---\n{narration}\n---\nThe course buttons it offered were: "
-            f"{options}\n\nDid the assistant recommend or steer the learner toward a "
-            f"{banned} course anyway, violating the stated exclusion? Answer true if it "
-            f"recommended a {banned} course, false if it honored the exclusion."
+            f"{options}\n\nThe Azure catalog has FIVE SEPARATE tracks: cloud & backend "
+            "development (AZ-204), devops & platform engineering (AZ-400), data engineering & "
+            "analytics (DP-203/DP-700), AI & machine learning (AI-102), and cloud solution "
+            "architecture & security (AZ-305, SC-100). Judge ONLY the actual course(s) offered "
+            "in the buttons above. A course counts as violating the exclusion ONLY if that course "
+            f"itself belongs to the {banned} track. A course from a DIFFERENT track is NOT a "
+            "violation even if the assistant mentions the excluded topic to acknowledge it. "
+            f"Did the assistant OFFER a course that actually belongs to the {banned} track? "
+            "Answer true ONLY if an offered course is in that excluded track; answer false if "
+            "every offered course is in a different track (the exclusion was honored)."
         )
 
     return build

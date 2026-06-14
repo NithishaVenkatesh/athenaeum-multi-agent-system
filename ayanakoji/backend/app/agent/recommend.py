@@ -101,6 +101,114 @@ def verticals_from_text(text: str) -> list[str]:
     return [v for v, _ in sorted(hits, key=lambda vs: vs[1], reverse=True)]
 
 
+@lru_cache(maxsize=8)
+def _catalog_vertical_ids(catalog_path: str) -> frozenset[str]:
+    """The authoritative set of real vertical ids in the catalog graph."""
+    return frozenset(n.vertical for n in _load_graph(catalog_path))
+
+
+def vertical_ids(settings: Settings | None = None) -> frozenset[str]:
+    """The real catalog vertical id set, the allow-list any classifier is validated against."""
+    settings = settings or get_settings()
+    path = str(settings.athenaeum_catalog_path or default_catalog_path())
+    return _catalog_vertical_ids(path)
+
+
+# Grounded classify of a recommendation ask into the catalog's vertical vocabulary.
+# This is the ROBUST replacement for keyword-negation regex: the model reads the
+# sentence (including "anything EXCEPT X", "not anything to do with Y") and returns
+# which tracks the learner WANTS vs. wants EXCLUDED, by id, from a fixed allow-list.
+# Every id is validated against the real vertical set before use, so a hallucinated
+# track can never leak in; an unparseable / empty reply degrades to no constraint.
+_CLASSIFY_SYSTEM = (
+    "You map a learner's course request onto a FIXED set of Azure learning tracks. "
+    "Each track is given as `track-id: description`. You MUST copy the track-id EXACTLY "
+    "as written (the slug before the colon, e.g. 'data-engineering'); never output a "
+    "certification code, a description word, or any id not in the list.\n"
+    "WANTED: a track the learner wants to learn (e.g. 'a data engineering course', "
+    "'get into machine learning'). If they ask for 'the next X course', X is WANTED.\n"
+    "EXCLUDED: a track the learner rejects as a WHOLE TOPIC (e.g. 'anything except "
+    "security', 'not anything to do with data engineering', 'no devops', 'I'm not "
+    "interested in architecture'). Put its track-id in `excluded`.\n"
+    "CRITICAL: rejecting one SPECIFIC course, or a course they already finished "
+    "('not the storage one I already did', 'not the foundations course'), is NOT a "
+    "topic exclusion: do NOT exclude that course's track. Only exclude a track when the "
+    "learner rejects the entire subject area. A track they did not clearly mention "
+    "belongs in NEITHER list. Never list the same track as both wanted and excluded.\n"
+    'Reply ONLY with JSON: {"wanted": [track-ids], "excluded": [track-ids]}.'
+)
+
+
+@dataclass(frozen=True)
+class VerticalIntent:
+    """Tracks a learner wants vs. explicitly excluded, both validated to real ids."""
+
+    wanted: tuple[str, ...]
+    excluded: tuple[str, ...]
+
+
+def _track_catalogue(ids: frozenset[str]) -> str:
+    """A stable id→human-label listing the classifier chooses from.
+
+    Labels are plain topic words only, no certification codes: a cert code like
+    'DP-203' in the label gets echoed back as a fake "id" by weaker FAST models,
+    which then fails id-validation and silently drops the constraint.
+    """
+    label = {
+        "cloud-backend": "cloud and backend development (app service, functions, serverless)",
+        "devops-platform": "devops and platform engineering (ci/cd, pipelines, kubernetes)",
+        "data-engineering": "data engineering and analytics (lakehouse, etl, data pipelines)",
+        "ai-ml": "ai and machine learning",
+        "architecture-security": "cloud solution architecture and security (governance, identity)",
+    }
+    return "\n".join(f"- {vid}: {label.get(vid, vid)}" for vid in sorted(ids))
+
+
+def classify_vertical_intent(
+    text: str,
+    *,
+    router: object | None = None,
+    settings: Settings | None = None,
+) -> VerticalIntent:
+    """Grounded LLM classify of wanted/excluded tracks, validated to real vertical ids.
+
+    Offline or with no router, returns an empty intent so the deterministic
+    keyword path stays in charge. Any provider/parse failure also degrades to
+    empty (fail-open to the normal recommendation, never a crash). The returned
+    ids are intersected with the real vertical set, so nothing outside the
+    catalog can ever be honored as wanted or excluded.
+    """
+    settings = settings or get_settings()
+    real_ids = vertical_ids(settings)
+    if settings.llm_offline or router is None or not text.strip():
+        return VerticalIntent(wanted=(), excluded=())
+    from app.agent.llm import Capability  # local import: offline CI lacks the SDK
+
+    catalogue = _track_catalogue(real_ids)
+    try:
+        result = router.complete(  # type: ignore[attr-defined]
+            Capability.FAST,
+            [
+                {"role": "system", "content": _CLASSIFY_SYSTEM},
+                {
+                    "role": "user",
+                    "content": f"TRACKS:\n{catalogue}\n\nLEARNER REQUEST:\n{text}",
+                },
+            ],
+            json_mode=True,
+            max_tokens=160,
+        )
+        data = json.loads(result.text)
+        wanted = tuple(v for v in data.get("wanted", []) if v in real_ids)
+        excluded = tuple(v for v in data.get("excluded", []) if v in real_ids)
+        # A track can't be both wanted and excluded; exclusion wins (the learner
+        # said NO to it explicitly, which is the higher-signal constraint).
+        wanted = tuple(v for v in wanted if v not in excluded)
+        return VerticalIntent(wanted=wanted, excluded=excluded)
+    except Exception:  # noqa: BLE001 — classify is best-effort; degrade to no constraint
+        return VerticalIntent(wanted=(), excluded=())
+
+
 def vertical_from_text(text: str) -> str | None:
     """The single best catalog vertical a message is about, or None if unspecific."""
     ranked = verticals_from_text(text)
@@ -286,6 +394,7 @@ def recommend_courses(
     taken: list[TakenCourse],
     role_title: str = "",
     k: int = _DEFAULT_K,
+    exclude_verticals: frozenset[str] | None = None,
     settings: Settings | None = None,
 ) -> list[CourseSuggestion]:
     """The next courses a learner should choose, best first.
@@ -297,10 +406,16 @@ def recommend_courses(
     the lowest-order untaken course whose prereqs are all completed; if none
     qualify (mid-ladder gaps), fall back to the earliest untaken so there is always
     something to offer.
+
+    ``exclude_verticals`` are tracks the learner explicitly does NOT want; every
+    course in them is removed from the candidate pool *deterministically*, so an
+    exclusion is honored even when it is the requested/target vertical. The
+    subtraction is pure (covers the offline path too).
     """
     settings = settings or get_settings()
     path = str(settings.athenaeum_catalog_path or default_catalog_path())
     graph = _load_graph(path)
+    excluded = exclude_verticals or frozenset()
 
     taken_ids = {t.catalog_id for t in taken}
     completed_ids = {t.catalog_id for t in taken if t.passed}
@@ -309,12 +424,16 @@ def recommend_courses(
     # only on "passed" would freeze the ladder; enrolled prereqs unlock the next.
     satisfied_ids = completed_ids | taken_ids
 
-    # Pool spans the current vertical + the target-cert vertical (priority-ordered).
+    # Pool spans the current vertical + the target-cert vertical (priority-ordered),
+    # minus any explicitly-excluded track (the negation constraint, applied first).
     target_vertical = _vertical_for_cert(path, target_cert)
-    verticals = [v for v in (vertical, target_vertical) if v]
+    verticals = [v for v in (vertical, target_vertical) if v and v not in excluded]
     priority = {v: i for i, v in enumerate(dict.fromkeys(verticals))}
     scoped = [n for n in graph if n.vertical in priority]
-    pool = [n for n in (scoped or graph) if n.id not in taken_ids]
+    # If the requested/target tracks were all excluded, widen to the whole catalog
+    # (still minus the excluded tracks) so an honest alternative is offered.
+    fallback = [n for n in graph if n.vertical not in excluded]
+    pool = [n for n in (scoped or fallback) if n.id not in taken_ids and n.vertical not in excluded]
     if not pool:
         return []
 
