@@ -80,6 +80,83 @@
         "Treating the portal as a second source of truth, so changes made outside the template become drift.",
         "Writing one giant template instead of factoring cohesive resources into modules with clear parameters and outputs."
       ]
+    },
+    {
+      "id": "do-c03-m01-c06",
+      "module_id": "do-c03-m01",
+      "prompt": "According to the module, what happens to a Bicep file under the hood, and to what can it be submitted as a deployment?",
+      "kind": "mcq",
+      "choices": [
+        "It compiles to an Azure Resource Manager (ARM) JSON template and is submitted as a deployment to a scope such as a resource group, subscription, management group, or tenant.",
+        "It is interpreted line by line at runtime by the Azure CLI, which calls the imperative az commands each resource represents.",
+        "It is converted to a Terraform HCL plan and applied only at the resource-group scope.",
+        "It is uploaded directly to the portal as a saved template that can only target a single subscription."
+      ],
+      "correct_answers": [
+        "It compiles to an Azure Resource Manager (ARM) JSON template and is submitted as a deployment to a scope such as a resource group, subscription, management group, or tenant."
+      ]
+    },
+    {
+      "id": "do-c03-m01-c07",
+      "module_id": "do-c03-m01",
+      "prompt": "In the opening Meridian Freight scenario, why is the eighteen-month-old click-built staging environment described as a problem?",
+      "kind": "mcq",
+      "choices": [
+        "Because click-built infrastructure is not reviewable, not reproducible, and not trustworthy, so nobody is certain which settings it carries or why production behaves differently.",
+        "Because the engineer who built it used Bicep modules that were never committed to source control.",
+        "Because the portal automatically deletes environments that have not been redeployed within eighteen months.",
+        "Because staging environments must always be cheaper SKUs than production, and this one was not."
+      ],
+      "correct_answers": [
+        "Because click-built infrastructure is not reviewable, not reproducible, and not trustworthy, so nobody is certain which settings it carries or why production behaves differently."
+      ]
+    },
+    {
+      "id": "do-c03-m01-c08",
+      "module_id": "do-c03-m01",
+      "prompt": "What does the module say Bicep modules let you do, and why is that valuable? Select all that apply.",
+      "kind": "msq",
+      "choices": [
+        "Factor a deployment into composable units such as a networking module, a storage module, and an app module, each with its own parameters and outputs.",
+        "Apply the same decomposition discipline used for application code, so you can test and reason about small units.",
+        "Guarantee that a deployment becomes idempotent only once it has been split into at least three modules.",
+        "Remove the need for a root template, since each module deploys itself independently of the others."
+      ],
+      "correct_answers": [
+        "Factor a deployment into composable units such as a networking module, a storage module, and an app module, each with its own parameters and outputs.",
+        "Apply the same decomposition discipline used for application code, so you can test and reason about small units."
+      ]
+    },
+    {
+      "id": "do-c03-m01-c09",
+      "module_id": "do-c03-m01",
+      "prompt": "In the Meridian main.bicep walkthrough, what role does the reserved: true property play on the App Service plan resource?",
+      "kind": "mcq",
+      "choices": [
+        "It is required for Linux plans.",
+        "It reserves geo-redundant storage capacity for the production environment.",
+        "It marks the plan as the implicit dependency target for the web app.",
+        "It locks the plan against drift so portal edits are rejected."
+      ],
+      "correct_answers": [
+        "It is required for Linux plans."
+      ]
+    },
+    {
+      "id": "do-c03-m01-c10",
+      "module_id": "do-c03-m01",
+      "prompt": "Based on the module, which statements correctly describe parameterization and environment promotion with Bicep? Select all that apply.",
+      "kind": "msq",
+      "choices": [
+        "Per-environment parameter values such as SKU sizes, instance counts, and naming prefixes should be kept in .bicepparam files under source control.",
+        "Promotion between environments means deploying the identical template with a different parameter file, which makes staging a faithful rehearsal for production.",
+        "Each environment requires its own copy of main.bicep so that environment-specific resources can be added independently.",
+        "Parameter values must be hardcoded into main.bicep because .bicepparam files cannot be tracked in source control."
+      ],
+      "correct_answers": [
+        "Per-environment parameter values such as SKU sizes, instance counts, and naming prefixes should be kept in .bicepparam files under source control.",
+        "Promotion between environments means deploying the identical template with a different parameter file, which makes staging a faithful rehearsal for production."
+      ]
     }
   ],
   "llm": [

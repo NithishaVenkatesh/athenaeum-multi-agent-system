@@ -78,6 +78,84 @@
       "correct_answers": [
         "The rule applies account-wide and will eventually delete blobs in every container; the fix is to add the prefixMatch [\"proof-of-delivery/\"] filter (and the blockBlob type filter) to scope it"
       ]
+    },
+    {
+      "id": "cb-c02-m04-c06",
+      "module_id": "cb-c02-m04",
+      "prompt": "According to the module, what does a single rule inside a lifecycle management policy consist of?",
+      "kind": "mcq",
+      "choices": [
+        "A filter selecting which blobs the rule applies to, plus a set of actions keyed to age that move a blob to cool, move it to archive, or delete it",
+        "A schedule expression plus a script body that the platform compiles and runs as a nightly cleanup job",
+        "A retention period and a legal-hold flag that together prevent the blob from being modified or deleted",
+        "A source container and a destination container between which blobs are continuously replicated"
+      ],
+      "correct_answers": [
+        "A filter selecting which blobs the rule applies to, plus a set of actions keyed to age that move a blob to cool, move it to archive, or delete it"
+      ]
+    },
+    {
+      "id": "cb-c02-m04-c07",
+      "module_id": "cb-c02-m04",
+      "prompt": "Per the module, on what can a rule's filter scope which blobs it applies to? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "A name prefix (prefixMatch)",
+        "Blob type (such as block blobs)",
+        "Index tags on the blobs",
+        "The geographic region of the storage account"
+      ],
+      "correct_answers": [
+        "A name prefix (prefixMatch)",
+        "Blob type (such as block blobs)",
+        "Index tags on the blobs"
+      ]
+    },
+    {
+      "id": "cb-c02-m04-c08",
+      "module_id": "cb-c02-m04",
+      "prompt": "The module warns about 'archiving data you still read.' What concrete consequence does it describe for a rule that archives blobs the application still requests?",
+      "kind": "mcq",
+      "choices": [
+        "Fast reads turn into multi-hour rehydration, so you should tier to archive only what is genuinely cold",
+        "The archive action is silently rejected because archived blobs cannot be requested at all",
+        "The blobs are permanently deleted instead of archived once an application reads them",
+        "Soft delete is bypassed for archived blobs, making the reads irrecoverable"
+      ],
+      "correct_answers": [
+        "Fast reads turn into multi-hour rehydration, so you should tier to archive only what is genuinely cold"
+      ]
+    },
+    {
+      "id": "cb-c02-m04-c09",
+      "module_id": "cb-c02-m04",
+      "prompt": "How does the module distinguish what blob soft delete protects against versus what blob versioning protects against?",
+      "kind": "mcq",
+      "choices": [
+        "Soft delete retains deleted blobs for a configurable retention period so a delete can be undone within the window; versioning automatically keeps a previous version whenever a blob is overwritten or deleted so the prior state can be restored",
+        "Soft delete keeps a copy of every overwrite while versioning only applies to outright deletions performed by a policy rule",
+        "Soft delete prevents modification or deletion for a fixed legal period while versioning tiers older versions to archive automatically",
+        "Soft delete starts the age clock for lifecycle actions while versioning stops it until a restore is performed"
+      ],
+      "correct_answers": [
+        "Soft delete retains deleted blobs for a configurable retention period so a delete can be undone within the window; versioning automatically keeps a previous version whenever a blob is overwritten or deleted so the prior state can be restored"
+      ]
+    },
+    {
+      "id": "cb-c02-m04-c10",
+      "module_id": "cb-c02-m04",
+      "prompt": "The module says the age clock for lifecycle conditions is driven by blob timestamps. Which timestamps does it name as possible drivers, and what does it note about using last access? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Creation, last modified, or last accessed can drive the age clock depending on the condition you choose",
+        "Enabling last-access tracking has its own setting you turn on at the account level",
+        "The age clock is always driven solely by the blob's creation time and cannot use any other timestamp",
+        "Last-access tracking is enabled automatically and requires no account-level setting"
+      ],
+      "correct_answers": [
+        "Creation, last modified, or last accessed can drive the age clock depending on the condition you choose",
+        "Enabling last-access tracking has its own setting you turn on at the account level"
+      ]
     }
   ],
   "llm": [

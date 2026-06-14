@@ -81,6 +81,85 @@
         "Treating the MCRA as a target topology to copy rather than a reference to map your estate against",
         "Boiling the ocean by attempting every Zero-Trust initiative simultaneously instead of sequencing with a RaMP"
       ]
+    },
+    {
+      "id": "as-c03-m01-c06",
+      "module_id": "as-c03-m01",
+      "prompt": "Under the module's \"verify explicitly\" principle, how should a request from a corporate laptop on the office network be treated?",
+      "kind": "mcq",
+      "choices": [
+        "It is evaluated on its merits like any request from the public internet, because the perimeter has moved to each access decision rather than the network edge",
+        "It is granted a free pass because it originates from a trusted network location inside the VPN",
+        "It is allowed only after the laptop is added to the MCRA diagram as a trusted device",
+        "It is blocked outright until the user re-joins the device to the on-premises domain"
+      ],
+      "correct_answers": [
+        "It is evaluated on its merits like any request from the public internet, because the perimeter has moved to each access decision rather than the network edge"
+      ]
+    },
+    {
+      "id": "as-c03-m01-c07",
+      "module_id": "as-c03-m01",
+      "prompt": "The module says resiliency means planning for when a control fails, not just if. Which approach does it name as the way to avoid a single point of failure when, for example, the identity provider is compromised?",
+      "kind": "mcq",
+      "choices": [
+        "Defense in depth — independent layers that each must be defeated",
+        "Consolidating all controls into the identity provider so there is one place to harden",
+        "Cloning the MCRA reference topology exactly as the target architecture",
+        "Leaving Conditional Access policies in report-only mode as a fallback"
+      ],
+      "correct_answers": [
+        "Defense in depth — independent layers that each must be defeated"
+      ]
+    },
+    {
+      "id": "as-c03-m01-c08",
+      "module_id": "as-c03-m01",
+      "prompt": "According to the module, how does the \"use least-privilege access\" principle describe the access that should be granted?",
+      "kind": "mcq",
+      "choices": [
+        "Just enough access, just in time, and let it expire",
+        "Broad standing access that is reviewed once per audit cycle",
+        "Full administrative access protected only by phishing-resistant MFA",
+        "Network-scoped access tied to the user's trusted office location"
+      ],
+      "correct_answers": [
+        "Just enough access, just in time, and let it expire"
+      ]
+    },
+    {
+      "id": "as-c03-m01-c09",
+      "module_id": "as-c03-m01",
+      "prompt": "The module describes the MCSB as a control framework whose controls are grouped into domains. Which of the following are named as MCSB control domains in the module? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Network security",
+        "Logging and threat detection",
+        "Posture and vulnerability management",
+        "Business resiliency planning"
+      ],
+      "correct_answers": [
+        "Network security",
+        "Logging and threat detection",
+        "Posture and vulnerability management"
+      ]
+    },
+    {
+      "id": "as-c03-m01-c10",
+      "module_id": "as-c03-m01",
+      "prompt": "In the module's Meridian Harbour RaMP, Phase 2 is \"Protect privileged access and critical data.\" Which statements about this phase are accurate per the module? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Its rationale is to limit blast radius once an account is compromised",
+        "It includes just-in-time elevation for admin roles using PIM",
+        "Its success metric is zero standing global-admin assignments",
+        "It comes before securing identity and access because privileged accounts are the most-used attack path"
+      ],
+      "correct_answers": [
+        "Its rationale is to limit blast radius once an account is compromised",
+        "It includes just-in-time elevation for admin roles using PIM",
+        "Its success metric is zero standing global-admin assignments"
+      ]
     }
   ],
   "llm": [

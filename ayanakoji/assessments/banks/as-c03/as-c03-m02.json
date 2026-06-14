@@ -81,6 +81,85 @@
         "Treating MITRE ATT&CK coverage as a checkbox, where a green technique backed by one brittle, untuned rule is mistaken for real coverage.",
         "Auto-disabling a service account that legitimately sends bulk mail, because automating decisions that need judgment can cause an outage."
       ]
+    },
+    {
+      "id": "as-c03-m02-c06",
+      "module_id": "as-c03-m02",
+      "kind": "mcq",
+      "prompt": "The module describes the 'art' of writing a good detection as a balance. Which characterization matches what it says a good detection must achieve?",
+      "choices": [
+        "Specific enough to avoid drowning analysts in false positives, yet general enough to catch variations of a technique—choosing a signal hard for an attacker to avoid while doing the thing you care about.",
+        "As broad as possible so that no activity is ever missed, accepting a high false-positive rate as the cost of complete coverage.",
+        "Tied to a single exact log value so it never matches anything but the one known attack instance, guaranteeing zero false positives.",
+        "Written to alert on raw log volume alone, since raw logs are themselves the security value the analyst needs."
+      ],
+      "correct_answers": [
+        "Specific enough to avoid drowning analysts in false positives, yet general enough to catch variations of a technique—choosing a signal hard for an attacker to avoid while doing the thing you care about."
+      ]
+    },
+    {
+      "id": "as-c03-m02-c07",
+      "module_id": "as-c03-m02",
+      "kind": "mcq",
+      "prompt": "According to the module, what is the distinction between a tactic and a technique in MITRE ATT&CK?",
+      "choices": [
+        "A tactic is the attacker's goal (such as initial access, persistence, or exfiltration), and a technique is how they achieve it.",
+        "A tactic is a specific command an attacker runs, and a technique is the long-term campaign it belongs to.",
+        "A tactic is a Sentinel analytics rule, and a technique is the Logic App playbook that responds to it.",
+        "A tactic is a detection you have written, and a technique is a detection you have not yet written."
+      ],
+      "correct_answers": [
+        "A tactic is the attacker's goal (such as initial access, persistence, or exfiltration), and a technique is how they achieve it."
+      ]
+    },
+    {
+      "id": "as-c03-m02-c08",
+      "module_id": "as-c03-m02",
+      "kind": "mcq",
+      "prompt": "The module warns that detections which compare activity against 'normal' have a specific dependency. What does it say you must do to support such detections and the hunting that accompanies them?",
+      "choices": [
+        "Disable long-term log storage so the workspace stays small and queries run faster.",
+        "Size the workspace and retention to the detections and investigations you actually run, since baseline comparisons need enough history to know what normal is and hunting needs retention.",
+        "Route all baseline calculations to Defender XDR, because Sentinel cannot compute a baseline.",
+        "Replace baseline-relative detections entirely with fixed thresholds that never reference historical data."
+      ],
+      "correct_answers": [
+        "Size the workspace and retention to the detections and investigations you actually run, since baseline comparisons need enough history to know what normal is and hunting needs retention."
+      ]
+    },
+    {
+      "id": "as-c03-m02-c09",
+      "module_id": "as-c03-m02",
+      "kind": "msq",
+      "prompt": "Based on the module, which statements are accurate about how MITRE ATT&CK is used as a coverage map and what that achieves?",
+      "choices": [
+        "You plot each of your detections against the techniques it catches, and the techniques no detection covers are where you are blind.",
+        "Used this way, it converts 'do we have good monitoring?' from an opinion into a defensible heatmap you can show the board.",
+        "A technique shown as green with one brittle, untuned rule should be treated as fully validated coverage requiring no further work.",
+        "MITRE ATT&CK is a public knowledge base of real adversary tactics and techniques."
+      ],
+      "correct_answers": [
+        "You plot each of your detections against the techniques it catches, and the techniques no detection covers are where you are blind.",
+        "Used this way, it converts 'do we have good monitoring?' from an opinion into a defensible heatmap you can show the board.",
+        "MITRE ATT&CK is a public knowledge base of real adversary tactics and techniques."
+      ]
+    },
+    {
+      "id": "as-c03-m02-c10",
+      "module_id": "as-c03-m02",
+      "kind": "msq",
+      "prompt": "In the Meridian Harbour walkthrough, which statements accurately describe the automated-response wiring and the final coverage step the module describes?",
+      "choices": [
+        "An automation rule triggers on incidents when they are created and, on a matching condition, runs a playbook (a Logic App).",
+        "The playbook would revoke the user's sessions and disable the account via Microsoft Graph, then notify the SOC.",
+        "The detection is tagged to the ATT&CK techniques it covers—collection via email rules and exfiltration over the mail channel—and added to the coverage heatmap.",
+        "The automation rule itself isolates the device and disables the user directly, with no playbook involved."
+      ],
+      "correct_answers": [
+        "An automation rule triggers on incidents when they are created and, on a matching condition, runs a playbook (a Logic App).",
+        "The playbook would revoke the user's sessions and disable the account via Microsoft Graph, then notify the SOC.",
+        "The detection is tagged to the ATT&CK techniques it covers—collection via email rules and exfiltration over the mail channel—and added to the coverage heatmap."
+      ]
     }
   ],
   "llm": [

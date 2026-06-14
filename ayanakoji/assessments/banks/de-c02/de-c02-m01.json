@@ -79,6 +79,84 @@
       "correct_answers": [
         "Because cast turns unparseable junk into NULL silently with no error, so measuring the nulls is the only way to surface what the cast cost you"
       ]
+    },
+    {
+      "id": "de-c02-m01-c06",
+      "module_id": "de-c02-m01",
+      "kind": "mcq",
+      "prompt": "The module stresses that a Spark transformation such as select, filter, or withColumn returns a new DataFrame rather than mutating the old one. Beyond coding style, why does the module say this immutability matters?",
+      "choices": [
+        "It lets Spark build a logical plan of the chained transformations that the Catalyst optimizer can later rewrite and execute efficiently",
+        "It guarantees each transformation runs immediately on the cluster so no work is deferred",
+        "It forces every DataFrame to be cached automatically, eliminating recomputation",
+        "It prevents the source files from ever being read more than once, regardless of how many actions you call"
+      ],
+      "correct_answers": [
+        "It lets Spark build a logical plan of the chained transformations that the Catalyst optimizer can later rewrite and execute efficiently"
+      ]
+    },
+    {
+      "id": "de-c02-m01-c07",
+      "module_id": "de-c02-m01",
+      "kind": "msq",
+      "prompt": "According to the module, what does the Catalyst optimizer do when an action finally triggers a chain of transformations?",
+      "choices": [
+        "It rewrites the whole chain into an efficient physical plan, for example pushing filters down and pruning columns",
+        "It combines steps so chaining many transformations costs nothing until the action runs",
+        "It re-orders the data alphabetically by partition key before any transformation is applied",
+        "It executes each transformation the moment it was written, ignoring the action that triggered it"
+      ],
+      "correct_answers": [
+        "It rewrites the whole chain into an efficient physical plan, for example pushing filters down and pruning columns",
+        "It combines steps so chaining many transformations costs nothing until the action runs"
+      ]
+    },
+    {
+      "id": "de-c02-m01-c08",
+      "module_id": "de-c02-m01",
+      "kind": "mcq",
+      "prompt": "The module warns against trusting inferSchema for scheduled production jobs. What specific failure does it describe, and what does it recommend instead?",
+      "choices": [
+        "Inference samples the file and can guess column types wrong when an early partition lacks a value, so you should supply an explicit schema for scheduled jobs",
+        "Inference always reads the entire file twice, doubling runtime, so you should disable the header option instead",
+        "Inference silently converts all columns to strings, so you should cast every column to decimal after reading",
+        "Inference broadcasts the schema to every executor, exhausting memory, so you should normalize the table first"
+      ],
+      "correct_answers": [
+        "Inference samples the file and can guess column types wrong when an early partition lacks a value, so you should supply an explicit schema for scheduled jobs"
+      ]
+    },
+    {
+      "id": "de-c02-m01-c09",
+      "module_id": "de-c02-m01",
+      "kind": "mcq",
+      "prompt": "In the walkthrough, the print statement that reports the count of unparseable prices is singled out as something you would compute differently or drop in a tight production job. Why?",
+      "choices": [
+        "The print is itself an action, so it forces an extra pass over the data on top of the final write",
+        "The print mutates the cleaned DataFrame in place, corrupting the downstream plan",
+        "The print disables the Catalyst optimizer for every transformation that follows it",
+        "The print broadcasts the price column to every executor, exhausting memory"
+      ],
+      "correct_answers": [
+        "The print is itself an action, so it forces an extra pass over the data on top of the final write"
+      ]
+    },
+    {
+      "id": "de-c02-m01-c10",
+      "module_id": "de-c02-m01",
+      "kind": "msq",
+      "prompt": "The module says that when a DataFrame is reused several times, you should cache or persist it after the expensive steps. Which statements reflect the module's guidance on this caching pattern?",
+      "choices": [
+        "Without persisting, each count(), show(), or write re-executes the whole lazy chain from the source",
+        "You should call unpersist() when you are done with the cached DataFrame to free the memory",
+        "cache() (or persist()) should be applied after the expensive transformations so the costly steps run once",
+        "Caching is only useful when the DataFrame is written exactly once and never read again"
+      ],
+      "correct_answers": [
+        "Without persisting, each count(), show(), or write re-executes the whole lazy chain from the source",
+        "You should call unpersist() when you are done with the cached DataFrame to free the memory",
+        "cache() (or persist()) should be applied after the expensive transformations so the costly steps run once"
+      ]
     }
   ],
   "llm": [

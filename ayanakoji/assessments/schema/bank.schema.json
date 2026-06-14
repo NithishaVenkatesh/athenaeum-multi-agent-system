@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://athenaeum.local/schemas/assessment-bank.json",
   "title": "Module Assessment Bank",
-  "description": "Authored question bank for one Athenaeum catalog module: a 5-question choices test (MCQ/MSQ) and a 3-question LLM (explanation) test. Grounded purely on the module's content.",
+  "description": "Authored question bank for one Athenaeum catalog module: a 10-question choices test (MCQ/MSQ) and a 3-question LLM (explanation) test. Grounded purely on the module's content.",
   "type": "object",
   "additionalProperties": false,
   "required": ["course_id", "module_id", "module_title", "choices", "llm"],
@@ -23,9 +23,9 @@
     },
     "choices": {
       "type": "array",
-      "description": "Exactly 5 multiple-choice / multiple-select questions.",
-      "minItems": 5,
-      "maxItems": 5,
+      "description": "Exactly 10 multiple-choice / multiple-select questions.",
+      "minItems": 10,
+      "maxItems": 10,
       "items": { "$ref": "#/$defs/choiceQuestion" }
     },
     "llm": {
@@ -44,8 +44,8 @@
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^[a-z]{2}-c[0-9]{2}-m[0-9]{2}-c0[1-5]$",
-          "description": "Stable id: '<module_id>-c<NN>', NN in 01..05."
+          "pattern": "^[a-z]{2}-c[0-9]{2}-m[0-9]{2}-c(0[1-9]|10)$",
+          "description": "Stable id: '<module_id>-c<NN>', NN in 01..10."
         },
         "module_id": {
           "type": "string",

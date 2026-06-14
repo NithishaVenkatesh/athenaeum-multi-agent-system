@@ -18,7 +18,7 @@ assessments/
 
 Each `<module_id>.json` carries **two tests** for one module:
 
-- **Choices test** — exactly **5** questions, each MCQ (one correct) or MSQ
+- **Choices test** — exactly **10** questions, each MCQ (one correct) or MSQ
   (two or more correct), 4 options each.
 - **LLM test** — exactly **3** open-ended questions, each with a reference
   answer for grading.
@@ -29,7 +29,7 @@ for the authoring standard.
 
 ## ID convention (stable, deterministic)
 
-- Choice question: `<module_id>-c<NN>` (`cb-c01-m01-c01` … `-c05`)
+- Choice question: `<module_id>-c<NN>` (`cb-c01-m01-c01` … `-c10`)
 - LLM question: `<module_id>-l<NN>` (`cb-c01-m01-l01` … `-l03`)
 
 ## Grounding rule

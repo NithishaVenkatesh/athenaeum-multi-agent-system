@@ -79,6 +79,83 @@
       "correct_answers": [
         "Issue a user-delegation SAS scoped to that single blob with read-only permission and a ten-minute expiry"
       ]
+    },
+    {
+      "id": "cb-c03-m02-c06",
+      "module_id": "cb-c03-m02",
+      "prompt": "Among the three kinds of material Key Vault stores, what does the module say is distinctive about cryptographic keys?",
+      "kind": "mcq",
+      "choices": [
+        "They can be backed by an HSM and used for signing or encryption without ever leaving the vault",
+        "They are stored as arbitrary strings just like connection strings and API keys",
+        "They are TLS certificates whose lifecycle the vault manages automatically",
+        "They are exported to the application at runtime so the code can perform the cryptography locally"
+      ],
+      "correct_answers": [
+        "They can be backed by an HSM and used for signing or encryption without ever leaving the vault"
+      ]
+    },
+    {
+      "id": "cb-c03-m02-c07",
+      "module_id": "cb-c03-m02",
+      "prompt": "The module's central argument for moving beyond merely storing a secret is captured by which statement?",
+      "kind": "mcq",
+      "choices": [
+        "A credential your code can read is a credential an attacker can read too",
+        "Environment variables are always more secure than appsettings.json for credentials",
+        "Key Vault eliminates the need to ever rotate any credential",
+        "Storing the secret in source control is acceptable as long as the repo is private"
+      ],
+      "correct_answers": [
+        "A credential your code can read is a credential an attacker can read too"
+      ]
+    },
+    {
+      "id": "cb-c03-m02-c08",
+      "module_id": "cb-c03-m02",
+      "prompt": "According to the 'Common pitfalls' guidance on client and secret handling, which practices does the module recommend? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Construct the SecretClient once and reuse it rather than recreating it on every request",
+        "Avoid caching the secret value forever so the app picks up a rotated value",
+        "Recreate the SecretClient on every request to guarantee a fresh token each time",
+        "Cache the retrieved secret value permanently to minimize calls to Key Vault"
+      ],
+      "correct_answers": [
+        "Construct the SecretClient once and reuse it rather than recreating it on every request",
+        "Avoid caching the secret value forever so the app picks up a rotated value"
+      ]
+    },
+    {
+      "id": "cb-c03-m02-c09",
+      "module_id": "cb-c03-m02",
+      "prompt": "Why does the module recommend Azure RBAC over the older access policies model for the Key Vault data plane?",
+      "kind": "mcq",
+      "choices": [
+        "It is consistent with the rest of Azure and supports fine-grained, auditable assignments",
+        "It removes the distinction between the management plane and the data plane entirely",
+        "It is the only model that lets a managed identity read secrets at all",
+        "It allows access policies and RBAC to be combined on the same vault simultaneously"
+      ],
+      "correct_answers": [
+        "It is consistent with the rest of Azure and supports fine-grained, auditable assignments"
+      ]
+    },
+    {
+      "id": "cb-c03-m02-c10",
+      "module_id": "cb-c03-m02",
+      "prompt": "Which statements does the module make about local development and the user-delegation SAS revocation story? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Code that only works with a managed identity fails on a laptop unless the developer is signed in with az login and has the same RBAC role",
+        "A user-delegation SAS is signed with Entra ID credentials and can be revoked by rotating the user delegation key",
+        "DefaultAzureCredential works locally only after the developer hardcodes the managed identity's principal ID",
+        "A user-delegation SAS is signed with the storage account key, which is why it is easy to revoke"
+      ],
+      "correct_answers": [
+        "Code that only works with a managed identity fails on a laptop unless the developer is signed in with az login and has the same RBAC role",
+        "A user-delegation SAS is signed with Entra ID credentials and can be revoked by rotating the user delegation key"
+      ]
     }
   ],
   "llm": [

@@ -80,6 +80,85 @@
         "Access reviews periodically force owners to re-certify who still needs access, catching expired contractors",
         "Entitlement management packages roles and resources into access packages users can request, with built-in approval and expiry"
       ]
+    },
+    {
+      "id": "as-c02-m02-c06",
+      "module_id": "as-c02-m02",
+      "prompt": "According to the module, what roles do subscriptions and resource groups respectively play in the Azure resource hierarchy?",
+      "kind": "mcq",
+      "choices": [
+        "A subscription is the primary unit of billing and a blast-radius boundary, while a resource group holds resources that share a lifecycle",
+        "A subscription holds resources sharing a lifecycle, while a resource group is the primary unit of billing",
+        "Both subscriptions and resource groups exist mainly to apply policy and access above each other in a tree",
+        "A subscription attaches key-value metadata for cost allocation, while a resource group enforces inheritance of that metadata"
+      ],
+      "correct_answers": [
+        "A subscription is the primary unit of billing and a blast-radius boundary, while a resource group holds resources that share a lifecycle"
+      ]
+    },
+    {
+      "id": "as-c02-m02-c07",
+      "module_id": "as-c02-m02",
+      "prompt": "In the Helios walkthrough, the allowed-locations policy assignment uses '--enforcement-mode Default'. What is the effect of this flag, and what would change if it were set to 'DoNotEnforce'?",
+      "kind": "mcq",
+      "choices": [
+        "Default makes the effect active so a deployment to a disallowed region is blocked; DoNotEnforce would only audit, letting you measure impact first",
+        "Default audits non-compliance silently; DoNotEnforce blocks all non-compliant deployments immediately",
+        "Default applies the policy only to the management group itself; DoNotEnforce extends it to every child subscription",
+        "Default requires a managed identity to remediate; DoNotEnforce removes that requirement"
+      ],
+      "correct_answers": [
+        "Default makes the effect active so a deployment to a disallowed region is blocked; DoNotEnforce would only audit, letting you measure impact first"
+      ]
+    },
+    {
+      "id": "as-c02-m02-c08",
+      "module_id": "as-c02-m02",
+      "prompt": "The module warns that 'deployIfNotExists' and 'modify' policies can silently fail. According to the module, what causes this, and how should you guard against it?",
+      "kind": "mcq",
+      "choices": [
+        "They act on your behalf and require a managed identity with sufficient rights, so you must verify the required role assignments when designing them",
+        "They evaluate resources only at creation time, so you must re-run the assignment after every deployment",
+        "They cannot be grouped into an initiative, so you must assign each one separately at the subscription scope",
+        "They are inherited only one level down the tree, so you must reassign them at every child management group"
+      ],
+      "correct_answers": [
+        "They act on your behalf and require a managed identity with sufficient rights, so you must verify the required role assignments when designing them"
+      ]
+    },
+    {
+      "id": "as-c02-m02-c09",
+      "module_id": "as-c02-m02",
+      "prompt": "Which statements accurately describe the module's guidance on shaping the management-group tree and assigning controls? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Assign policy and broad RBAC at the management-group level so it is inherited, reserving subscriptions for billing and isolation boundaries",
+        "Avoid an overly deep tree, since every extra level is cognitive overhead with little benefit beyond a few layers",
+        "A tree that mirrors the org chart breaks on every reorganization and adds layers that carry no controls",
+        "Assigning policy at the subscription level is preferred because it avoids repeating assignments for every new subscription"
+      ],
+      "correct_answers": [
+        "Assign policy and broad RBAC at the management-group level so it is inherited, reserving subscriptions for billing and isolation boundaries",
+        "Avoid an overly deep tree, since every extra level is cognitive overhead with little benefit beyond a few layers",
+        "A tree that mirrors the org chart breaks on every reorganization and adds layers that carry no controls"
+      ]
+    },
+    {
+      "id": "as-c02-m02-c10",
+      "module_id": "as-c02-m02",
+      "prompt": "Which statements about Azure Policy initiatives and the 'deny' effect are accurate per the module? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "An initiative (policy set) lets you assign a coherent bundle, such as a regulatory baseline, as one unit and report compliance against it",
+        "The 'deny' effect rejects a non-compliant resource at creation time, the hard guardrail that would have stopped the forbidden-region database",
+        "Bundling related policies into an initiative lets compliance report as a single number",
+        "An initiative automatically converts every 'audit' effect inside it into a 'deny' effect once compliance reaches 100 percent"
+      ],
+      "correct_answers": [
+        "An initiative (policy set) lets you assign a coherent bundle, such as a regulatory baseline, as one unit and report compliance against it",
+        "The 'deny' effect rejects a non-compliant resource at creation time, the hard guardrail that would have stopped the forbidden-region database",
+        "Bundling related policies into an initiative lets compliance report as a single number"
+      ]
     }
   ],
   "llm": [

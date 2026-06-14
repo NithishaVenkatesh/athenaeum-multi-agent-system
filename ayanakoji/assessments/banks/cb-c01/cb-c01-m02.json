@@ -79,6 +79,85 @@
         "A function has one trigger but can have several input and output bindings",
         "The `connection` property must name an app setting rather than contain a literal connection string"
       ]
+    },
+    {
+      "id": "cb-c01-m02-c06",
+      "module_id": "cb-c01-m02",
+      "kind": "mcq",
+      "prompt": "According to the module, what triggers a queue or blob trigger to run, and what kind of coupling does this enable between parts of a system?",
+      "choices": [
+        "A message landing on a queue or a file appearing in storage runs it, letting one part of the system react to another asynchronously",
+        "An inbound HTTP request runs it, letting the caller wait synchronously for the result",
+        "A timer firing on a CRON schedule runs it, letting jobs react to one another on a fixed cadence",
+        "An output binding completing runs it, letting one function chain directly into the next"
+      ],
+      "correct_answers": [
+        "A message landing on a queue or a file appearing in storage runs it, letting one part of the system react to another asynchronously"
+      ]
+    },
+    {
+      "id": "cb-c01-m02-c07",
+      "module_id": "cb-c01-m02",
+      "kind": "mcq",
+      "prompt": "The module warns against putting long-running work in a single function invocation. What is the recommended way to handle a job that would otherwise exceed the plan's timeout?",
+      "choices": [
+        "Break the long work into queue-driven steps so each invocation is short and restartable",
+        "Move the job to an HTTP trigger so the request can stay open until the work finishes",
+        "Run the job on the Consumption plan so scale-to-zero pauses and resumes it as needed",
+        "Add a second trigger to the function so the work is split across both invocations"
+      ],
+      "correct_answers": [
+        "Break the long work into queue-driven steps so each invocation is short and restartable"
+      ]
+    },
+    {
+      "id": "cb-c01-m02-c08",
+      "module_id": "cb-c01-m02",
+      "kind": "mcq",
+      "prompt": "Per the module, what are the defining cost-and-scaling characteristics of the Consumption plan, and what is the trade-off it carries?",
+      "choices": [
+        "It scales to zero and bills per execution, ideal for spiky infrequent work, but an idle function may incur a cold start",
+        "It keeps instances warm at a higher baseline cost, eliminating cold starts for all functions",
+        "It bills a flat monthly rate regardless of executions, making cost predictable but never scaling down",
+        "It scales to zero only for timer triggers, while HTTP triggers always keep one instance warm"
+      ],
+      "correct_answers": [
+        "It scales to zero and bills per execution, ideal for spiky infrequent work, but an idle function may incur a cold start"
+      ]
+    },
+    {
+      "id": "cb-c01-m02-c09",
+      "module_id": "cb-c01-m02",
+      "kind": "msq",
+      "prompt": "A teammate sets `connection=\"DefaultEndpointsProtocol=https;AccountName=...\"` directly on a queue trigger. According to the module's pitfalls, what is wrong and what should be done instead? (Select all that apply.)",
+      "choices": [
+        "The `connection` property must name an app setting, not contain the literal value",
+        "Putting a literal connection string there leaks the secret",
+        "It breaks per-environment configuration",
+        "A literal connection string is acceptable as long as it is the production storage account"
+      ],
+      "correct_answers": [
+        "The `connection` property must name an app setting, not contain the literal value",
+        "Putting a literal connection string there leaks the secret",
+        "It breaks per-environment configuration"
+      ]
+    },
+    {
+      "id": "cb-c01-m02-c10",
+      "module_id": "cb-c01-m02",
+      "kind": "msq",
+      "prompt": "Based on the walkthrough and deployment steps, which of the following are accurate? (Select all that apply.)",
+      "choices": [
+        "In the v2 programming model, triggers and bindings are declared with decorators",
+        "The function app is deployed with `func azure functionapp publish`",
+        "The timer-triggered ExpireStaleCarts function never opens a connection to anything; it just runs on schedule",
+        "STORAGE_CONNECTION holds the literal storage connection string embedded in the function source code"
+      ],
+      "correct_answers": [
+        "In the v2 programming model, triggers and bindings are declared with decorators",
+        "The function app is deployed with `func azure functionapp publish`",
+        "The timer-triggered ExpireStaleCarts function never opens a connection to anything; it just runs on schedule"
+      ]
     }
   ],
   "llm": [

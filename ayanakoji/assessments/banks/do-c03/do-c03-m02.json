@@ -79,6 +79,85 @@
       "correct_answers": [
         "A managed identity gives the running app/resource an identity so it holds no credential, while workload identity federation lets a pipeline running outside Azure authenticate by presenting a short-lived OIDC token"
       ]
+    },
+    {
+      "id": "do-c03-m02-c06",
+      "module_id": "do-c03-m02",
+      "prompt": "The module describes two flavors of managed identity. Which statement correctly distinguishes them?",
+      "kind": "mcq",
+      "choices": [
+        "System-assigned is tied to one resource's lifecycle, while user-assigned is a standalone identity you can attach to several resources",
+        "System-assigned can be attached to several resources, while user-assigned is tied to one resource's lifecycle",
+        "System-assigned holds a client secret, while user-assigned is secretless",
+        "System-assigned is used for pipelines, while user-assigned is used for running applications"
+      ],
+      "correct_answers": [
+        "System-assigned is tied to one resource's lifecycle, while user-assigned is a standalone identity you can attach to several resources"
+      ]
+    },
+    {
+      "id": "do-c03-m02-c07",
+      "module_id": "do-c03-m02",
+      "prompt": "The module states that the point of a vault is not merely encryption at rest. According to the module, what is the primary value it emphasizes, and which RBAC role does it name as the preferred, least-privilege way to grant read access?",
+      "kind": "mcq",
+      "choices": [
+        "Centralized control (one place for access policy, audit trail, and rotation), granted via the Key Vault Secrets User role",
+        "Hardware-backed encryption, granted via the Key Vault Administrator role",
+        "Automatic secret rotation, granted via the Key Vault Crypto Officer role",
+        "Network isolation, granted via the Key Vault Contributor role"
+      ],
+      "correct_answers": [
+        "Centralized control (one place for access policy, audit trail, and rotation), granted via the Key Vault Secrets User role"
+      ]
+    },
+    {
+      "id": "do-c03-m02-c08",
+      "module_id": "do-c03-m02",
+      "prompt": "In the GitHub Actions workflow from the walkthrough, the deploy job sets 'id-token: write' under permissions. According to the module, what does this permission do?",
+      "kind": "mcq",
+      "choices": [
+        "It allows the workflow to request an OIDC token",
+        "It grants the workflow write access to the Key Vault secret",
+        "It writes the federated credential's subject claim onto the Entra app registration",
+        "It lets the workflow store the client secret as an output variable"
+      ],
+      "correct_answers": [
+        "It allows the workflow to request an OIDC token"
+      ]
+    },
+    {
+      "id": "do-c03-m02-c09",
+      "module_id": "do-c03-m02",
+      "prompt": "Select all measures the module's 'Common pitfalls' section explicitly recommends to prevent secret leakage into logs.",
+      "kind": "msq",
+      "choices": [
+        "Never log secret values, and avoid interpolating a secret into an error message",
+        "Rely on the platform's automatic masking",
+        "Prefer secretless auth so there is nothing to mask",
+        "Always enable shell tracing with set -x so secrets are recorded for audit"
+      ],
+      "correct_answers": [
+        "Never log secret values, and avoid interpolating a secret into an error message",
+        "Rely on the platform's automatic masking",
+        "Prefer secretless auth so there is nothing to mask"
+      ]
+    },
+    {
+      "id": "do-c03-m02-c10",
+      "module_id": "do-c03-m02",
+      "prompt": "The module's 'Confusing identifiers with secrets' pitfall draws a specific line. Select all statements that match how the module characterizes this distinction.",
+      "kind": "msq",
+      "choices": [
+        "Client and tenant IDs are public identifiers",
+        "Treating client and tenant IDs as secrets adds friction without security",
+        "Treating an actual client secret as 'just config' causes leaks",
+        "Certificates are public identifiers that can be shared like IDs"
+      ],
+      "correct_answers": [
+        "Client and tenant IDs are public identifiers",
+        "Treating client and tenant IDs as secrets adds friction without security",
+        "Treating an actual client secret as 'just config' causes leaks"
+      ]
     }
   ],
   "llm": [

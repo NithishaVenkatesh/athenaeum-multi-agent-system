@@ -81,6 +81,85 @@
         "It acts as an abstraction boundary so that when files are repartitioned or moved, you update the view definition and queries keep working",
         "It points at silver and gold paths and names columns sensibly while hiding the physical folder structure"
       ]
+    },
+    {
+      "id": "de-c01-m02-c06",
+      "module_id": "de-c01-m02",
+      "prompt": "According to the module, how do you reference data in a Data Lake Storage Gen2 account, and what is the top-level grouping called?",
+      "kind": "mcq",
+      "choices": [
+        "You use the abfss:// driver with the form abfss://<container>@<account>.dfs.core.windows.net/<path>, where the container is what Gen2 calls a filesystem",
+        "You use the https:// driver exclusively, and the top-level grouping is called a bucket",
+        "You use the abfss:// driver, but the top-level grouping is called a partition because each zone maps to one partition",
+        "You use a POSIX mount path, and the top-level grouping is called a directory ACL"
+      ],
+      "correct_answers": [
+        "You use the abfss:// driver with the form abfss://<container>@<account>.dfs.core.windows.net/<path>, where the container is what Gen2 calls a filesystem"
+      ]
+    },
+    {
+      "id": "de-c01-m02-c07",
+      "module_id": "de-c01-m02",
+      "prompt": "In the analyst query example, the silver data is partitioned by event_date and the analyst filters on event_date and region. According to the module, why does this result in a small bill?",
+      "kind": "mcq",
+      "choices": [
+        "Serverless SQL prunes to a week of files from the WHERE clause and bills only for that scan",
+        "Spark caches the partition folders in cluster memory so subsequent reads are free",
+        "The view physically materializes only the matching rows into gold before billing",
+        "Serverless SQL bills a flat rate per query regardless of how much data is scanned"
+      ],
+      "correct_answers": [
+        "Serverless SQL prunes to a week of files from the WHERE clause and bills only for that scan"
+      ]
+    },
+    {
+      "id": "de-c01-m02-c08",
+      "module_id": "de-c01-m02",
+      "prompt": "Per the module's distinction between the medallion zones, which statements correctly describe the silver and gold zones?",
+      "kind": "msq",
+      "choices": [
+        "Silver is data that has been validated, deduplicated, conformed to consistent types and schemas, and partitioned sensibly",
+        "Silver is what most engineering reads from",
+        "Gold is business-level aggregates and curated marts shaped for specific consumers, such as the tables a dashboard or analyst hits directly",
+        "Gold is the append-only replay-and-audit source of truth that is never edited"
+      ],
+      "correct_answers": [
+        "Silver is data that has been validated, deduplicated, conformed to consistent types and schemas, and partitioned sensibly",
+        "Silver is what most engineering reads from",
+        "Gold is business-level aggregates and curated marts shaped for specific consumers, such as the tables a dashboard or analyst hits directly"
+      ]
+    },
+    {
+      "id": "de-c01-m02-c09",
+      "module_id": "de-c01-m02",
+      "prompt": "According to the module, which tasks should make you reach for Spark rather than serverless SQL?",
+      "kind": "msq",
+      "choices": [
+        "Transforming at scale with complex logic",
+        "Running multi-step pipelines",
+        "Writing back partitioned outputs",
+        "Running a one-line SELECT for ad-hoc exploration"
+      ],
+      "correct_answers": [
+        "Transforming at scale with complex logic",
+        "Running multi-step pipelines",
+        "Writing back partitioned outputs"
+      ]
+    },
+    {
+      "id": "de-c01-m02-c10",
+      "module_id": "de-c01-m02",
+      "prompt": "The module lists granting blanket access to the whole account as a common pitfall. What does it recommend instead?",
+      "kind": "mcq",
+      "choices": [
+        "Use container- and directory-level access control so a team that needs gold cannot accidentally read or write bronze",
+        "Disable the hierarchical namespace so that flat key-value permissions apply uniformly",
+        "Copy each zone into a separate storage account so no account ever holds more than one zone",
+        "Route all analyst access through a single shared admin credential to simplify auditing"
+      ],
+      "correct_answers": [
+        "Use container- and directory-level access control so a team that needs gold cannot accidentally read or write bronze"
+      ]
     }
   ],
   "llm": [

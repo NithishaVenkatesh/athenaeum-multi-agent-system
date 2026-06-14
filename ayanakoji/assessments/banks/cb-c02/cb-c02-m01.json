@@ -81,6 +81,84 @@
         "Querying without the partition key, which forces an expensive cross-partition fan-out query",
         "Storing huge items instead of putting large blobs in Blob Storage with a pointer in Cosmos"
       ]
+    },
+    {
+      "id": "cb-c02-m01-c06",
+      "module_id": "cb-c02-m01",
+      "prompt": "According to the module, when an operation's consumption exceeds the provisioned RU/s for a partition, what does Cosmos DB return to tell the client how long to wait before retrying?",
+      "kind": "mcq",
+      "choices": [
+        "HTTP 429 with an x-ms-retry-after-ms header",
+        "HTTP 503 with a Retry-After header measured in seconds",
+        "HTTP 409 with an x-ms-request-charge header",
+        "HTTP 429 with the x-ms-request-charge header indicating remaining RUs"
+      ],
+      "correct_answers": [
+        "HTTP 429 with an x-ms-retry-after-ms header"
+      ]
+    },
+    {
+      "id": "cb-c02-m01-c07",
+      "module_id": "cb-c02-m01",
+      "prompt": "In the walkthrough code, why does the module use DefaultAzureCredential when constructing the CosmosClient, and what throughput value is set on the manual-throughput container?",
+      "kind": "mcq",
+      "choices": [
+        "So no keys live in code, with offer_throughput set to 400 RU/s, the manual-throughput minimum",
+        "So the client auto-selects the cheapest consistency level, with offer_throughput set to 1 RU/s",
+        "So the SDK can rotate access keys automatically, with offer_throughput set to 2 MB",
+        "So reads bypass the partition key requirement, with offer_throughput set to 400 MB/s"
+      ],
+      "correct_answers": [
+        "So no keys live in code, with offer_throughput set to 400 RU/s, the manual-throughput minimum"
+      ]
+    },
+    {
+      "id": "cb-c02-m01-c08",
+      "module_id": "cb-c02-m01",
+      "prompt": "The module describes the partition key with a coat-check analogy. Which properties does it say characterize a GOOD partition key? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "High cardinality so load spreads evenly across partitions",
+        "Access patterns that mostly stay within one partition-key value so related reads are cheap",
+        "A low-cardinality value like /region so fewer partitions need managing",
+        "A time-based value like /date so today's writes are grouped together"
+      ],
+      "correct_answers": [
+        "High cardinality so load spreads evenly across partitions",
+        "Access patterns that mostly stay within one partition-key value so related reads are cheap"
+      ]
+    },
+    {
+      "id": "cb-c02-m01-c09",
+      "module_id": "cb-c02-m01",
+      "prompt": "After the replace_item call in the walkthrough, how does the module say you should measure the real RU cost of the operation rather than guessing?",
+      "kind": "mcq",
+      "choices": [
+        "Read the x-ms-request-charge header from last_response_headers after the call",
+        "Multiply the item size in KB by the provisioned RU/s",
+        "Subtract the x-ms-retry-after-ms value from the offer_throughput",
+        "Call a separate get_request_charge method on the container"
+      ],
+      "correct_answers": [
+        "Read the x-ms-request-charge header from last_response_headers after the call"
+      ]
+    },
+    {
+      "id": "cb-c02-m01-c10",
+      "module_id": "cb-c02-m01",
+      "prompt": "Which statements about how Cosmos DB physically organizes data and limits item size does the module make? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "All items sharing a partition-key value live together and are co-located on the same physical partition",
+        "Items have a maximum size, commonly cited around 2 MB, and large blobs belong in Blob Storage with a pointer in Cosmos",
+        "Every container is guaranteed exactly one physical partition regardless of its partition key",
+        "A partition key value is hashed by Cosmos to assign the item to a logical partition"
+      ],
+      "correct_answers": [
+        "All items sharing a partition-key value live together and are co-located on the same physical partition",
+        "Items have a maximum size, commonly cited around 2 MB, and large blobs belong in Blob Storage with a pointer in Cosmos",
+        "A partition key value is hashed by Cosmos to assign the item to a logical partition"
+      ]
     }
   ],
   "llm": [

@@ -79,6 +79,85 @@
       "correct_answers": [
         "Ordering layers from least- to most-frequently-changed keeps the expensive dependency-install layer cached when only code changes."
       ]
+    },
+    {
+      "id": "cb-c01-m03-c06",
+      "module_id": "cb-c01-m03",
+      "prompt": "In the walkthrough, the Container App is deployed with --image pointing at an ACR. According to the module, what happens if you omit --registry-server (or a managed identity with pull rights) when the app pulls from a private ACR?",
+      "kind": "mcq",
+      "choices": [
+        "The deployment yields image-pull failures because the Container App lacks credentials to authenticate to the private registry.",
+        "The Container App silently falls back to pulling the image from Docker Hub instead.",
+        "The image is automatically rebuilt in the registry using az acr build before deployment.",
+        "The app deploys successfully but is forced to use the mutable latest tag."
+      ],
+      "correct_answers": [
+        "The deployment yields image-pull failures because the Container App lacks credentials to authenticate to the private registry."
+      ]
+    },
+    {
+      "id": "cb-c01-m03-c07",
+      "module_id": "cb-c01-m03",
+      "prompt": "The module describes the Container Apps environment created with az containerapp env create. What is the environment, according to the module?",
+      "kind": "mcq",
+      "choices": [
+        "The shared boundary (networking, logging) that one or more container apps live in.",
+        "A private managed registry where the container images are stored and versioned.",
+        "A single isolated container that runs for its duration and then exits.",
+        "The mutable tag that points production at the most recently built image."
+      ],
+      "correct_answers": [
+        "The shared boundary (networking, logging) that one or more container apps live in."
+      ]
+    },
+    {
+      "id": "cb-c01-m03-c08",
+      "module_id": "cb-c01-m03",
+      "prompt": "The module explains why container image builds can be fast when only your code changes. Which statements about image layers does the module make?",
+      "kind": "msq",
+      "choices": [
+        "Each layer is content-addressed, so identical layers are cached and shared.",
+        "Changing only your code rebuilds only the layer that changed.",
+        "A container image is a layered, read-only bundle of the application and everything it needs to run.",
+        "Every code change forces all layers, including dependency installs, to rebuild from scratch."
+      ],
+      "correct_answers": [
+        "Each layer is content-addressed, so identical layers are cached and shared.",
+        "Changing only your code rebuilds only the layer that changed.",
+        "A container image is a layered, read-only bundle of the application and everything it needs to run."
+      ]
+    },
+    {
+      "id": "cb-c01-m03-c09",
+      "module_id": "cb-c01-m03",
+      "prompt": "In the walkthrough, the registry is named northwindacr and created with --sku Basic. According to the module, what fully qualified login server does this registry name become?",
+      "kind": "mcq",
+      "choices": [
+        "northwindacr.azurecr.io",
+        "northwindacr.containerapps.io",
+        "northwindacr.basic.acr.azure.com",
+        "basic.northwindacr.azurecr.net"
+      ],
+      "correct_answers": [
+        "northwindacr.azurecr.io"
+      ]
+    },
+    {
+      "id": "cb-c01-m03-c10",
+      "module_id": "cb-c01-m03",
+      "prompt": "The module's mental model assigns a distinct role to each of the three services. Which pairings of service to its role match the module?",
+      "kind": "msq",
+      "choices": [
+        "ACR is where the image lives.",
+        "ACI is where you run a container quickly and simply.",
+        "Container Apps is where you run a service that must scale, roll out gradually, and stay up.",
+        "ACI is where you run a long-lived service with autoscaling and traffic-splitting."
+      ],
+      "correct_answers": [
+        "ACR is where the image lives.",
+        "ACI is where you run a container quickly and simply.",
+        "Container Apps is where you run a service that must scale, roll out gradually, and stay up."
+      ]
     }
   ],
   "llm": [

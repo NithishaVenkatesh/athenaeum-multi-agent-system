@@ -33,7 +33,7 @@ def main() -> int:
             print(f"  ✗ {f}")
         return 1
 
-    print(f"OK — all {len(files)} banks valid (5 choices + 3 llm each, keys consistent).")
+    print(f"OK — all {len(files)} banks valid (10 choices + 3 llm each, keys consistent).")
     return 0
 
 

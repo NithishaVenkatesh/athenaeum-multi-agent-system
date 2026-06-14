@@ -79,6 +79,84 @@
       "correct_answers": [
         "A tumbling window trigger, because it tracks state and supports backfill and dependency between windows"
       ]
+    },
+    {
+      "id": "de-c02-m03-c06",
+      "module_id": "de-c02-m03",
+      "prompt": "The module describes several control activities that give a pipeline real logic. Which control activity should you use to iterate over a collection, such as looping over every store's file?",
+      "kind": "mcq",
+      "choices": [
+        "ForEach",
+        "If Condition",
+        "Until",
+        "Execute Pipeline"
+      ],
+      "correct_answers": [
+        "ForEach"
+      ]
+    },
+    {
+      "id": "de-c02-m03-c07",
+      "module_id": "de-c02-m03",
+      "prompt": "According to the module, what distinguishes a self-hosted integration runtime from the Azure (auto-resolve) integration runtime?",
+      "kind": "mcq",
+      "choices": [
+        "A self-hosted IR reaches into a private network or on-premises source, while the Azure (auto-resolve) IR handles cloud-to-cloud movement and transforms",
+        "A self-hosted IR commits pipeline JSON to Git, while the Azure IR publishes it to the live service",
+        "A self-hosted IR fires the pipeline on blob arrival, while the Azure IR fires it on a wall-clock recurrence",
+        "A self-hosted IR computes pipeline parameters from the trigger time, while the Azure IR hardcodes them"
+      ],
+      "correct_answers": [
+        "A self-hosted IR reaches into a private network or on-premises source, while the Azure (auto-resolve) IR handles cloud-to-cloud movement and transforms"
+      ]
+    },
+    {
+      "id": "de-c02-m03-c08",
+      "module_id": "de-c02-m03",
+      "prompt": "Rather than hardcoding a date into the pipeline, the nightly Greenfork pipeline computes the run date at trigger time. Which expressions and constructs does the module present for parameterizing and computing dates in this way? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Referencing a pipeline parameter with @pipeline().parameters.runDate",
+        "Using the system variable @pipeline().TriggerTime",
+        "Formatting a date with @formatDateTime(...)",
+        "Embedding a literal value such as 2026-06-12 directly in the activity setting"
+      ],
+      "correct_answers": [
+        "Referencing a pipeline parameter with @pipeline().parameters.runDate",
+        "Using the system variable @pipeline().TriggerTime",
+        "Formatting a date with @formatDateTime(...)"
+      ]
+    },
+    {
+      "id": "de-c02-m03-c09",
+      "module_id": "de-c02-m03",
+      "prompt": "In the walkthrough JSON, the notebook activity carries a policy of retry 2 with retryIntervalInSeconds 300. According to the module, what is the purpose of this retry policy?",
+      "kind": "mcq",
+      "choices": [
+        "A transient cluster hiccup retries twice before failing the pipeline, so a temporary failure does not kill the whole run",
+        "It guarantees the downstream stored procedure runs even if the notebook ultimately fails",
+        "It backfills any missed nightly time slices by replaying them automatically",
+        "It commits the activity's JSON to the Git working branch after each attempt"
+      ],
+      "correct_answers": [
+        "A transient cluster hiccup retries twice before failing the pipeline, so a temporary failure does not kill the whole run"
+      ]
+    },
+    {
+      "id": "de-c02-m03-c10",
+      "module_id": "de-c02-m03",
+      "prompt": "The module's pitfalls warn against using 'Completion' where you meant 'Succeeded'. Which statements about these dependency conditions are correct per the module? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "A dependency on Completion runs the next activity on success or failure, so it can silently load bad data when misused",
+        "Completion should be reserved for cleanup activities, while Succeeded is used for the happy path",
+        "A Completion dependency runs the next activity only when the upstream activity failed",
+        "Succeeded and Completion are interchangeable and produce identical run behavior"
+      ],
+      "correct_answers": [
+        "A dependency on Completion runs the next activity on success or failure, so it can silently load bad data when misused",
+        "Completion should be reserved for cleanup activities, while Succeeded is used for the happy path"
+      ]
     }
   ],
   "llm": [

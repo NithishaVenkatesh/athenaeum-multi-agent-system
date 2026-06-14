@@ -9,14 +9,15 @@
 The Athenaeum catalog has **15 courses × 4 modules = 60 modules**. We need an
 authored, static **question bank per module**, with two tests each:
 
-- **Choices test** — exactly **5** questions; each is MCQ (one correct) or MSQ
+- **Choices test** — exactly **10** questions; each is MCQ (one correct) or MSQ
   (two or more correct). Stored fields: question id, prompt, choices, correct
   choice(s), and the module it maps to.
 - **LLM test** — **3** open-ended questions that require an explanation from the
   learner. Stored fields: question id, prompt (question), reference answer, and
   the module it maps to.
 
-Totals: **300 choice questions + 180 LLM questions** across 60 modules.
+Totals: **600 choice questions + 180 LLM questions** across 60 modules (the choices
+test was later expanded from 5 to 10 questions per module).
 
 The questions are **authored content committed to the repo** (authored by the
 agent, grounded on each module's catalog metadata), not generated at app
@@ -57,7 +58,7 @@ ayanakoji/assessments/
       "choices": ["…", "…", "…", "…"],
       "correct_answers": ["…"]
     }
-    // …5 total; mix of mcq and msq
+    // …10 total; mix of mcq and msq
   ],
   "llm": [
     {
@@ -72,11 +73,11 @@ ayanakoji/assessments/
 ```
 
 ### ID convention (deterministic, stable)
-- Choice: `<module_id>-c<NN>` (`cb-c01-m01-c01` … `-c05`)
+- Choice: `<module_id>-c<NN>` (`cb-c01-m01-c01` … `-c10`)
 - LLM: `<module_id>-l<NN>` (`cb-c01-m01-l01` … `-l03`)
 
 ### Schema rules (enforced by `bank.schema.json` + tests)
-- Exactly 5 questions with 4 `choices`, exactly 3 `llm`.
+- Exactly 10 questions with 4 `choices`, exactly 3 `llm`.
 - `kind` ∈ {`mcq`,`msq`}; `mcq` ⇒ exactly 1 correct, `msq` ⇒ ≥2 correct.
 - Each choice has 4 options; every `correct_answers` entry must appear in
   `choices`.
@@ -145,7 +146,7 @@ Responses use the project's existing envelope conventions (Pydantic schemas in
 Codifies the authoring standard:
 - Ground **only** on the module's catalog `summary` / `objectives` /
   `grounded_skills`. No outside facts, no topics not explicitly in the module.
-- 5 choice questions (4 options each): deliberate MCQ/MSQ mix, plausible
+- 10 choice questions (4 options each): deliberate MCQ/MSQ mix, plausible
   distractors, difficulty spread (recall → application), no trick/ambiguous
   items, exactly-correct keys.
 - 3 LLM questions: require genuine explanation; each has a complete, correct
@@ -155,7 +156,7 @@ Codifies the authoring standard:
 ### Workflow — `.claude/workflows/author-assessments`
 Per-module pipeline (fan-out across 60 modules):
 1. **Author agent** — reads the module's catalog metadata, emits the bank JSON
-   (5 choices + 3 llm) following the skill.
+   (10 choices + 3 llm) following the skill.
 2. **Review agent** (required) — gates the questions on:
    - **Relevance** to the module.
    - **Grounding** — purely and explicitly tied to topics discussed in the
@@ -178,7 +179,7 @@ Per-module pipeline (fan-out across 60 modules):
 - **CI** (`.github/workflows/ci.yml`): the existing `backend` job already lints,
   type-checks, and tests the new package. Add a deterministic
   **bank-validation** step: validate all 60 JSON files against the schema and
-  assert counts (5 choices + 3 llm/module), mirroring the existing Work IQ
+  assert counts (10 choices + 3 llm/module), mirroring the existing Work IQ
   `git diff --exit-code` determinism check. Azure smoke is **not** in CI
   (credential-gated, manual).
 

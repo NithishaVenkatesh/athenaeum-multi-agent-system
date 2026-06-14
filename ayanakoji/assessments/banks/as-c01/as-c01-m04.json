@@ -79,6 +79,82 @@
         "APIM consolidates auth, rate limiting (e.g., 100 calls a minute), versioning, and throttling/transformation policies into one governed façade.",
         "Infrastructure as code using Bicep or ARM templates lets an environment be recreated identically, reviewed in a pull request, and rolled back."
       ]
+    },
+    {
+      "id": "as-c01-m04-c06",
+      "module_id": "as-c01-m04",
+      "prompt": "Per the module, what role does Azure Event Grid play, and what kind of communication is it designed for?",
+      "kind": "mcq",
+      "choices": [
+        "It is the lightweight publish/subscribe router for discrete reactive events, fanning a single event out to many subscribers, where the publisher does not know or care who is listening.",
+        "It is the transactional command-messaging service with sessions for ordering and dead-letter queues for poison messages.",
+        "It is the partitioned-log service built for millions of telemetry events per second from clickstreams or IoT.",
+        "It is the in-memory cache that serves read-heavy data in sub-millisecond time with a configurable TTL."
+      ],
+      "correct_answers": [
+        "It is the lightweight publish/subscribe router for discrete reactive events, fanning a single event out to many subscribers, where the publisher does not know or care who is listening."
+      ]
+    },
+    {
+      "id": "as-c01-m04-c07",
+      "module_id": "as-c01-m04",
+      "prompt": "In the module's Bicep walkthrough, what is the purpose of the queue's 'lockDuration' property (set to PT30S)?",
+      "kind": "mcq",
+      "choices": [
+        "It gives the consumer a window to finish processing before the message becomes visible to another receiver, preventing duplicate sends under normal operation.",
+        "It moves a message to the dead-letter queue after it has been delivered for 30 seconds.",
+        "It sets how long a cached copy of the message stays fresh before eviction.",
+        "It caps the number of failed processing attempts before the message is discarded."
+      ],
+      "correct_answers": [
+        "It gives the consumer a window to finish processing before the message becomes visible to another receiver, preventing duplicate sends under normal operation."
+      ]
+    },
+    {
+      "id": "as-c01-m04-c08",
+      "module_id": "as-c01-m04",
+      "prompt": "Per the module, what are the TWO design questions you must answer when adopting a caching solution like Azure Cache for Redis? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "What to cache, i.e., which data is read-heavy and change-tolerant.",
+        "How to invalidate, i.e., whether to use a TTL or explicit eviction on write.",
+        "How to partition the cache into a log that consumers read sequentially.",
+        "How to guarantee at-least-once delivery and retries for each cached read."
+      ],
+      "correct_answers": [
+        "What to cache, i.e., which data is read-heavy and change-tolerant.",
+        "How to invalidate, i.e., whether to use a TTL or explicit eviction on write."
+      ]
+    },
+    {
+      "id": "as-c01-m04-c09",
+      "module_id": "as-c01-m04",
+      "prompt": "Per the module's common pitfalls, what goes wrong when you use an event router like Event Grid for a communication that is actually a command that must be processed (such as a payment or a receipt)?",
+      "kind": "mcq",
+      "choices": [
+        "Event Grid is fire-and-forget pub/sub and does not provide the queues, retries, and dead-lettering delivery guarantees that a command needs, so the message can be silently lost.",
+        "Event Grid forces exactly-once ordering through sessions, which slows the command down too much.",
+        "Event Grid caches the command as a second copy of the truth, which can serve a stale payment.",
+        "Event Grid centralizes auth and throttling, which adds unwanted rate limits to the payment path."
+      ],
+      "correct_answers": [
+        "Event Grid is fire-and-forget pub/sub and does not provide the queues, retries, and dead-lettering delivery guarantees that a command needs, so the message can be silently lost."
+      ]
+    },
+    {
+      "id": "as-c01-m04-c10",
+      "module_id": "as-c01-m04",
+      "prompt": "In the module's producer code example, what does using DefaultAzureCredential accomplish in production?",
+      "kind": "mcq",
+      "choices": [
+        "Production runs on a managed identity with no connection string or secret in the code.",
+        "It guarantees the receipt message is delivered exactly once to the email service.",
+        "It caches the credential in Redis so repeated sends avoid re-authenticating.",
+        "It applies an APIM subscription key so the partner's rate limit is enforced."
+      ],
+      "correct_answers": [
+        "Production runs on a managed identity with no connection string or secret in the code."
+      ]
     }
   ],
   "llm": [

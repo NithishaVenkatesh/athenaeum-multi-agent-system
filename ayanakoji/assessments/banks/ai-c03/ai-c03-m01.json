@@ -81,6 +81,85 @@
         "Trusting raw tag confidence and surfacing every tag, including very low-confidence guesses",
         "Assuming captions are always present, instead of designing a tags-based fallback for unsupported regions"
       ]
+    },
+    {
+      "id": "ai-c03-m01-c06",
+      "module_id": "ai-c03-m01",
+      "kind": "mcq",
+      "prompt": "In the walkthrough, the analyze call passes `gender_neutral_caption=True`. According to the module, what effect does this have?",
+      "choices": [
+        "The caption uses a neutral noun like \"person\" instead of gendered nouns",
+        "It forces the read feature to return text in a neutral, language-agnostic encoding",
+        "It disables tag confidence scores so no demographic guesses are surfaced",
+        "It switches caption output from a single sentence to dense per-region captions"
+      ],
+      "correct_answers": [
+        "The caption uses a neutral noun like \"person\" instead of gendered nouns"
+      ]
+    },
+    {
+      "id": "ai-c03-m01-c07",
+      "module_id": "ai-c03-m01",
+      "kind": "mcq",
+      "prompt": "The module says the read feature is \"line-oriented, not document-oriented.\" Which statement best captures what this means for the data you get back?",
+      "choices": [
+        "You receive text grouped into lines and words with bounding polygons and confidence, but no judgment about which line is the total or vendor",
+        "You receive a per-document classification label that names each structured field, but no raw characters",
+        "You receive only a single concatenated string with no positional information at all",
+        "You receive separate API responses for printed text and for handwritten text"
+      ],
+      "correct_answers": [
+        "You receive text grouped into lines and words with bounding polygons and confidence, but no judgment about which line is the total or vendor"
+      ]
+    },
+    {
+      "id": "ai-c03-m01-c08",
+      "module_id": "ai-c03-m01",
+      "kind": "mcq",
+      "prompt": "A photo shows a tent, a stove, and a sleeping bag together, and the team wants a separate descriptive sentence for each distinct subject. Which visual feature does the module say fits this need?",
+      "choices": [
+        "Dense captions, which segment the image into regions and write a sentence for each",
+        "A single caption, which already covers every distinct subject in one sentence",
+        "Objects, because each bounding box automatically includes a full descriptive sentence",
+        "Smart crops, which produce one sentence per cropped region"
+      ],
+      "correct_answers": [
+        "Dense captions, which segment the image into regions and write a sentence for each"
+      ]
+    },
+    {
+      "id": "ai-c03-m01-c09",
+      "module_id": "ai-c03-m01",
+      "kind": "msq",
+      "prompt": "According to the module, which statements about the read (OCR) capability and large-document handling are correct?",
+      "choices": [
+        "The read feature handles both printed and handwritten text in the same call",
+        "For large documents and PDFs the historical pattern was an asynchronous submit-then-poll operation",
+        "Synchronous image analysis returns read results inline",
+        "The read feature returns each line already classified as a known document field such as \"total\" or \"date\""
+      ],
+      "correct_answers": [
+        "The read feature handles both printed and handwritten text in the same call",
+        "For large documents and PDFs the historical pattern was an asynchronous submit-then-poll operation",
+        "Synchronous image analysis returns read results inline"
+      ]
+    },
+    {
+      "id": "ai-c03-m01-c10",
+      "module_id": "ai-c03-m01",
+      "kind": "msq",
+      "prompt": "The module lists several visual features the Image Analysis API can return in a single request. Which of the following are named as requestable features in the module?",
+      "choices": [
+        "People",
+        "Smart crops",
+        "Dense captions",
+        "Sentiment scores"
+      ],
+      "correct_answers": [
+        "People",
+        "Smart crops",
+        "Dense captions"
+      ]
     }
   ],
   "llm": [

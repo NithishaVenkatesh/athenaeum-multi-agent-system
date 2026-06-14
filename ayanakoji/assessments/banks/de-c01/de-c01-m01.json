@@ -80,6 +80,83 @@
         "Use time-based partitioning (by ingest date or hour) so each micro-batch appends to the current partition without rewriting old data.",
         "Pair partitioning with periodic compaction, because a too-fine time grain reproduces the small-file problem in real time."
       ]
+    },
+    {
+      "id": "de-c01-m01-c06",
+      "module_id": "de-c01-m01",
+      "prompt": "The module gives a simple arithmetic discipline for sanity-checking partition granularity. Which check does it describe, and what does it indicate?",
+      "kind": "mcq",
+      "choices": [
+        "Estimate total_size / number_of_partitions; if the average partition is well under ~100 MB, the partitioning is too fine.",
+        "Estimate number_of_partitions / number_of_columns; if the ratio exceeds 100, you have too many partition columns.",
+        "Estimate total_rows / number_of_files; if the average file holds under 100 rows, the partitioning is too coarse.",
+        "Estimate number_of_partitions / total_size in GB; if the result is below 1, you should add another partition column."
+      ],
+      "correct_answers": [
+        "Estimate total_size / number_of_partitions; if the average partition is well under ~100 MB, the partitioning is too fine."
+      ]
+    },
+    {
+      "id": "de-c01-m01-c07",
+      "module_id": "de-c01-m01",
+      "prompt": "According to the module, where do a partition column's values physically live, and what consequence does this layout enable?",
+      "kind": "mcq",
+      "choices": [
+        "The values live in the directory path, not inside the files, which is what lets the engine prune by reading directory names before opening any file.",
+        "The values are duplicated into every file's footer, which is what lets the engine prune by reading file footers before scanning rows.",
+        "The values live in a central manifest index, which is what lets the engine prune by consulting the index instead of listing directories.",
+        "The values live inside each file's columnar data, which is what lets the engine prune by decompressing only the partition column."
+      ],
+      "correct_answers": [
+        "The values live in the directory path, not inside the files, which is what lets the engine prune by reading directory names before opening any file."
+      ]
+    },
+    {
+      "id": "de-c01-m01-c08",
+      "module_id": "de-c01-m01",
+      "prompt": "In the Northwind repartitioning walkthrough, what roles do sortWithinPartitions(\"region\") and the .explain() call play?",
+      "kind": "msq",
+      "choices": [
+        "sortWithinPartitions(\"region\") clusters region within each date partition for better file skipping.",
+        "Calling .explain() and looking for PartitionFilters in the scan node confirms the engine will prune to the matching day-partitions instead of scanning the year.",
+        "sortWithinPartitions(\"region\") makes region a second partition column so the path becomes region=.../event_date=....",
+        ".explain() physically compacts the small files in each partition so that PartitionFilters can take effect."
+      ],
+      "correct_answers": [
+        "sortWithinPartitions(\"region\") clusters region within each date partition for better file skipping.",
+        "Calling .explain() and looking for PartitionFilters in the scan node confirms the engine will prune to the matching day-partitions instead of scanning the year."
+      ]
+    },
+    {
+      "id": "de-c01-m01-c09",
+      "module_id": "de-c01-m01",
+      "prompt": "The module warns against partitioning on a high-cardinality column such as device_id or a full timestamp. What does it recommend you do instead for fine-grained skipping on such columns?",
+      "kind": "mcq",
+      "choices": [
+        "Partition on low-to-moderate cardinality columns that appear in filters, and push fine-grained skipping to file-level statistics instead.",
+        "Hash the high-cardinality column into a fixed number of buckets and make each bucket its own top-level partition.",
+        "Partition on the high-cardinality column anyway, then merge the resulting tiny partitions with periodic compaction.",
+        "Encode the high-cardinality column into the file names rather than the directory path so listing stays cheap."
+      ],
+      "correct_answers": [
+        "Partition on low-to-moderate cardinality columns that appear in filters, and push fine-grained skipping to file-level statistics instead."
+      ]
+    },
+    {
+      "id": "de-c01-m01-c10",
+      "module_id": "de-c01-m01",
+      "prompt": "Per the module, which actions are valid mitigations for data skew caused by a single dominant key?",
+      "kind": "msq",
+      "choices": [
+        "Combine the skewed column with an evenly distributed one, such as partitioning by event_date so each region's data spreads across day partitions.",
+        "For in-engine processing, repartition or salt the skewed key across more tasks.",
+        "Add more workers to the cluster, since extra compute resolves the straggler partition created by the dominant key.",
+        "Switch the partition column to the dominant key itself so all of its data lands in a single, well-known partition."
+      ],
+      "correct_answers": [
+        "Combine the skewed column with an evenly distributed one, such as partitioning by event_date so each region's data spreads across day partitions.",
+        "For in-engine processing, repartition or salt the skewed key across more tasks."
+      ]
     }
   ],
   "llm": [

@@ -79,6 +79,85 @@
         "CTAS lets you set the table's distribution and index at creation time",
         "The idiom is external table → SELECT with your transforms → CTAS into the target with the right distribution"
       ]
+    },
+    {
+      "id": "de-c02-m02-c06",
+      "module_id": "de-c02-m02",
+      "kind": "mcq",
+      "prompt": "The module says you hash-distribute large fact tables on the common join/group key. What does it recommend you do with small dimension tables, and why?",
+      "choices": [
+        "Replicate them so a full copy exists on every distribution, so joins to them need no cross-distribution movement",
+        "Hash-distribute them on the same key as the fact table so both shuffle together",
+        "Load them with a cursor since they are small enough that row-by-row work is acceptable",
+        "Store them only as external tables so they are read fresh from the lake on every join"
+      ],
+      "correct_answers": [
+        "Replicate them so a full copy exists on every distribution, so joins to them need no cross-distribution movement"
+      ]
+    },
+    {
+      "id": "de-c02-m02-c07",
+      "module_id": "de-c02-m02",
+      "kind": "mcq",
+      "prompt": "According to the module, what is the underlying cause of a SHUFFLE_MOVE appearing in a dedicated SQL pool query plan?",
+      "choices": [
+        "A join or aggregation needs rows that live on different distributions, so the engine moves them across the network",
+        "The table has a clustered columnstore index that must be rebuilt before each scan",
+        "OPENJSON has to re-parse the JSON documents once per distribution",
+        "The loader decoded the source files with the wrong code page, forcing a re-read"
+      ],
+      "correct_answers": [
+        "A join or aggregation needs rows that live on different distributions, so the engine moves them across the network"
+      ]
+    },
+    {
+      "id": "de-c02-m02-c08",
+      "module_id": "de-c02-m02",
+      "kind": "mcq",
+      "prompt": "The module explains that 'café' showing up as 'cafÃ©' is mojibake. What does it identify as the root cause of this corruption?",
+      "choices": [
+        "A file is bytes, and a UTF-8 file was read with the wrong code page (such as Latin-1), so the bytes decode into the wrong characters",
+        "The accented characters were stored as NULL because the column type was too narrow",
+        "CROSS APPLY exploded the string into one row per character and reassembled it incorrectly",
+        "The CTAS operation compressed the column and lost the high bytes during minimal logging"
+      ],
+      "correct_answers": [
+        "A file is bytes, and a UTF-8 file was read with the wrong code page (such as Latin-1), so the bytes decode into the wrong characters"
+      ]
+    },
+    {
+      "id": "de-c02-m02-c09",
+      "module_id": "de-c02-m02",
+      "kind": "msq",
+      "prompt": "In the walkthrough that shreds the supplier delivery documents, which statements accurately describe how the JSON is turned into rows? Select all that apply.",
+      "choices": [
+        "The outer OPENJSON uses a WITH clause to extract typed header columns and pull the items array out as a JSON blob",
+        "CROSS APPLY runs the shred once per parent row, exploding the nested array into one row per element",
+        "A second OPENJSON over CROSS APPLY explodes the items array into one row per line item with its own WITH schema",
+        "OPENJSON returns a single scalar value, so each document must be looped over with a cursor to produce rows"
+      ],
+      "correct_answers": [
+        "The outer OPENJSON uses a WITH clause to extract typed header columns and pull the items array out as a JSON blob",
+        "CROSS APPLY runs the shred once per parent row, exploding the nested array into one row per element",
+        "A second OPENJSON over CROSS APPLY explodes the items array into one row per line item with its own WITH schema"
+      ]
+    },
+    {
+      "id": "de-c02-m02-c10",
+      "module_id": "de-c02-m02",
+      "kind": "msq",
+      "prompt": "The module lists several common pitfalls. Which of the following does it explicitly call out as anti-patterns to avoid? Select all that apply.",
+      "choices": [
+        "Using row-by-row cursors in an MPP pool instead of a single set-based statement",
+        "Patching mojibake with REPLACE chains rather than fixing the decode at load time",
+        "Joining two large tables distributed on different keys, triggering a costly shuffle every run",
+        "Adding a clustered columnstore index to a gold table that the dashboards scan analytically"
+      ],
+      "correct_answers": [
+        "Using row-by-row cursors in an MPP pool instead of a single set-based statement",
+        "Patching mojibake with REPLACE chains rather than fixing the decode at load time",
+        "Joining two large tables distributed on different keys, triggering a costly shuffle every run"
+      ]
     }
   ],
   "llm": [

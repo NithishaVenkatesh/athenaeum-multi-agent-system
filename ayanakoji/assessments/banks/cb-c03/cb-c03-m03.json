@@ -79,6 +79,84 @@
       "correct_answers": [
         "The cache key does not vary by trackingId, so different lookups collide on one cached entry"
       ]
+    },
+    {
+      "id": "cb-c03-m03-c06",
+      "module_id": "cb-c03-m03",
+      "prompt": "Which APIM logical part does the module describe as an auto-generated, customizable site where consumers discover APIs, read documentation, and obtain keys?",
+      "kind": "mcq",
+      "choices": [
+        "The developer portal",
+        "The management plane",
+        "The gateway",
+        "The product"
+      ],
+      "correct_answers": [
+        "The developer portal"
+      ]
+    },
+    {
+      "id": "cb-c03-m03-c07",
+      "module_id": "cb-c03-m03",
+      "prompt": "According to the module, why is the Developer tier described as suitable for non-production use only?",
+      "kind": "mcq",
+      "choices": [
+        "It carries no SLA, so it should be matched only to testing rather than production availability needs",
+        "It cannot import APIs from an OpenAPI definition",
+        "It does not support applying policies at the inbound or outbound stages",
+        "It blocks the use of subscription keys for granting access"
+      ],
+      "correct_answers": [
+        "It carries no SLA, so it should be matched only to testing rather than production availability needs"
+      ]
+    },
+    {
+      "id": "cb-c03-m03-c08",
+      "module_id": "cb-c03-m03",
+      "prompt": "The module warns about forgetting the <base /> element in a scoped (for example, API-level) policy. What does omitting it cause?",
+      "kind": "mcq",
+      "choices": [
+        "Policies from broader scopes (such as global CORS or logging) are silently dropped for that API",
+        "The policy fails to load and the gateway returns a 429 Too Many Requests error",
+        "The subscription key is no longer required in the Ocp-Apim-Subscription-Key header",
+        "Cached responses are served to every partner regardless of the vary-by configuration"
+      ],
+      "correct_answers": [
+        "Policies from broader scopes (such as global CORS or logging) are silently dropped for that API"
+      ]
+    },
+    {
+      "id": "cb-c03-m03-c09",
+      "module_id": "cb-c03-m03",
+      "prompt": "Select all reasons the module gives for putting cross-cutting concerns in the APIM facade rather than coding them into the backend service.",
+      "kind": "msq",
+      "choices": [
+        "It provides one place to enforce authentication, throttling, caching, transformation, and logging without touching the backends",
+        "It avoids coupling business logic to gateway concerns so services stay focused on their actual work",
+        "It can hide that 'the API' is really several microservices behind the gateway",
+        "It removes the need for any subscription keys because the facade authenticates every end user itself"
+      ],
+      "correct_answers": [
+        "It provides one place to enforce authentication, throttling, caching, transformation, and logging without touching the backends",
+        "It avoids coupling business logic to gateway concerns so services stay focused on their actual work",
+        "It can hide that 'the API' is really several microservices behind the gateway"
+      ]
+    },
+    {
+      "id": "cb-c03-m03-c10",
+      "module_id": "cb-c03-m03",
+      "prompt": "In the Northwind outbound policy, the set-header policy is used with exists-action set to delete on the X-Internal-Node header. Select all statements the module supports about this transformation.",
+      "kind": "msq",
+      "choices": [
+        "It strips an internal diagnostic header so the backend's topology never leaks to partners",
+        "It runs on the outbound stage, before the response returns to the client",
+        "It rate-limits each partner to 600 calls per 60 seconds",
+        "It validates the Entra-issued JWT bearer token on the way out"
+      ],
+      "correct_answers": [
+        "It strips an internal diagnostic header so the backend's topology never leaks to partners",
+        "It runs on the outbound stage, before the response returns to the client"
+      ]
     }
   ],
   "llm": [

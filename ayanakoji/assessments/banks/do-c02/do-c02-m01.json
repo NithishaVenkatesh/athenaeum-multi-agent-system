@@ -80,6 +80,83 @@
         "Copy-pasting whole pipelines instead of factoring shared logic into a template, causing the copies to drift.",
         "Adding dependsOn to jobs that are actually independent, forfeiting parallelism and slowing every run."
       ]
+    },
+    {
+      "id": "do-c02-m01-c06",
+      "module_id": "do-c02-m01",
+      "prompt": "According to the module, what is the primary value of factoring shared build logic into a template like templates/dotnet-build.yml when ten microservices all build the same way?",
+      "kind": "mcq",
+      "choices": [
+        "You write the build steps once and each service's pipeline calls it with its own parameters, so a bug fixed in the template is inherited by all ten pipelines.",
+        "The template runs all ten microservice builds inside a single shared agent, eliminating the need for separate jobs.",
+        "The template stores the staging URL and connection strings centrally so secrets never appear in any pipeline file.",
+        "The template forces the ten pipelines to run sequentially, guaranteeing that one service's build cannot interfere with another's."
+      ],
+      "correct_answers": [
+        "You write the build steps once and each service's pipeline calls it with its own parameters, so a bug fixed in the template is inherited by all ten pipelines."
+      ]
+    },
+    {
+      "id": "do-c02-m01-c07",
+      "module_id": "do-c02-m01",
+      "prompt": "In Larkspur's order-service pipeline, the trigger includes a paths filter (src/order-service/*). What concrete effect does this filter have, per the module?",
+      "kind": "mcq",
+      "choices": [
+        "A change to an unrelated service does not run this pipeline at all, so the pipeline is not triggered by commits outside that path.",
+        "Only files under src/order-service/* are copied onto the build agent, reducing the size of the workspace checkout.",
+        "Steps that reference paths outside src/order-service/* are skipped, while the rest of the pipeline still runs.",
+        "The pipeline runs on every commit but fails fast unless the changed files are under src/order-service/*."
+      ],
+      "correct_answers": [
+        "A change to an unrelated service does not run this pipeline at all, so the pipeline is not triggered by commits outside that path."
+      ]
+    },
+    {
+      "id": "do-c02-m01-c08",
+      "module_id": "do-c02-m01",
+      "prompt": "The module describes default execution behavior before any dependsOn is added. Which statements about that default behavior are correct?",
+      "kind": "msq",
+      "choices": [
+        "By default, stages run one after another in the order they are written.",
+        "By default, jobs within a stage run in parallel, subject to how many parallel agents the organization has.",
+        "By default, every job within a stage waits for the job written above it to succeed before starting.",
+        "By default, all steps within a single job run in sequence on that one agent."
+      ],
+      "correct_answers": [
+        "By default, stages run one after another in the order they are written.",
+        "By default, jobs within a stage run in parallel, subject to how many parallel agents the organization has.",
+        "By default, all steps within a single job run in sequence on that one agent."
+      ]
+    },
+    {
+      "id": "do-c02-m01-c09",
+      "module_id": "do-c02-m01",
+      "prompt": "The module distinguishes inline variables from variable groups. Which guidance does it give for deciding where a value belongs?",
+      "kind": "mcq",
+      "choices": [
+        "Define inline variables for values specific to one pipeline, and pull shared or sensitive values from a variable group, which is a named central collection often backed by a secret store.",
+        "Always prefer inline variables, because variable groups cannot be referenced by more than one pipeline at a time.",
+        "Place every value in a variable group so that nothing is ever defined inline, eliminating drift entirely.",
+        "Store secrets inline within each step and reserve variable groups only for non-sensitive display strings."
+      ],
+      "correct_answers": [
+        "Define inline variables for values specific to one pipeline, and pull shared or sensitive values from a variable group, which is a named central collection often backed by a secret store."
+      ]
+    },
+    {
+      "id": "do-c02-m01-c10",
+      "module_id": "do-c02-m01",
+      "prompt": "The module mentions controlling flow with condition beyond just gating on branch. Which example does it explicitly give for using condition?",
+      "kind": "mcq",
+      "choices": [
+        "A cleanup job that runs always(), executing even when earlier work in the pipeline failed.",
+        "A build job that retries always() until the compilation finally succeeds.",
+        "A test job that runs always() so it bypasses its dependsOn predecessors.",
+        "A deploy job that runs always() to overwrite the prior environment regardless of approvals."
+      ],
+      "correct_answers": [
+        "A cleanup job that runs always(), executing even when earlier work in the pipeline failed."
+      ]
     }
   ],
   "llm": [

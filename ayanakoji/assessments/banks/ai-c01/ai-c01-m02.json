@@ -79,6 +79,85 @@
       "correct_answers": [
         "It keeps fixed instruction text in one place while per-request values like the customer's question are slotted in at call time"
       ]
+    },
+    {
+      "id": "ai-c01-m02-c06",
+      "module_id": "ai-c01-m02",
+      "kind": "mcq",
+      "prompt": "The module says you can include prior assistant turns in the message list. What does doing so provide the model?",
+      "choices": [
+        "Conversational memory, by giving the model its earlier turns as context",
+        "A permanent fine-tuning signal that updates the deployment's weights",
+        "A lower temperature, because past turns make sampling more deterministic",
+        "A stop sequence that halts generation at the end of each turn"
+      ],
+      "correct_answers": [
+        "Conversational memory, by giving the model its earlier turns as context"
+      ]
+    },
+    {
+      "id": "ai-c01-m02-c07",
+      "module_id": "ai-c01-m02",
+      "kind": "mcq",
+      "prompt": "The module defines top_p (nucleus sampling). Which description matches it?",
+      "choices": [
+        "It restricts choices to the smallest set of tokens whose combined probability reaches p",
+        "It caps the maximum number of tokens in the completion at p",
+        "It halts generation when the model emits a token whose probability falls below p",
+        "It scales the overall randomness of sampling by multiplying every token probability by p"
+      ],
+      "correct_answers": [
+        "It restricts choices to the smallest set of tokens whose combined probability reaches p"
+      ]
+    },
+    {
+      "id": "ai-c01-m02-c08",
+      "module_id": "ai-c01-m02",
+      "kind": "mcq",
+      "prompt": "According to the module, what is the function of a stop sequence?",
+      "choices": [
+        "It tells the model to halt generation when it emits a given string, keeping it from running past a structured boundary",
+        "It removes a forbidden phrase from the output after the model has generated it",
+        "It marks where per-request template values should be slotted into the prompt",
+        "It restricts sampling to the smallest set of tokens whose probability reaches a threshold"
+      ],
+      "correct_answers": [
+        "It tells the model to halt generation when it emits a given string, keeping it from running past a structured boundary"
+      ]
+    },
+    {
+      "id": "ai-c01-m02-c09",
+      "module_id": "ai-c01-m02",
+      "kind": "msq",
+      "prompt": "The module gives specific guidance on choosing and writing few-shot examples. Which statements does it support?",
+      "choices": [
+        "Examples should cover both the normal case and an edge case, such as a question the assistant should decline",
+        "Examples carry a token cost because they sit in every request, so they should be kept tight",
+        "Two or three well-chosen examples can outperform a long paragraph of instructions",
+        "Adding more examples is always better, since each one further fine-tunes the deployment"
+      ],
+      "correct_answers": [
+        "Examples should cover both the normal case and an edge case, such as a question the assistant should decline",
+        "Examples carry a token cost because they sit in every request, so they should be kept tight",
+        "Two or three well-chosen examples can outperform a long paragraph of instructions"
+      ]
+    },
+    {
+      "id": "ai-c01-m02-c10",
+      "module_id": "ai-c01-m02",
+      "kind": "msq",
+      "prompt": "The module frames templates with the principle 'treat your prompts as code.' Which claims about prompt templates and scattered prompt strings does it make?",
+      "choices": [
+        "Centralizing prompts in a template makes a prompt change one reviewed edit",
+        "The template is the seam where the next module's retrieved context will be injected",
+        "Inline, duplicated prompts scattered across the codebase drift apart and become untestable",
+        "Templates increase output diversity by randomizing which instructions are sent each request"
+      ],
+      "correct_answers": [
+        "Centralizing prompts in a template makes a prompt change one reviewed edit",
+        "The template is the seam where the next module's retrieved context will be injected",
+        "Inline, duplicated prompts scattered across the codebase drift apart and become untestable"
+      ]
     }
   ],
   "llm": [

@@ -81,6 +81,84 @@
         "A quarantine location (via reject thresholds) where rejected rows are written instead of crashing the whole batch",
         "Making each step safe to repeat so a half-run pipeline leaves a recoverable state (non-destructive failure)"
       ]
+    },
+    {
+      "id": "de-c02-m04-c06",
+      "module_id": "de-c02-m04",
+      "prompt": "According to the module, why is a full reload of the entire sales history every night 'simple and wrong at scale'?",
+      "kind": "mcq",
+      "choices": [
+        "Its cost grows linearly with history and it reprocesses data that has not changed, eventually pushing the run past its time window",
+        "It locks the source table for the duration of the load, blocking all other writers",
+        "It cannot apply schema changes, so new columns are silently dropped on each run",
+        "It requires a cryptographic checksum of every row, which is too slow to compute nightly"
+      ],
+      "correct_answers": [
+        "Its cost grows linearly with history and it reprocesses data that has not changed, eventually pushing the run past its time window"
+      ]
+    },
+    {
+      "id": "de-c02-m04-c07",
+      "module_id": "de-c02-m04",
+      "prompt": "The module says the watermark should be stored in a tiny control table, read at the start of the run, and written 'only after the load succeeds.' What is the stated benefit of writing the new value only after success?",
+      "kind": "mcq",
+      "choices": [
+        "A failed run leaves the watermark untouched, so the next run simply retries the same slice",
+        "It guarantees the control table never grows beyond a single row",
+        "It lets multiple pipelines share one watermark without locking",
+        "It converts the append into an upsert automatically"
+      ],
+      "correct_answers": [
+        "A failed run leaves the watermark untouched, so the next run simply retries the same slice"
+      ]
+    },
+    {
+      "id": "de-c02-m04-c08",
+      "module_id": "de-c02-m04",
+      "prompt": "How does the module define idempotency in the context of upserts?",
+      "kind": "mcq",
+      "choices": [
+        "Running the same batch twice produces the same result as running it once, because the second run matches existing rows and updates them in place rather than duplicating them",
+        "Every row is written exactly once and any later change is rejected as a duplicate",
+        "The pipeline automatically retries any activity that fails due to a transient error",
+        "The load advances the watermark before processing so no slice is ever read twice"
+      ],
+      "correct_answers": [
+        "Running the same batch twice produces the same result as running it once, because the second run matches existing rows and updates them in place rather than duplicating them"
+      ]
+    },
+    {
+      "id": "de-c02-m04-c09",
+      "module_id": "de-c02-m04",
+      "prompt": "Per the module's discussion of the MERGE upsert, which statements correctly describe how the two branches behave when reconciling the source against the target on the business key? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "WHEN MATCHED updates the existing row in place rather than inserting a new one",
+        "WHEN NOT MATCHED inserts the incoming row because its key does not yet exist in the target",
+        "WHEN MATCHED deletes the existing row and re-inserts it to refresh all columns",
+        "WHEN NOT MATCHED appends every incoming row regardless of whether its key already exists"
+      ],
+      "correct_answers": [
+        "WHEN MATCHED updates the existing row in place rather than inserting a new one",
+        "WHEN NOT MATCHED inserts the incoming row because its key does not yet exist in the target"
+      ]
+    },
+    {
+      "id": "de-c02-m04-c10",
+      "module_id": "de-c02-m04",
+      "prompt": "The module contrasts the two fronts of robust failure handling. Which statements match what it says about activity-level retries versus the 'non-destructive failure' principle? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Activity-level retries (from the previous module) automatically absorb transient failures such as a network blip",
+        "Non-destructive failure means a half-run pipeline must leave the system in a state the next run can recover from",
+        "Watermark-after-success plus upsert is what gives you non-destructive recovery",
+        "Activity-level retries replace the need for validation checks before exposing the data"
+      ],
+      "correct_answers": [
+        "Activity-level retries (from the previous module) automatically absorb transient failures such as a network blip",
+        "Non-destructive failure means a half-run pipeline must leave the system in a state the next run can recover from",
+        "Watermark-after-success plus upsert is what gives you non-destructive recovery"
+      ]
     }
   ],
   "llm": [

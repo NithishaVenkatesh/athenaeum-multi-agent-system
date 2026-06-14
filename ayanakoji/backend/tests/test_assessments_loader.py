@@ -32,7 +32,7 @@ def test_seed_loads_banks_and_questions(assessments_session: Session, tmp_path: 
     assert counts == {
         "files": 2,
         "banks": 4,  # 2 modules x (choices + llm)
-        "choice_questions": 10,  # 2 x 5
+        "choice_questions": 20,  # 2 x 10
         "llm_questions": 6,  # 2 x 3
     }
 

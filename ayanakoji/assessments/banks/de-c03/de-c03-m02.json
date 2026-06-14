@@ -79,6 +79,83 @@
         "Exactly-once relies on checkpointed offsets plus a transactional sink like Delta; a re-attempted micro-batch writes the same data under the same transaction and does not duplicate it",
         "Writing to a non-transactional sink does not get the same exactly-once guarantee, so you must know what your sink supports"
       ]
+    },
+    {
+      "id": "de-c03-m02-c06",
+      "module_id": "de-c03-m02",
+      "prompt": "According to the module, how does the trigger interval relate to latency and batch behavior in the default micro-batch model?",
+      "kind": "mcq",
+      "choices": [
+        "A shorter trigger interval gives lower latency but produces more, smaller batches; the default fires a new batch as soon as the previous one finishes",
+        "A shorter trigger interval gives higher latency because each batch must wait for a fixed minimum window",
+        "The trigger interval has no effect on latency; only cluster size changes how fast events are processed",
+        "The default trigger holds all data until a batch reaches a fixed row count, then processes it"
+      ],
+      "correct_answers": [
+        "A shorter trigger interval gives lower latency but produces more, smaller batches; the default fires a new batch as soon as the previous one finishes"
+      ]
+    },
+    {
+      "id": "de-c03-m02-c07",
+      "module_id": "de-c03-m02",
+      "prompt": "The module contrasts two source-specific approaches to schema drift. Which TWO statements correctly describe what it says?",
+      "kind": "msq",
+      "choices": [
+        "With the cloud-file source, the engine can infer and evolve a schema, storing the tracked schema in a location you specify and adding new columns as they appear",
+        "When reading JSON payloads from Event Hubs, a common pattern is to land the raw body and parse defensively, keeping the unparsed remainder so a new field is captured rather than fatal",
+        "The cloud-file source requires you to delete and recreate the checkpoint each time a column is added",
+        "Event Hubs automatically rewrites the producer's schema so consumers never see unexpected fields"
+      ],
+      "correct_answers": [
+        "With the cloud-file source, the engine can infer and evolve a schema, storing the tracked schema in a location you specify and adding new columns as they appear",
+        "When reading JSON payloads from Event Hubs, a common pattern is to land the raw body and parse defensively, keeping the unparsed remainder so a new field is captured rather than fatal"
+      ]
+    },
+    {
+      "id": "de-c03-m02-c08",
+      "module_id": "de-c03-m02",
+      "prompt": "In the walkthrough, what specific role does mode(\"PERMISSIVE\") play when parsing the JSON body with from_json?",
+      "kind": "mcq",
+      "choices": [
+        "It keeps malformed or partial records instead of dropping the whole batch",
+        "It automatically adds any new column to the Delta table without needing mergeSchema",
+        "It guarantees exactly-once delivery by recording offsets during parsing",
+        "It forces the stream to restart whenever a record fails to parse"
+      ],
+      "correct_answers": [
+        "It keeps malformed or partial records instead of dropping the whole batch"
+      ]
+    },
+    {
+      "id": "de-c03-m02-c09",
+      "module_id": "de-c03-m02",
+      "prompt": "Per the module, why is it emphasized that the same transformation logic works on both batch and stream?",
+      "kind": "mcq",
+      "choices": [
+        "It lets you share code between the nightly batch job and the live streaming job",
+        "It removes the need for a checkpoint location on the streaming job",
+        "It allows the streaming job to skip the micro-batch model entirely",
+        "It means streaming queries automatically get exactly-once on any sink"
+      ],
+      "correct_answers": [
+        "It lets you share code between the nightly batch job and the live streaming job"
+      ]
+    },
+    {
+      "id": "de-c03-m02-c10",
+      "module_id": "de-c03-m02",
+      "prompt": "In the walkthrough's parsing pattern for the Event Hubs body, which steps does the module describe before extracting the known fields?",
+      "kind": "msq",
+      "choices": [
+        "Read the binary body and cast it to string",
+        "Parse the cast string against a schema that includes the known fields using from_json",
+        "Aggregate the events into windows before any fields are read",
+        "Write the raw body directly to Delta and parse it later in a separate batch job"
+      ],
+      "correct_answers": [
+        "Read the binary body and cast it to string",
+        "Parse the cast string against a schema that includes the known fields using from_json"
+      ]
     }
   ],
   "llm": [

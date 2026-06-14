@@ -80,6 +80,85 @@
         "A shorter watermark emits results sooner and uses less memory but discards more stragglers",
         "The threshold should be picked from how late real data actually arrives, not from a guess"
       ]
+    },
+    {
+      "id": "de-c03-m03-c06",
+      "module_id": "de-c03-m03",
+      "prompt": "The team wants to group each vessel's continuous movement into 'trips' separated by idle time at a dock, where the bucket has no fixed size and closes after a period of inactivity. Which window shape does the module say fits this?",
+      "kind": "mcq",
+      "choices": [
+        "A session window",
+        "A tumbling window",
+        "A hopping window",
+        "A watermark-bounded window"
+      ],
+      "correct_answers": [
+        "A session window"
+      ]
+    },
+    {
+      "id": "de-c03-m03-c07",
+      "module_id": "de-c03-m03",
+      "prompt": "According to the module, how does the engine compute the watermark and decide which windows are complete? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "It tracks the maximum event time it has seen and subtracts the allowed-lateness threshold",
+        "Windows whose end is older than the watermark are considered complete, finalized, and their state is dropped",
+        "Events that arrive after their window has passed the watermark are too late and are dropped or routed aside",
+        "It tracks the current processing-time clock and finalizes windows on a fixed wall-clock schedule"
+      ],
+      "correct_answers": [
+        "It tracks the maximum event time it has seen and subtracts the allowed-lateness threshold",
+        "Windows whose end is older than the watermark are considered complete, finalized, and their state is dropped",
+        "Events that arrive after their window has passed the watermark are too late and are dropped or routed aside"
+      ]
+    },
+    {
+      "id": "de-c03-m03-c08",
+      "module_id": "de-c03-m03",
+      "prompt": "The module names the specific mechanisms each engine uses to tell it which column is event time. Which pairing is correct as stated in the module?",
+      "kind": "mcq",
+      "choices": [
+        "Stream Analytics uses TIMESTAMP BY; Spark uses withWatermark on an event-time column",
+        "Stream Analytics uses withWatermark; Spark uses TIMESTAMP BY on an event-time column",
+        "Both engines use TIMESTAMP BY to declare the event-time column",
+        "Both engines infer the event-time column automatically from the JSON payload"
+      ],
+      "correct_answers": [
+        "Stream Analytics uses TIMESTAMP BY; Spark uses withWatermark on an event-time column"
+      ]
+    },
+    {
+      "id": "de-c03-m03-c09",
+      "module_id": "de-c03-m03",
+      "prompt": "In the walkthrough, the event_time field arrives as a string from the JSON payload. Why is to_timestamp applied to it before the window function is used?",
+      "kind": "mcq",
+      "choices": [
+        "Because windowing on event time requires a timestamp column, so the string is cast to a timestamp first",
+        "Because to_timestamp shifts the readings to processing time to simplify bucketing",
+        "Because the window function requires the column to remain a string for parsing",
+        "Because casting to a timestamp is what configures the two-minute watermark"
+      ],
+      "correct_answers": [
+        "Because windowing on event time requires a timestamp column, so the string is cast to a timestamp first"
+      ]
+    },
+    {
+      "id": "de-c03-m03-c10",
+      "module_id": "de-c03-m03",
+      "prompt": "Which of the following does the module list as common pitfalls when working with windowed, event-time aggregations? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Using a tumbling window for a smoothed rolling metric, or a hopping window for non-overlapping per-minute totals",
+        "Setting a watermark too short for the lateness real data exhibits, silently dropping valid events and undercounting",
+        "Expecting append output mode to emit windowed results immediately rather than only after the watermark passes the window's end",
+        "Using event time rather than processing time for a time-based aggregate, which credits late data to the wrong window"
+      ],
+      "correct_answers": [
+        "Using a tumbling window for a smoothed rolling metric, or a hopping window for non-overlapping per-minute totals",
+        "Setting a watermark too short for the lateness real data exhibits, silently dropping valid events and undercounting",
+        "Expecting append output mode to emit windowed results immediately rather than only after the watermark passes the window's end"
+      ]
     }
   ],
   "llm": [

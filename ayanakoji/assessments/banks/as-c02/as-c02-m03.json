@@ -81,6 +81,84 @@
         "Workspace sprawl, such as one workspace per team, which makes cross-service correlation hard during an incident.",
         "Forgetting to route control-plane (Activity Log) and identity (Entra sign-in/audit) logs alongside resource logs."
       ]
+    },
+    {
+      "id": "as-c02-m03-c06",
+      "module_id": "as-c02-m03",
+      "prompt": "In the checkout investigation walkthrough, the KQL query uses `summarize ... by bin(TimeGenerated, 5m)`. According to the module, what does this bucketing accomplish?",
+      "kind": "mcq",
+      "choices": [
+        "It rolls events into five-minute buckets, turning a flat list of requests into a trend where a spike is obvious.",
+        "It restricts the query results to only the most recent five minutes of telemetry.",
+        "It deletes request records older than five minutes to reduce ingestion cost.",
+        "It samples one request every five minutes to convert logs into metrics."
+      ],
+      "correct_answers": [
+        "It rolls events into five-minute buckets, turning a flat list of requests into a trend where a spike is obvious."
+      ]
+    },
+    {
+      "id": "as-c02-m03-c07",
+      "module_id": "as-c02-m03",
+      "prompt": "The module derives a `failureRatePct` column in the checkout KQL rather than alerting on the raw `failures` count. Per the walkthrough, why express failures as a percentage?",
+      "kind": "mcq",
+      "choices": [
+        "So the signal is comparable regardless of traffic volume.",
+        "So the query can read from the AppRequests table instead of metrics.",
+        "So the alert fires on a single evaluation rather than two consecutive ones.",
+        "So the result can be archived to Azure Storage for seven years."
+      ],
+      "correct_answers": [
+        "So the signal is comparable regardless of traffic volume."
+      ]
+    },
+    {
+      "id": "as-c02-m03-c08",
+      "module_id": "as-c02-m03",
+      "prompt": "Per the module's design implication for the two shapes of telemetry, which uses are correctly matched? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Use metrics for fast, high-frequency health signals and alerting on thresholds.",
+        "Use logs for investigation, correlation, and slicing by arbitrary dimensions.",
+        "Use metrics for anything you need to slice by arbitrary dimensions because they are richer than logs.",
+        "Treat metrics and logs as interchangeable so either can be substituted freely."
+      ],
+      "correct_answers": [
+        "Use metrics for fast, high-frequency health signals and alerting on thresholds.",
+        "Use logs for investigation, correlation, and slicing by arbitrary dimensions."
+      ]
+    },
+    {
+      "id": "as-c02-m03-c09",
+      "module_id": "as-c02-m03",
+      "prompt": "According to the module, what advantages do MULTIPLE Log Analytics workspaces provide compared to a single organization-wide workspace? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Data-residency boundaries, such as a workspace per region for sovereignty requirements.",
+        "Access isolation, such as a security team's workspace kept separate from app teams.",
+        "Independent retention and cost ownership per workspace.",
+        "Trivial cross-resource correlation, because one query spans everything."
+      ],
+      "correct_answers": [
+        "Data-residency boundaries, such as a workspace per region for sovereignty requirements.",
+        "Access isolation, such as a security team's workspace kept separate from app teams.",
+        "Independent retention and cost ownership per workspace."
+      ]
+    },
+    {
+      "id": "as-c02-m03-c10",
+      "module_id": "as-c02-m03",
+      "prompt": "The module describes workbooks in Azure Monitor. Which statement matches its definition of a workbook?",
+      "kind": "mcq",
+      "choices": [
+        "Interactive, parameterized reports that combine metrics, logs, and text into a view tailored to an audience.",
+        "A reusable bundle of notifications and automated responses that an alert rule points at.",
+        "A container that stores log data and is the thing KQL queries run against.",
+        "A declaration on a resource of which log categories and metrics to emit and where to send them."
+      ],
+      "correct_answers": [
+        "Interactive, parameterized reports that combine metrics, logs, and text into a view tailored to an audience."
+      ]
     }
   ],
   "llm": [

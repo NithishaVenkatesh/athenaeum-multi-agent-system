@@ -79,6 +79,85 @@
       "correct_answers": [
         "It links the silver input to the gold output so Purview draws the lineage edge from inputs to outputs; authentication uses DefaultAzureCredential with no secrets in code"
       ]
+    },
+    {
+      "id": "de-c01-m04-c06",
+      "module_id": "de-c01-m04",
+      "prompt": "The module distinguishes two ways assets become discoverable once scanned: 'Search' and 'Browse'. Which statement correctly describes how each works?",
+      "kind": "mcq",
+      "choices": [
+        "Search is keyword-driven and returns matching tables ranked by relevance; Browse is structure-driven, navigating the catalog by source and hierarchy like a file tree",
+        "Search navigates the catalog by source and hierarchy; Browse types keywords and ranks results by relevance",
+        "Search queries the underlying sensor data directly; Browse only inspects column types without showing owners",
+        "Search returns only assets that have been classified as sensitive; Browse returns only un-classified assets"
+      ],
+      "correct_answers": [
+        "Search is keyword-driven and returns matching tables ranked by relevance; Browse is structure-driven, navigating the catalog by source and hierarchy like a file tree"
+      ]
+    },
+    {
+      "id": "de-c01-m04-c07",
+      "module_id": "de-c01-m04",
+      "prompt": "Per the module's 'Common pitfalls', why is it a mistake to assume that because Purview classified a column as sensitive, the data is now protected?",
+      "kind": "mcq",
+      "choices": [
+        "Purview finds and labels sensitive data but does not by itself encrypt or restrict it; classification informs controls you must still apply at the storage and access layers",
+        "Classification automatically encrypts the column, but only if a recurring scan is scheduled to maintain the encryption key",
+        "Classification removes the sensitive column from the catalog entirely, so analysts can no longer query it",
+        "Classification restricts access at the storage layer automatically, making additional access controls redundant"
+      ],
+      "correct_answers": [
+        "Purview finds and labels sensitive data but does not by itself encrypt or restrict it; classification informs controls you must still apply at the storage and access layers"
+      ]
+    },
+    {
+      "id": "de-c01-m04-c08",
+      "module_id": "de-c01-m04",
+      "prompt": "The module names three concrete jobs that lineage supports. Select every job that the module explicitly attributes to lineage.",
+      "kind": "msq",
+      "choices": [
+        "Impact analysis: before changing or dropping a table, seeing everything downstream that would break",
+        "Root-cause analysis: when a gold number looks wrong, tracing upstream to find which source or transform introduced the error",
+        "Compliance and trust: proving, not asserting, where a reported figure originated",
+        "Capacity planning: forecasting how much storage each zone will consume next quarter"
+      ],
+      "correct_answers": [
+        "Impact analysis: before changing or dropping a table, seeing everything downstream that would break",
+        "Root-cause analysis: when a gold number looks wrong, tracing upstream to find which source or transform introduced the error",
+        "Compliance and trust: proving, not asserting, where a reported figure originated"
+      ]
+    },
+    {
+      "id": "de-c01-m04-c09",
+      "module_id": "de-c01-m04",
+      "prompt": "The module warns about a 'stale catalog from one-off scans'. What is the recommended practice, and why?",
+      "kind": "mcq",
+      "choices": [
+        "Schedule recurring scans, because a lake grows daily and a catalog scanned only once is wrong within a week",
+        "Scan once at registration and then disable scanning, because re-scanning would overwrite curated descriptions",
+        "Replace scanning with manual catalog edits, because automated scans cannot read folder structure",
+        "Run a single deep scan that copies the data into Purview so the catalog never needs refreshing"
+      ],
+      "correct_answers": [
+        "Schedule recurring scans, because a lake grows daily and a catalog scanned only once is wrong within a week"
+      ]
+    },
+    {
+      "id": "de-c01-m04-c10",
+      "module_id": "de-c01-m04",
+      "prompt": "According to the module, select every accurate statement about scanning a registered source and the 'over-scanning' pitfall it warns about.",
+      "kind": "msq",
+      "choices": [
+        "Scanning can read structure and sample data for classification, so you should point scans at sources you're authorized to inspect and scope credentials with least privilege",
+        "Scanning can run automatic classification, tagging columns that look like email addresses, government IDs, or other sensitive patterns",
+        "Scanning reads the structure (files, folders, tables, columns) and writes that metadata into the catalog",
+        "Scanning must copy a full backup of every table before it can classify columns as sensitive"
+      ],
+      "correct_answers": [
+        "Scanning can read structure and sample data for classification, so you should point scans at sources you're authorized to inspect and scope credentials with least privilege",
+        "Scanning can run automatic classification, tagging columns that look like email addresses, government IDs, or other sensitive patterns",
+        "Scanning reads the structure (files, folders, tables, columns) and writes that metadata into the catalog"
+      ]
     }
   ],
   "llm": [

@@ -80,6 +80,84 @@
         "Running the WAF in Prevention mode so it blocks matching attacks outright rather than only logging them",
         "Applying the OWASP managed rule set to block common attacks like SQL injection and cross-site scripting"
       ]
+    },
+    {
+      "id": "as-c03-m04-c06",
+      "module_id": "as-c03-m04",
+      "prompt": "In the walkthrough code, what does the module say DefaultAzureCredential does that lets the same code run unchanged in Azure and on a developer's machine?",
+      "kind": "mcq",
+      "choices": [
+        "It uses the app's managed identity when running in Azure and the developer's signed-in identity when running locally, so no secret is needed in either place",
+        "It reads a connection-string password from Key Vault in Azure and from a local config file when running on the developer's machine",
+        "It generates a new long-lived API key each time the app starts and caches it for both environments",
+        "It disables TLS locally for convenience and re-enables it automatically once the app is deployed to Azure"
+      ],
+      "correct_answers": [
+        "It uses the app's managed identity when running in Azure and the developer's signed-in identity when running locally, so no secret is needed in either place"
+      ]
+    },
+    {
+      "id": "as-c03-m04-c07",
+      "module_id": "as-c03-m04",
+      "prompt": "The module places specific controls in the 'develop' phase of the application security lifecycle. Which control does it explicitly assign to that phase?",
+      "kind": "mcq",
+      "choices": [
+        "Secure coding with dependency scanning and secret detection in the pipeline",
+        "Threat modeling that asks how each component could be abused",
+        "Infrastructure-as-code review to ensure no secrets in config",
+        "Runtime protection and monitoring of the deployed application"
+      ],
+      "correct_answers": [
+        "Secure coding with dependency scanning and secret detection in the pipeline"
+      ]
+    },
+    {
+      "id": "as-c03-m04-c08",
+      "module_id": "as-c03-m04",
+      "prompt": "According to the module, how is data in transit protected, and what does the architect do about it?",
+      "kind": "mcq",
+      "choices": [
+        "It is protected with TLS, which the architect enforces by rejecting anything older or unencrypted",
+        "It is encrypted platform-side by default at rest, so no transit-specific action is needed",
+        "It is classified by Microsoft Purview, which applies sensitivity labels to each packet in flight",
+        "It is protected by the WAF's OWASP rule set, which encrypts request bodies before forwarding them"
+      ],
+      "correct_answers": [
+        "It is protected with TLS, which the architect enforces by rejecting anything older or unencrypted"
+      ]
+    },
+    {
+      "id": "as-c03-m04-c09",
+      "module_id": "as-c03-m04",
+      "prompt": "Which of the following does the module identify as common pitfalls in securing the application and data tiers? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Leaving a WAF in Detection mode, which only logs and gives a false sense of safety while attacks still land",
+        "Storing secrets 'temporarily' in app settings, since temporary becomes permanent and leaks",
+        "Encrypting everything but classifying nothing, which prevents applying stronger controls where needed or proving compliance",
+        "Granting a managed identity least-privilege access, which leaves the service unable to authenticate as itself"
+      ],
+      "correct_answers": [
+        "Leaving a WAF in Detection mode, which only logs and gives a false sense of safety while attacks still land",
+        "Storing secrets 'temporarily' in app settings, since temporary becomes permanent and leaks",
+        "Encrypting everything but classifying nothing, which prevents applying stronger controls where needed or proving compliance"
+      ]
+    },
+    {
+      "id": "as-c03-m04-c10",
+      "module_id": "as-c03-m04",
+      "prompt": "In the walkthrough's Python code, which elements together demonstrate the module's hardening goals for the tracking API's database connection? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "The credential is a short-lived token tied to the app's identity, with no password in the code, in config, or in source control",
+        "Encrypt=yes in the connection string enforces TLS so traffic is encrypted in transit",
+        "A connection-string password is read from an app setting that is itself protected in Key Vault",
+        "TrustServerCertificate is set to yes so the client skips certificate validation for speed"
+      ],
+      "correct_answers": [
+        "The credential is a short-lived token tied to the app's identity, with no password in the code, in config, or in source control",
+        "Encrypt=yes in the connection string enforces TLS so traffic is encrypted in transit"
+      ]
     }
   ],
   "llm": [

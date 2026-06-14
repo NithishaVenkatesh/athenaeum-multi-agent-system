@@ -80,6 +80,84 @@
         "Never testing restores or failovers",
         "Hard-coding a specific regional server endpoint in the application instead of using a failover-group listener"
       ]
+    },
+    {
+      "id": "as-c02-m04-c06",
+      "module_id": "as-c02-m04",
+      "prompt": "The module distinguishes high availability from disaster recovery by the kind of failure each addresses. According to the module, which failures does high availability keep a workload running through?",
+      "kind": "mcq",
+      "choices": [
+        "Localized failures such as a failed disk, a rebooting host, or a single data-center fault, usually within one region",
+        "The loss of an entire region, by failing the workload over to a different region",
+        "Corruption, accidental deletion, or ransomware, by restoring point-in-time copies",
+        "A simultaneous outage of every availability zone in a region"
+      ],
+      "correct_answers": [
+        "Localized failures such as a failed disk, a rebooting host, or a single data-center fault, usually within one region"
+      ]
+    },
+    {
+      "id": "as-c02-m04-c07",
+      "module_id": "as-c02-m04",
+      "prompt": "According to the module, which Azure service orchestrates replication and failover of whole VMs (Azure-to-Azure or on-premises-to-Azure) for hybrid disaster recovery?",
+      "kind": "mcq",
+      "choices": [
+        "Azure Site Recovery",
+        "Azure Backup via a Recovery Services vault",
+        "A SQL Database failover group",
+        "Zone-redundant Business Critical SKU"
+      ],
+      "correct_answers": [
+        "Azure Site Recovery"
+      ]
+    },
+    {
+      "id": "as-c02-m04-c08",
+      "module_id": "as-c02-m04",
+      "prompt": "The module says synchronous, zero-loss replication should not be applied to every workload. Which reasons does it give for matching the RPO to each workload's real tolerance rather than designing to zero RPO everywhere? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Near-zero RPO implies synchronous replication, which is expensive",
+        "Synchronous replication adds latency",
+        "The business should be able to see the cost of each tier and choose with open eyes",
+        "Zero RPO is technically impossible to achieve in any Azure region"
+      ],
+      "correct_answers": [
+        "Near-zero RPO implies synchronous replication, which is expensive",
+        "Synchronous replication adds latency",
+        "The business should be able to see the cost of each tier and choose with open eyes"
+      ]
+    },
+    {
+      "id": "as-c02-m04-c09",
+      "module_id": "as-c02-m04",
+      "prompt": "For cross-region disaster recovery of relational data, what does the module say a failover group provides beyond an active geo-replication secondary, and what is the nature of its cross-region replication?",
+      "kind": "mcq",
+      "choices": [
+        "A stable connection endpoint that redirects to whichever region is primary, with asynchronous cross-region replication so the RPO is small but not zero",
+        "A synchronous cross-region copy that guarantees an RPO of exactly zero with no application changes",
+        "A point-in-time backup vault that restores from corruption with a longer RTO than replication",
+        "An additional availability zone in the secondary region that removes the need for a second region"
+      ],
+      "correct_answers": [
+        "A stable connection endpoint that redirects to whichever region is primary, with asynchronous cross-region replication so the RPO is small but not zero"
+      ]
+    },
+    {
+      "id": "as-c02-m04-c10",
+      "module_id": "as-c02-m04",
+      "prompt": "The module warns against \"treating backup as disaster recovery.\" Which statements reflect the module's reasoning about why backup and replication-based failover solve different problems? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Backups protect against corruption and deletion but typically have a longer RTO than replication-based failover",
+        "For a tight regional-outage RTO you need replication, not just backup",
+        "Backup and replication-based failover solve the same problem, so either is fine for a regional outage",
+        "Backup always provides a tighter RPO than replication because it is taken more frequently"
+      ],
+      "correct_answers": [
+        "Backups protect against corruption and deletion but typically have a longer RTO than replication-based failover",
+        "For a tight regional-outage RTO you need replication, not just backup"
+      ]
     }
   ],
   "llm": [

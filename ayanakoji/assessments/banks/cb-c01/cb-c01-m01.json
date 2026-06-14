@@ -81,6 +81,85 @@
         "The --https-only true setting causes any http:// request to be redirected",
         "The swap command exchanges the staging slot with the production target slot for a zero-downtime release"
       ]
+    },
+    {
+      "id": "cb-c01-m01-c06",
+      "module_id": "cb-c01-m01",
+      "prompt": "According to the module, what kind of hosting model is Azure App Service and what does it handle on your behalf?",
+      "kind": "mcq",
+      "choices": [
+        "A Platform-as-a-Service host that runs your code or container on infrastructure it patches, load-balances, and keeps available",
+        "An Infrastructure-as-a-Service offering where you manage the operating-system updates and virtual machines yourself",
+        "A Function-as-a-Service runtime that executes code only when an event occurs",
+        "A managed Kubernetes cluster where you define pods and handle node patching directly"
+      ],
+      "correct_answers": [
+        "A Platform-as-a-Service host that runs your code or container on infrastructure it patches, load-balances, and keeps available"
+      ]
+    },
+    {
+      "id": "cb-c01-m01-c07",
+      "module_id": "cb-c01-m01",
+      "prompt": "The module warns about 'swapping without warming up.' What problem does it say this causes, and what does it recommend doing first?",
+      "kind": "mcq",
+      "choices": [
+        "An un-warmed slot can serve slow first requests right after a swap; hit the staging slot's health endpoint before swapping so instances are ready",
+        "The swap will fail outright because App Service blocks swaps on cold instances until a warm-up timeout passes",
+        "Production will return HTTP 500 errors during the swap; disable HTTPS-only first so traffic can reach the cold slot",
+        "The staging database connection becomes sticky automatically; mark it non-sticky before swapping to avoid slow requests"
+      ],
+      "correct_answers": [
+        "An un-warmed slot can serve slow first requests right after a swap; hit the staging slot's health endpoint before swapping so instances are ready"
+      ]
+    },
+    {
+      "id": "cb-c01-m01-c08",
+      "module_id": "cb-c01-m01",
+      "prompt": "Per the module, why is reusing a generic app name like 'orders-api' a pitfall, and what is the recommended fix?",
+      "kind": "mcq",
+      "choices": [
+        "The default *.azurewebsites.net hostname is global, so a generic name will already be taken; use an org prefix",
+        "Generic names are reserved for the Free tier only, so you must upgrade to Standard before using one",
+        "App Service blocks names shorter than ten characters; lengthen the name to satisfy the validator",
+        "Non-unique names disable deployment slots; rename the app to restore the 'Add slot' option"
+      ],
+      "correct_answers": [
+        "The default *.azurewebsites.net hostname is global, so a generic name will already be taken; use an org prefix"
+      ]
+    },
+    {
+      "id": "cb-c01-m01-c09",
+      "module_id": "cb-c01-m01",
+      "prompt": "Which statements about a deployment slot and the swap are accurate according to the module? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "A deployment slot is a fully functioning copy of your app with its own hostname, running inside the same plan",
+        "After a swap, the old version sits in staging, so a swap back is instant if the new version misbehaves",
+        "App Service warms up the staging instances and then redirects production traffic to them by exchanging the routing",
+        "Each deployment slot requires its own separate App Service Plan with dedicated compute instances"
+      ],
+      "correct_answers": [
+        "A deployment slot is a fully functioning copy of your app with its own hostname, running inside the same plan",
+        "After a swap, the old version sits in staging, so a swap back is instant if the new version misbehaves",
+        "App Service warms up the staging instances and then redirects production traffic to them by exchanging the routing"
+      ]
+    },
+    {
+      "id": "cb-c01-m01-c10",
+      "module_id": "cb-c01-m01",
+      "prompt": "Which statements about configuration in App Service, as presented in the module, are correct? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Application settings let the same image behave differently per environment because platform settings override values baked into the deployment",
+        "Connection strings are a closely related slot in the configuration UI that App Service can surface with a documented prefix",
+        "The module frames configuration and secrets as operational data rather than source code",
+        "For most modern apps the module recommends connection strings over plain app settings plus a secret store as the cleaner path"
+      ],
+      "correct_answers": [
+        "Application settings let the same image behave differently per environment because platform settings override values baked into the deployment",
+        "Connection strings are a closely related slot in the configuration UI that App Service can surface with a documented prefix",
+        "The module frames configuration and secrets as operational data rather than source code"
+      ]
     }
   ],
   "llm": [

@@ -79,6 +79,85 @@
         "Lag — how far behind real time the output is",
         "Resource utilization — such as SU utilization percentage or executor CPU/memory"
       ]
+    },
+    {
+      "id": "de-c03-m04-c06",
+      "module_id": "de-c03-m04",
+      "prompt": "During the festival walkthrough, the metrics show SU utilization pinned near 100% while input backlog climbs steadily. Per the module, what does this pair of signals indicate and what is the correct response?",
+      "kind": "mcq",
+      "choices": [
+        "A capacity-bound signal — arrival exceeds processing rate near a ceiling — so raise processing parallelism (more streaming units), provided the job is parallelizable and the source can feed it",
+        "A skew problem caused by one hot key, so the fix is a better partition key rather than more streaming units",
+        "A source partition ceiling, so the only valid response is to add more Event Hubs partitions",
+        "A retention shortfall, so retention must be extended before the backlog can drain"
+      ],
+      "correct_answers": [
+        "A capacity-bound signal — arrival exceeds processing rate near a ceiling — so raise processing parallelism (more streaming units), provided the job is parallelizable and the source can feed it"
+      ]
+    },
+    {
+      "id": "de-c03-m04-c07",
+      "module_id": "de-c03-m04",
+      "prompt": "The module describes scaling as having two independent dimensions. Which statements correctly identify what governs each dimension? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Ingestion capacity is governed by the source — Event Hubs partition count caps read parallelism and provisioned throughput caps ingress/egress rate",
+        "Processing capacity is the engine — streaming units in Stream Analytics, or executor count and cores in Spark",
+        "Scaling one stage without the others just moves the bottleneck rather than removing it",
+        "Ingestion capacity is governed by executor CPU and memory, while processing capacity is governed by partition count"
+      ],
+      "correct_answers": [
+        "Ingestion capacity is governed by the source — Event Hubs partition count caps read parallelism and provisioned throughput caps ingress/egress rate",
+        "Processing capacity is the engine — streaming units in Stream Analytics, or executor count and cores in Spark",
+        "Scaling one stage without the others just moves the bottleneck rather than removing it"
+      ]
+    },
+    {
+      "id": "de-c03-m04-c08",
+      "module_id": "de-c03-m04",
+      "prompt": "According to the module, why is over-provisioning singled out as a real cost concern specifically for streaming jobs?",
+      "kind": "mcq",
+      "choices": [
+        "A streaming job runs continuously, twenty-four hours a day, so idle headroom is paid for every hour",
+        "A streaming job recomputes all historical results on every restart, multiplying the cost of spare capacity",
+        "Over-provisioning forces the source to retain events longer, which is the dominant cost",
+        "Idle streaming units automatically convert into additional partitions, inflating the source bill"
+      ],
+      "correct_answers": [
+        "A streaming job runs continuously, twenty-four hours a day, so idle headroom is paid for every hour"
+      ]
+    },
+    {
+      "id": "de-c03-m04-c09",
+      "module_id": "de-c03-m04",
+      "prompt": "The module says partition skew — one hot partition such as a single extremely chatty ferry — defeats scaling. Why does adding more resources fail to help, and what is the prescribed fix?",
+      "kind": "mcq",
+      "choices": [
+        "One reader is overwhelmed while the rest idle, so more cores do not help; the fix is a better partition key, not more compute",
+        "The hot partition saturates the checkpoint, so the fix is to delete and rebuild the checkpoint",
+        "Skew exhausts source retention, so the fix is to extend retention to cover the hot key",
+        "Extra cores deadlock waiting on the hot reader, so the fix is to reduce the streaming-unit count"
+      ],
+      "correct_answers": [
+        "One reader is overwhelmed while the rest idle, so more cores do not help; the fix is a better partition key, not more compute"
+      ]
+    },
+    {
+      "id": "de-c03-m04-c10",
+      "module_id": "de-c03-m04",
+      "prompt": "Which statements reflect the operational discipline the module prescribes for clean recovery from interruptions? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Recovery rests on a replayable source — Event Hubs retains events so a restarted consumer resumes from its offset",
+        "A durable checkpoint lets Spark resume processing and window state exactly where it left off",
+        "Checkpoints must never be shared or deleted",
+        "Checkpoints should be deleted and rebuilt on each deployment to guarantee a clean restart"
+      ],
+      "correct_answers": [
+        "Recovery rests on a replayable source — Event Hubs retains events so a restarted consumer resumes from its offset",
+        "A durable checkpoint lets Spark resume processing and window state exactly where it left off",
+        "Checkpoints must never be shared or deleted"
+      ]
     }
   ],
   "llm": [

@@ -78,6 +78,84 @@
       "correct_answers": [
         "It runs keyword and vector queries together and fuses the rankings, combining exact-term precision with semantic recall so it won't miss verbatim part numbers and SKUs"
       ]
+    },
+    {
+      "id": "ai-c03-m04-c06",
+      "module_id": "ai-c03-m04",
+      "prompt": "The module says an indexer ties the four objects together. According to the text, in what order does the indexer act on content when it runs?",
+      "kind": "mcq",
+      "choices": [
+        "It crawls the data source, runs documents through the skillset, maps the results to index fields, and loads them",
+        "It defines the index schema, then provisions the data source, then schedules the skillset",
+        "It loads raw documents into the index first, then runs the skillset to enrich them in place afterward",
+        "It generates embeddings, fuses keyword and vector rankings, and returns the top results to the user"
+      ],
+      "correct_answers": [
+        "It crawls the data source, runs documents through the skillset, maps the results to index fields, and loads them"
+      ]
+    },
+    {
+      "id": "ai-c03-m04-c07",
+      "module_id": "ai-c03-m04",
+      "prompt": "The module notes you can push documents directly into an index via the API without an indexer. When does it say you'd choose this push approach?",
+      "kind": "mcq",
+      "choices": [
+        "When your application already has the data in hand rather than crawling a store",
+        "When you need OCR and key-phrase extraction applied during ingestion",
+        "When the content lives in Blob Storage and must be crawled on a schedule",
+        "When you want semantic ranking to re-rank the top keyword results"
+      ],
+      "correct_answers": [
+        "When your application already has the data in hand rather than crawling a store"
+      ]
+    },
+    {
+      "id": "ai-c03-m04-c08",
+      "module_id": "ai-c03-m04",
+      "prompt": "The module repeatedly stresses that you should enrich only what you'll query. According to the text, which statements support this discipline? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Every skill in a skillset adds ingestion cost and indexing latency",
+        "Running OCR on documents that are already digital text is wasted work",
+        "Adding more skills automatically makes every field filterable and sortable",
+        "A skillset must enrich every field in a document before the indexer can load any of them"
+      ],
+      "correct_answers": [
+        "Every skill in a skillset adds ingestion cost and indexing latency",
+        "Running OCR on documents that are already digital text is wasted work"
+      ]
+    },
+    {
+      "id": "ai-c03-m04-c09",
+      "module_id": "ai-c03-m04",
+      "prompt": "In the 'Ignoring indexer scheduling and failures' pitfall, the module warns about what specific risk and how to guard against it?",
+      "kind": "mcq",
+      "choices": [
+        "An indexer runs on a schedule and can partially fail on malformed documents, so you should monitor its execution history and configure error handling or the index silently drifts out of date",
+        "An indexer can only run once, so you must manually re-create it every time the source changes",
+        "An indexer rebuilds the entire index on every run, so you should disable scheduling to save cost",
+        "An indexer overwrites the skillset on failure, so you should store a backup skillset separately"
+      ],
+      "correct_answers": [
+        "An indexer runs on a schedule and can partially fail on malformed documents, so you should monitor its execution history and configure error handling or the index silently drifts out of date"
+      ]
+    },
+    {
+      "id": "ai-c03-m04-c10",
+      "module_id": "ai-c03-m04",
+      "prompt": "Based on how the module describes vector search and its connection to the earlier modules in the vertical, which statements are accurate? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "You generate embeddings (for example with an Azure OpenAI embedding model) and store them in a vector field, with the index declaring that field's dimensions and similarity metric",
+        "An image caption, a custom-vision tag, or a Video Indexer transcript can all become fields in a search index so a single text query spans documents, images, and video",
+        "Enriched values can also be persisted to a knowledge store for reuse beyond search",
+        "Vector search stores raw document bytes and matches them by exact term overlap rather than by similarity"
+      ],
+      "correct_answers": [
+        "You generate embeddings (for example with an Azure OpenAI embedding model) and store them in a vector field, with the index declaring that field's dimensions and similarity metric",
+        "An image caption, a custom-vision tag, or a Video Indexer transcript can all become fields in a search index so a single text query spans documents, images, and video",
+        "Enriched values can also be persisted to a knowledge store for reuse beyond search"
+      ]
     }
   ],
   "llm": [

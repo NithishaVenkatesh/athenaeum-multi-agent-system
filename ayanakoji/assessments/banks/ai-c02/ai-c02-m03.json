@@ -78,6 +78,83 @@
       "correct_answers": [
         "A composed model that bundles several models behind one model ID and puts a classifier in front to identify each document type and run the matching sub-model"
       ]
+    },
+    {
+      "id": "ai-c02-m03-c06",
+      "module_id": "ai-c02-m03",
+      "prompt": "According to the module, which document classes have prebuilt models you can use with no training at all? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Invoices and receipts",
+        "Identity documents and business cards",
+        "Tax forms and a general document model",
+        "Warranty claim forms with fields like ClaimReason and PurchaseStore"
+      ],
+      "correct_answers": [
+        "Invoices and receipts",
+        "Identity documents and business cards",
+        "Tax forms and a general document model"
+      ]
+    },
+    {
+      "id": "ai-c02-m03-c07",
+      "module_id": "ai-c02-m03",
+      "prompt": "Beyond a flat value, what does each field returned by a prebuilt model carry, according to the module?",
+      "kind": "mcq",
+      "choices": [
+        "Its extracted content, a normalized typed value where applicable (e.g., a date as a date, currency as a number plus code), and a confidence score",
+        "A bounding region only, with the typed value computed later by a separate layout call",
+        "A translation of the value into the resource's default language plus a confidence score",
+        "A pointer to the labeled training sample the value was learned from"
+      ],
+      "correct_answers": [
+        "Its extracted content, a normalized typed value where applicable (e.g., a date as a date, currency as a number plus code), and a confidence score"
+      ]
+    },
+    {
+      "id": "ai-c02-m03-c08",
+      "module_id": "ai-c02-m03",
+      "prompt": "In the module's description, how do you build a custom extraction model before training it?",
+      "kind": "mcq",
+      "choices": [
+        "Upload a handful of example documents to storage and label the fields you care about by drawing on the document in Document Intelligence Studio",
+        "Write a JSON schema declaring each field name and type, then submit it without any example documents",
+        "Point the prebuilt invoice model at your documents and rename its output fields to match your form",
+        "Provide a single pristine example and let the service auto-generate the remaining labels"
+      ],
+      "correct_answers": [
+        "Upload a handful of example documents to storage and label the fields you care about by drawing on the document in Document Intelligence Studio"
+      ]
+    },
+    {
+      "id": "ai-c02-m03-c09",
+      "module_id": "ai-c02-m03",
+      "prompt": "The module warns against 'labeling too few or too uniform samples.' What guidance does it give to avoid this pitfall?",
+      "kind": "mcq",
+      "choices": [
+        "A custom model generalizes only as well as its labeled examples represent reality, so include the skewed scans and edge cases, not just one pristine sample",
+        "Always label the maximum number of samples the service allows, regardless of how varied your documents are",
+        "Use only pristine, perfectly aligned scans so the model learns clean field positions first",
+        "Skip labeling entirely and rely on layout analysis to infer the fields"
+      ],
+      "correct_answers": [
+        "A custom model generalizes only as well as its labeled examples represent reality, so include the skewed scans and edge cases, not just one pristine sample"
+      ]
+    },
+    {
+      "id": "ai-c02-m03-c10",
+      "module_id": "ai-c02-m03",
+      "prompt": "In the invoice walkthrough, how does the AP automation use the InvoiceTotal field's confidence score?",
+      "kind": "mcq",
+      "choices": [
+        "Above the threshold it posts to finance automatically; below it, the invoice lands in a review queue with the low-confidence field highlighted",
+        "It averages the confidence across all fields and posts only if the document-level average clears the threshold",
+        "It retries begin_analyze_document until the confidence rises above the threshold",
+        "It uses the confidence to choose between the template and neural model at runtime"
+      ],
+      "correct_answers": [
+        "Above the threshold it posts to finance automatically; below it, the invoice lands in a review queue with the low-confidence field highlighted"
+      ]
     }
   ],
   "llm": [

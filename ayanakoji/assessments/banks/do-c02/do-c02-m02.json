@@ -81,6 +81,84 @@
         "Republishing a version like 2.4.1 with different bytes, which breaks the immutability consumers rely on",
         "Skipping upstream sources and letting every build hit the public internet, losing the policy chokepoint"
       ]
+    },
+    {
+      "id": "do-c02-m02-c06",
+      "module_id": "do-c02-m02",
+      "prompt": "In the module's opening scenario, the `larkspur-telemetry` library was copied as a folder into each repository, and over time the warehouse and fleet teams each fixed different bugs in their own copies. According to the module, what is the root fix for this situation?",
+      "kind": "mcq",
+      "choices": [
+        "Stop copying source and publish one versioned package to a feed that every service consumes from, giving a single source of truth",
+        "Have each team continue maintaining its own copy but synchronize the fixes manually every sprint",
+        "Pick whichever team's copy has the most recent change and delete the others' copies",
+        "Compile every service with the same pipeline so the divergent copies produce identical binaries"
+      ],
+      "correct_answers": [
+        "Stop copying source and publish one versioned package to a feed that every service consumes from, giving a single source of truth"
+      ]
+    },
+    {
+      "id": "do-c02-m02-c07",
+      "module_id": "do-c02-m02",
+      "prompt": "The module describes feed views as named slices at different quality levels (conventionally @local, @prerelease, @release). According to the module, how do views and consumers interact?",
+      "kind": "mcq",
+      "choices": [
+        "A package is promoted into @prerelease for integration testing and only into @release once it has earned trust, and consumers choose which view to point at based on their risk tolerance",
+        "Every view holds an independently rebuilt copy of the package, so each quality level is recompiled before it advances",
+        "Consumers always read from @local, and the feed automatically mirrors @local into @release on a schedule",
+        "Views are immutable so a package can exist in only one view at a time and must be deleted from @prerelease before entering @release"
+      ],
+      "correct_answers": [
+        "A package is promoted into @prerelease for integration testing and only into @release once it has earned trust, and consumers choose which view to point at based on their risk tolerance"
+      ]
+    },
+    {
+      "id": "do-c02-m02-c08",
+      "module_id": "do-c02-m02",
+      "prompt": "In the walkthrough's publish pipeline, the module uses a `npmAuthenticate@0` task against the `.npmrc` file. According to the module, why is this step used?",
+      "kind": "mcq",
+      "choices": [
+        "It injects feed credentials so no token is hard-coded in source",
+        "It bumps the package version automatically before publishing",
+        "It validates that the resolved versions match the committed lockfile",
+        "It promotes the published package from @prerelease into @release"
+      ],
+      "correct_answers": [
+        "It injects feed credentials so no token is hard-coded in source"
+      ]
+    },
+    {
+      "id": "do-c02-m02-c09",
+      "module_id": "do-c02-m02",
+      "prompt": "The module distinguishes what a version range allows from what a lockfile pins. Select all statements that match how the module describes this interaction.",
+      "kind": "msq",
+      "choices": [
+        "A range like ^2.4.1 says what versions are allowed, but the lockfile pins the exact resolved version",
+        "Committing package-lock.json makes two builds a month apart produce identical dependency trees",
+        "Without a committed lockfile, a version range can resolve to different transitive dependency versions over time",
+        "A lockfile replaces the version range entirely, so declaring a range in package.json becomes unnecessary"
+      ],
+      "correct_answers": [
+        "A range like ^2.4.1 says what versions are allowed, but the lockfile pins the exact resolved version",
+        "Committing package-lock.json makes two builds a month apart produce identical dependency trees",
+        "Without a committed lockfile, a version range can resolve to different transitive dependency versions over time"
+      ]
+    },
+    {
+      "id": "do-c02-m02-c10",
+      "module_id": "do-c02-m02",
+      "prompt": "The module repeatedly cautions about details that change over time. Select all the specifics the module explicitly says to confirm or verify in the current docs.",
+      "kind": "msq",
+      "choices": [
+        "How feed retention and saved upstream copies are configured, before relying on a particular retention guarantee",
+        "The precise pipeline task names, authentication mechanics, and .npmrc registry format, which differ between Azure Artifacts and GitHub Packages",
+        "The meaning of the SemVer MAJOR digit, which the module says may be redefined per organization",
+        "Which quality level the @release view corresponds to, since the conventional view names are not standardized"
+      ],
+      "correct_answers": [
+        "How feed retention and saved upstream copies are configured, before relying on a particular retention guarantee",
+        "The precise pipeline task names, authentication mechanics, and .npmrc registry format, which differ between Azure Artifacts and GitHub Packages"
+      ]
     }
   ],
   "llm": [

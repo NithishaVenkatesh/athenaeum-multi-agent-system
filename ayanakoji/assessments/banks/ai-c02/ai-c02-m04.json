@@ -79,6 +79,84 @@
         "Using real-time recognition to stream a bulk archive of recorded calls",
         "Mismatching the recognizer's configured language with the actual audio"
       ]
+    },
+    {
+      "id": "ai-c02-m04-c06",
+      "module_id": "ai-c02-m04",
+      "prompt": "The module describes a SpeechRecognizer as supporting two recognition styles. Which pairing correctly matches each style to its intended use?",
+      "kind": "mcq",
+      "choices": [
+        "Single-shot recognition for a short utterance; continuous recognition for a long conversation",
+        "Single-shot recognition for a long conversation; continuous recognition for a short utterance",
+        "Single-shot recognition for stored archives; continuous recognition for currency values",
+        "Single-shot recognition for translation; continuous recognition for synthesis"
+      ],
+      "correct_answers": [
+        "Single-shot recognition for a short utterance; continuous recognition for a long conversation"
+      ]
+    },
+    {
+      "id": "ai-c02-m04-c07",
+      "module_id": "ai-c02-m04",
+      "prompt": "According to the module, what does a TranslationRecognizer do on its own, and what must be added to achieve speech-to-speech translation?",
+      "kind": "mcq",
+      "choices": [
+        "It takes audio in a source language and returns text in one or more target languages (speech-to-text translation); adding synthesis of the translated text gives speech-to-speech translation",
+        "It returns translated audio directly, so no synthesizer is ever needed for speech-to-speech translation",
+        "It only transcribes audio into the same language; a separate text translator must then translate the transcript",
+        "It synthesizes neural voices from text, and a SpeechRecognizer is added to translate the result"
+      ],
+      "correct_answers": [
+        "It takes audio in a source language and returns text in one or more target languages (speech-to-text translation); adding synthesis of the translated text gives speech-to-speech translation"
+      ]
+    },
+    {
+      "id": "ai-c02-m04-c08",
+      "module_id": "ai-c02-m04",
+      "prompt": "The module says the Speech resource's region is \"part of the contract.\" Which consequences of region binding does it explicitly cite? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "The set of neural voices available is tied to the region",
+        "Latency is tied to the region, so you should provision near your users",
+        "A voice or feature available in one region may not exist in another",
+        "Region determines whether SSML say-as elements are honored"
+      ],
+      "correct_answers": [
+        "The set of neural voices available is tied to the region",
+        "Latency is tied to the region, so you should provision near your users",
+        "A voice or feature available in one region may not exist in another"
+      ]
+    },
+    {
+      "id": "ai-c02-m04-c09",
+      "module_id": "ai-c02-m04",
+      "prompt": "In the walkthrough's SSML, three non-voice elements each serve a distinct purpose. Which mapping of element to purpose matches the module's explanation?",
+      "kind": "mcq",
+      "choices": [
+        "<break> inserts a pause before the number; <say-as interpret-as=\"digits\"> forces digit-by-digit reading; <prosody rate=\"-10%\"> slows the sign-off",
+        "<break> forces digit-by-digit reading; <say-as interpret-as=\"digits\"> inserts a pause; <prosody rate=\"-10%\"> switches the speaking voice",
+        "<break> slows the sign-off; <say-as interpret-as=\"digits\"> switches voices; <prosody rate=\"-10%\"> inserts a pause",
+        "<break> adjusts pitch; <say-as interpret-as=\"digits\"> sets the region; <prosody rate=\"-10%\"> selects the neural voice"
+      ],
+      "correct_answers": [
+        "<break> inserts a pause before the number; <say-as interpret-as=\"digits\"> forces digit-by-digit reading; <prosody rate=\"-10%\"> slows the sign-off"
+      ]
+    },
+    {
+      "id": "ai-c02-m04-c10",
+      "module_id": "ai-c02-m04",
+      "prompt": "The module warns that a recognizer configured for the wrong language \"quietly produces garbage transcripts.\" Which remedies does it recommend for getting recognition language right? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Set the expected input language for the recognizer",
+        "For multilingual lines, consider language identification or speech translation",
+        "Always replace the recognizer with a synthesizer when language is uncertain",
+        "Route audio to the host's local speaker so the language is detected automatically"
+      ],
+      "correct_answers": [
+        "Set the expected input language for the recognizer",
+        "For multilingual lines, consider language identification or speech translation"
+      ]
     }
   ],
   "llm": [

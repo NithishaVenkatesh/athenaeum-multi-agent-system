@@ -79,6 +79,83 @@
         "Prompt shields detect injection and jailbreak attempts in user input and in documents",
         "Safety comes from filters and shields plus least-privilege design, so a successful injection still cannot cause real harm"
       ]
+    },
+    {
+      "id": "ai-c01-m04-c06",
+      "module_id": "ai-c01-m04",
+      "kind": "mcq",
+      "prompt": "The module describes the 'LLM-as-judge' technique for evaluation. What problem does it specifically solve, and how does it work?",
+      "choices": [
+        "Grading thousands of free-text answers by hand does not scale, so a separate model scores each answer against the question and context using a rubric",
+        "Manual test sets drift over time, so the judge model regenerates fresh test questions for each evaluation run",
+        "Content filters cannot screen completions, so the judge model re-screens every answer for harmful categories before scoring",
+        "Retrieval quality is hard to observe, so the judge model fetches better context and re-runs the generation step"
+      ],
+      "correct_answers": [
+        "Grading thousands of free-text answers by hand does not scale, so a separate model scores each answer against the question and context using a rubric"
+      ]
+    },
+    {
+      "id": "ai-c01-m04-c07",
+      "module_id": "ai-c01-m04",
+      "kind": "msq",
+      "prompt": "According to the module's section on monitoring with Azure Monitor, which statements are true about diagnostic signals and when to instrument? (Select all that apply.)",
+      "choices": [
+        "Diagnostic logs and metrics are routed to a Log Analytics workspace where you can query or alert on them",
+        "Watching filtered-content and shield-triggered events tells you when you are under adversarial pressure",
+        "You should instrument after the first production incident, once you know which signals actually matter",
+        "Watching token usage protects your budget, while latency and errors tell you whether the service is healthy"
+      ],
+      "correct_answers": [
+        "Diagnostic logs and metrics are routed to a Log Analytics workspace where you can query or alert on them",
+        "Watching filtered-content and shield-triggered events tells you when you are under adversarial pressure",
+        "Watching token usage protects your budget, while latency and errors tell you whether the service is healthy"
+      ]
+    },
+    {
+      "id": "ai-c01-m04-c08",
+      "module_id": "ai-c01-m04",
+      "kind": "mcq",
+      "prompt": "The module distinguishes the two faithfulness metrics for a grounded assistant. What does 'relevance' measure, as opposed to 'groundedness'?",
+      "choices": [
+        "Whether the answer actually addressed the question, whereas groundedness asks whether the answer is supported by the retrieved context",
+        "Whether the right context was fetched in the first place, whereas groundedness measures the eloquence of the wording",
+        "Whether the answer is supported by the retrieved context, whereas groundedness asks whether the question was addressed",
+        "Whether the completion tripped a content filter, whereas groundedness measures token usage per request"
+      ],
+      "correct_answers": [
+        "Whether the answer actually addressed the question, whereas groundedness asks whether the answer is supported by the retrieved context"
+      ]
+    },
+    {
+      "id": "ai-c01-m04-c09",
+      "module_id": "ai-c01-m04",
+      "kind": "mcq",
+      "prompt": "The module lists 'Tuning filters to one extreme' as a common pitfall. What is the correct guidance for setting content-filter thresholds?",
+      "choices": [
+        "Set thresholds to the product's actual risk profile and revisit them with monitoring data, since too permissive lets harm through and too strict blocks legitimate use",
+        "Always set thresholds to the strictest setting, because blocking legitimate use is preferable to any chance of harmful content",
+        "Leave thresholds at their defaults permanently, because per-deployment customization invalidates the built-in filters",
+        "Set a single global threshold across all deployments so a children's product and a security-research tool behave identically"
+      ],
+      "correct_answers": [
+        "Set thresholds to the product's actual risk profile and revisit them with monitoring data, since too permissive lets harm through and too strict blocks legitimate use"
+      ]
+    },
+    {
+      "id": "ai-c01-m04-c10",
+      "module_id": "ai-c01-m04",
+      "kind": "mcq",
+      "prompt": "According to the module, how does Azure OpenAI content filtering apply, and what is true about its default behavior and configurability?",
+      "choices": [
+        "It applies to both the prompt and the generated completion, runs by default, and its thresholds can be configured per deployment",
+        "It applies only to the generated completion, must be enabled manually per request, and uses a single fixed threshold",
+        "It applies only to the prompt, runs by default, and cannot be configured because severity levels are globally fixed",
+        "It applies to both prompt and completion but only after a blocklist match, and thresholds are set per Log Analytics workspace"
+      ],
+      "correct_answers": [
+        "It applies to both the prompt and the generated completion, runs by default, and its thresholds can be configured per deployment"
+      ]
     }
   ],
   "llm": [

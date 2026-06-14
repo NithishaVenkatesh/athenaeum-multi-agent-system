@@ -78,6 +78,84 @@
       "correct_answers": [
         "It bypasses the transaction log so the log no longer matches the files on disk and corrupts the table; instead they should recover through the Delta API using time travel / RESTORE TABLE ... TO VERSION AS OF"
       ]
+    },
+    {
+      "id": "de-c01-m03-c06",
+      "module_id": "de-c01-m03",
+      "kind": "mcq",
+      "prompt": "The module describes the problem the lakehouse was created to solve. Before lakehouses, why did teams run a separate data lake and data warehouse, and what was the cost?",
+      "choices": [
+        "The lake gave cheap, scalable, schemaless storage and the warehouse gave transactional governed fast SQL, so data was copied between them, doubling storage and drifting out of sync",
+        "The lake handled streaming while the warehouse handled batch, so the same data was never stored in both places and stayed perfectly in sync",
+        "The warehouse stored Parquet and the lake stored the transaction log, so neither system could function without the other",
+        "Object storage could not hold structured data at all, so the warehouse was mandatory for anything other than raw image and ML files"
+      ],
+      "correct_answers": [
+        "The lake gave cheap, scalable, schemaless storage and the warehouse gave transactional governed fast SQL, so data was copied between them, doubling storage and drifting out of sync"
+      ]
+    },
+    {
+      "id": "de-c01-m03-c07",
+      "module_id": "de-c01-m03",
+      "kind": "mcq",
+      "prompt": "According to the module, how does Delta Lake's transaction log enable schema enforcement, and what option does it leave open?",
+      "choices": [
+        "Each commit records the schema, so a write that doesn't match the table's schema is rejected rather than silently corrupting data, while you can opt into controlled schema evolution when you genuinely want to add columns",
+        "The log stores only column names, so writes with mismatched data types are silently coerced to the existing types without any rejection",
+        "Schema is enforced by VACUUM, which deletes any files whose columns differ from the latest commit during its retention sweep",
+        "Delta always auto-merges incoming schemas by default, so production tables widen automatically and enforcement must be turned on per write"
+      ],
+      "correct_answers": [
+        "Each commit records the schema, so a write that doesn't match the table's schema is rejected rather than silently corrupting data, while you can opt into controlled schema evolution when you genuinely want to add columns"
+      ]
+    },
+    {
+      "id": "de-c01-m03-c08",
+      "module_id": "de-c01-m03",
+      "kind": "msq",
+      "prompt": "Based on the module, which statements about Delta's MERGE (upsert) are correct?",
+      "choices": [
+        "MERGE is a single atomic statement that inserts new rows and updates existing ones based on a match condition",
+        "MERGE exists because plain Parquet has no update-in-place, and it is the backbone of incremental loading used in later pipelines",
+        "Internally MERGE reads the matching files, computes the changed rows, and commits the result as one transaction, so concurrent readers see either the full before or the full after",
+        "MERGE applies updates by editing the matched Parquet files in place on disk, so readers may briefly observe a row that is half-updated"
+      ],
+      "correct_answers": [
+        "MERGE is a single atomic statement that inserts new rows and updates existing ones based on a match condition",
+        "MERGE exists because plain Parquet has no update-in-place, and it is the backbone of incremental loading used in later pipelines",
+        "Internally MERGE reads the matching files, computes the changed rows, and commits the result as one transaction, so concurrent readers see either the full before or the full after"
+      ]
+    },
+    {
+      "id": "de-c01-m03-c09",
+      "module_id": "de-c01-m03",
+      "kind": "mcq",
+      "prompt": "The module lists a pitfall about high-write tables, such as streaming or frequent writes. What is the problem and the recommended response?",
+      "choices": [
+        "Many small commits create many small files and a long log, slowly degrading reads; schedule compaction/optimize and log checkpointing for high-write tables",
+        "Frequent writes overflow the retention window, so you must lengthen VACUUM retention to avoid losing recent commits",
+        "Each write opens a new transaction log directory, so you must periodically delete old _delta_log folders to keep the table fast",
+        "Streaming writes bypass the log entirely, so you must replay them through MERGE at the end of each day to make them durable"
+      ],
+      "correct_answers": [
+        "Many small commits create many small files and a long log, slowly degrading reads; schedule compaction/optimize and log checkpointing for high-write tables"
+      ]
+    },
+    {
+      "id": "de-c01-m03-c10",
+      "module_id": "de-c01-m03",
+      "kind": "msq",
+      "prompt": "The module contrasts how readers discover data in a Delta table versus plain Parquet, and warns against one read-time confusion. Which statements are accurate per the module?",
+      "choices": [
+        "Readers never list the data folder and guess; they read the log to learn the current valid set of files",
+        "Reading VERSION AS OF does not protect against an account deletion or region outage, because time travel is in-table history, not disaster recovery",
+        "Readers determine the current data by listing every Parquet file present in the directory at read time and using whichever ones they find",
+        "Time travel replicates the table to another region, so reading a past version doubles as disaster recovery"
+      ],
+      "correct_answers": [
+        "Readers never list the data folder and guess; they read the log to learn the current valid set of files",
+        "Reading VERSION AS OF does not protect against an account deletion or region outage, because time travel is in-table history, not disaster recovery"
+      ]
     }
   ],
   "llm": [

@@ -79,6 +79,85 @@
       "correct_answers": [
         "It tells the engine to use the reading's own timestamp as event time rather than the arrival time"
       ]
+    },
+    {
+      "id": "de-c03-m01-c06",
+      "module_id": "de-c03-m01",
+      "prompt": "The module says partitions are \"the unit of parallelism.\" Which statement does it make about how partition count relates to read parallelism for a consumer group?",
+      "kind": "mcq",
+      "choices": [
+        "You cannot have more concurrent readers per consumer group than there are partitions, so partition count caps read parallelism",
+        "More consumer groups can always be added to exceed the partition count and read in parallel beyond it",
+        "Read parallelism is governed entirely by streaming units, so partition count places no ceiling on concurrent readers",
+        "Each partition can be read by an unlimited number of concurrent readers within one consumer group"
+      ],
+      "correct_answers": [
+        "You cannot have more concurrent readers per consumer group than there are partitions, so partition count caps read parallelism"
+      ]
+    },
+    {
+      "id": "de-c03-m01-c07",
+      "module_id": "de-c03-m01",
+      "prompt": "According to the module, what conditions must line up for a Stream Analytics job to be \"embarrassingly parallel\" and scale by adding streaming units?",
+      "kind": "msq",
+      "choices": [
+        "The input partition key, the partitioning of the query, and the output must align so each partition's data can be processed independently",
+        "A global aggregation that has to see all partitions at once is avoided, since it forces a shuffle and stops scaling cleanly",
+        "The query must filter and project per partition rather than requiring the engine to see all partitions together",
+        "The job must use TIMESTAMP BY so that arrival time and event time are forced to be identical across partitions"
+      ],
+      "correct_answers": [
+        "The input partition key, the partitioning of the query, and the output must align so each partition's data can be processed independently",
+        "A global aggregation that has to see all partitions at once is avoided, since it forces a shuffle and stops scaling cleanly",
+        "The query must filter and project per partition rather than requiring the engine to see all partitions together"
+      ]
+    },
+    {
+      "id": "de-c03-m01-c08",
+      "module_id": "de-c03-m01",
+      "prompt": "The module describes Stream Analytics as running SQL over \"a moving table.\" How does it say a plain `SELECT ... WHERE` behaves compared to batch SQL?",
+      "kind": "mcq",
+      "choices": [
+        "The query runs continuously and emits a result row for every matching event as it flows through, rather than once over a finished table",
+        "The query runs once when the job starts and returns a single fixed result set over all retained events",
+        "The query waits until the input partition is fully drained, then emits one aggregated row per partition",
+        "The query buffers all matching events until the retention period expires, then emits them as a batch"
+      ],
+      "correct_answers": [
+        "The query runs continuously and emits a result row for every matching event as it flows through, rather than once over a finished table"
+      ]
+    },
+    {
+      "id": "de-c03-m01-c09",
+      "module_id": "de-c03-m01",
+      "prompt": "The module stresses that Event Hubs is \"replayable.\" What property does it specifically attribute to this replayability?",
+      "kind": "mcq",
+      "choices": [
+        "If the processor crashes, it resumes from the last committed offset rather than losing events that arrived while it was down",
+        "Replay lets the hub re-derive events it never received, filling gaps left during a processor outage",
+        "Replay means the hub automatically removes duplicate events so downstream sinks see each event once",
+        "Replay rewrites each event's offset on restart so consumers always begin reading from offset zero"
+      ],
+      "correct_answers": [
+        "If the processor crashes, it resumes from the last committed offset rather than losing events that arrived while it was down"
+      ]
+    },
+    {
+      "id": "de-c03-m01-c10",
+      "module_id": "de-c03-m01",
+      "prompt": "Based on the module, which statements correctly distinguish partition count from throughput provisioning for an event hub?",
+      "kind": "msq",
+      "choices": [
+        "Throughput is provisioned separately from partition count, historically as throughput units and in newer tiers as processing units or a capacity model",
+        "Partition count is fixed at creation for a given hub, and changing it later is disruptive",
+        "The specific ingress and egress limits per unit should be verified in current pricing and quota docs rather than memorized, because they change between tiers",
+        "Raising the partition count is the documented mechanism for provisioning additional throughput on a hub"
+      ],
+      "correct_answers": [
+        "Throughput is provisioned separately from partition count, historically as throughput units and in newer tiers as processing units or a capacity model",
+        "Partition count is fixed at creation for a given hub, and changing it later is disruptive",
+        "The specific ingress and egress limits per unit should be verified in current pricing and quota docs rather than memorized, because they change between tiers"
+      ]
     }
   ],
   "llm": [

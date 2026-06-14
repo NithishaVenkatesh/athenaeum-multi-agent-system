@@ -81,6 +81,85 @@
         "A one-time Secure Score should be treated as meaningless and the trend treated as the truth, since posture decays as new resources deploy",
         "Once a server is Arc-enabled you can apply Azure Policy to it, onboard it to Defender for Cloud, and assess its posture like an Azure VM"
       ]
+    },
+    {
+      "id": "as-c03-m03-c06",
+      "module_id": "as-c03-m03",
+      "prompt": "The module describes raising posture as applying a particular principle 'before the breach.' What does it say posture management is doing when it surfaces misconfigurations as prioritized recommendations?",
+      "kind": "mcq",
+      "choices": [
+        "Applying the assume-breach principle before the breach by minimizing the footholds an attacker could use",
+        "Replacing detection from the previous module, since posture findings make runtime monitoring unnecessary",
+        "Generating incident alerts that confirm an attacker has already gained a foothold",
+        "Proving the estate is breach-proof once every recommendation has been remediated"
+      ],
+      "correct_answers": [
+        "Applying the assume-breach principle before the breach by minimizing the footholds an attacker could use"
+      ]
+    },
+    {
+      "id": "as-c03-m03-c07",
+      "module_id": "as-c03-m03",
+      "prompt": "In the walkthrough, after the depot's on-premises server is Arc-enabled, as what resource does the module say it shows up?",
+      "kind": "mcq",
+      "choices": [
+        "A Microsoft.HybridCompute/machines resource",
+        "A Microsoft.Compute/virtualMachines resource",
+        "A microsoft.security/assessments resource",
+        "A Microsoft.Kubernetes/connectedClusters resource"
+      ],
+      "correct_answers": [
+        "A Microsoft.HybridCompute/machines resource"
+      ]
+    },
+    {
+      "id": "as-c03-m03-c08",
+      "module_id": "as-c03-m03",
+      "prompt": "According to the module's pitfall about Defender for Cloud's free tier, which statement correctly distinguishes the foundational tier from the paid plans?",
+      "kind": "mcq",
+      "choices": [
+        "Foundational CSPM assesses configuration, but workload threat protection for servers, containers, and databases requires the paid plans",
+        "The free tier provides full workload threat protection, while the paid plans only add cosmetic dashboard features",
+        "The free tier covers Azure resources only, while the paid plans are the sole way to assess configuration on any non-Azure resource",
+        "Both tiers are functionally identical; the paid plans only raise the rate limit on recommendations"
+      ],
+      "correct_answers": [
+        "Foundational CSPM assesses configuration, but workload threat protection for servers, containers, and databases requires the paid plans"
+      ]
+    },
+    {
+      "id": "as-c03-m03-c09",
+      "module_id": "as-c03-m03",
+      "prompt": "Which statements about extending posture management across hybrid and multicloud, as described in the module, are correct? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Azure Arc projects non-Azure resources into Azure's control plane as first-class resources",
+        "Defender for Cloud connects directly to AWS and GCP accounts to assess their native resources against equivalent benchmarks",
+        "The architectural goal is one posture view and one policy plane across everything, rather than a separate security story per environment",
+        "Leaving non-Azure resources unconnected is acceptable because Defender for Cloud auto-discovers any internet-reachable VM"
+      ],
+      "correct_answers": [
+        "Azure Arc projects non-Azure resources into Azure's control plane as first-class resources",
+        "Defender for Cloud connects directly to AWS and GCP accounts to assess their native resources against equivalent benchmarks",
+        "The architectural goal is one posture view and one policy plane across everything, rather than a separate security story per environment"
+      ]
+    },
+    {
+      "id": "as-c03-m03-c10",
+      "module_id": "as-c03-m03",
+      "prompt": "In the walkthrough's Azure Resource Graph query, which choices reflect what the module says the query does and why it can span the whole estate? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "It queries the securityresources table for type microsoft.security/assessments and filters to status 'Unhealthy'",
+        "It returns findings for cloud and depot machines together because Arc made the on-premises servers Azure resources",
+        "It summarizes findings by severity so you can sort by severity and pick the top Secure Score contributor to remediate",
+        "It works only against native Azure VMs and must be re-run separately in each cloud's own console for non-Azure machines"
+      ],
+      "correct_answers": [
+        "It queries the securityresources table for type microsoft.security/assessments and filters to status 'Unhealthy'",
+        "It returns findings for cloud and depot machines together because Arc made the on-premises servers Azure resources",
+        "It summarizes findings by severity so you can sort by severity and pick the top Secure Score contributor to remediate"
+      ]
     }
   ],
   "llm": [

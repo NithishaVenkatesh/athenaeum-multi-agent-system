@@ -80,6 +80,84 @@
         "You can add question-and-answer pairs manually for things no document covers",
         "Each candidate answer comes with a confidence score, and you set a threshold below which the assistant falls back rather than returning a weak match"
       ]
+    },
+    {
+      "id": "ai-c02-m02-c06",
+      "module_id": "ai-c02-m02",
+      "prompt": "According to the module, in what ways can an entity such as OrderNumber be recognized in a CLU project? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Learned from labeled example spans inside utterances",
+        "Defined by a fixed list of values and synonyms",
+        "Matched by a regular expression",
+        "Generated automatically from the confusion matrix after evaluation"
+      ],
+      "correct_answers": [
+        "Learned from labeled example spans inside utterances",
+        "Defined by a fixed list of values and synonyms",
+        "Matched by a regular expression"
+      ]
+    },
+    {
+      "id": "ai-c02-m02-c07",
+      "module_id": "ai-c02-m02",
+      "prompt": "The module says ten near-identical phrasings of one intent teach the model less than ten genuinely different ones. What underlying principle does this illustrate?",
+      "kind": "mcq",
+      "choices": [
+        "The model learns from labeled utterances, so coverage and variety of phrasings — including slang, typos, and word orders — are what drive generalization",
+        "More training epochs are required when utterances are too similar to each other",
+        "Confidence thresholds must be raised when utterances lack variety",
+        "Entities cannot be extracted unless utterances are phrased identically"
+      ],
+      "correct_answers": [
+        "The model learns from labeled utterances, so coverage and variety of phrasings — including slang, typos, and word orders — are what drive generalization"
+      ]
+    },
+    {
+      "id": "ai-c02-m02-c08",
+      "module_id": "ai-c02-m02",
+      "prompt": "How does the module describe the relationship between CLU and custom question answering in many real assistants?",
+      "kind": "mcq",
+      "choices": [
+        "CLU acts as the router that classifies intent, and question answering is one of the things it can route to",
+        "Question answering runs first and only falls back to CLU when no stored answer matches",
+        "CLU and question answering must be deployed as a single combined model to share a confidence threshold",
+        "Question answering classifies the intent while CLU retrieves the stored answer"
+      ],
+      "correct_answers": [
+        "CLU acts as the router that classifies intent, and question answering is one of the things it can route to"
+      ]
+    },
+    {
+      "id": "ai-c02-m02-c09",
+      "module_id": "ai-c02-m02",
+      "prompt": "In the Larkspur walkthrough, the runtime prediction call is said to target a project AND a deployment name. Why does the module emphasize that the call passes the deployment name?",
+      "kind": "mcq",
+      "choices": [
+        "Because deployments are decoupled from training, you could retrain a v2 model without disturbing live traffic on the named deployment",
+        "Because the deployment name determines which confidence threshold the fallback path uses",
+        "Because passing the deployment name is what splits utterances into training and testing sets",
+        "Because the deployment name selects which prebuilt entity types are available at runtime"
+      ],
+      "correct_answers": [
+        "Because deployments are decoupled from training, you could retrain a v2 model without disturbing live traffic on the named deployment"
+      ]
+    },
+    {
+      "id": "ai-c02-m02-c10",
+      "module_id": "ai-c02-m02",
+      "prompt": "Which of the following does the module describe as features you can add when building a custom question answering knowledge base? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Attach alternate phrasings to a pair so differently worded questions hit the same answer",
+        "Add follow-up prompts to a pair to build multi-turn flows",
+        "Define a confusion matrix to detect which answers the service mixes up",
+        "Label entity spans inside each answer so the service can extract typed slots"
+      ],
+      "correct_answers": [
+        "Attach alternate phrasings to a pair so differently worded questions hit the same answer",
+        "Add follow-up prompts to a pair to build multi-turn flows"
+      ]
     }
   ],
   "llm": [

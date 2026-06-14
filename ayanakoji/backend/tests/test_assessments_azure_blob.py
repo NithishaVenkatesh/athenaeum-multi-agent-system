@@ -83,7 +83,7 @@ def test_pushed_blob_roundtrips_through_pull(tmp_path: Path) -> None:
     push_banks(client=client, container="c", root=tmp_path)
     bank = pull_bank("cb-c01", "cb-c01-m01", client=client, container="c")
     assert bank["module_id"] == "cb-c01-m01"
-    assert len(bank["choices"]) == 5
+    assert len(bank["choices"]) == 10
     assert len(bank["llm"]) == 3
 
 

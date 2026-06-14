@@ -81,6 +81,85 @@
         "Passing overwrite=True means it will silently replace existing data, so the choice should be made intentionally.",
         "A single get_blob_properties() call returns both service-defined fields (content type, size, tier) and your custom metadata."
       ]
+    },
+    {
+      "id": "cb-c02-m03-c06",
+      "module_id": "cb-c02-m03",
+      "kind": "mcq",
+      "prompt": "A blob is named 2026/06/dlv-90187.jpg and a storage browser displays it inside a 2026 > 06 folder tree. According to the module, what is actually happening in the storage account?",
+      "choices": [
+        "The slashes are just part of the blob name; the folder tree is virtual, because containers are flat buckets with no real directories.",
+        "The container created real nested directories named 2026 and 06 to physically organize the blobs on disk.",
+        "The account automatically converts slash-containing names into sub-containers, one per path segment.",
+        "The blob was split into one block blob per path segment, and the browser reassembles them into a tree."
+      ],
+      "correct_answers": [
+        "The slashes are just part of the blob name; the folder tree is virtual, because containers are flat buckets with no real directories."
+      ]
+    },
+    {
+      "id": "cb-c02-m03-c07",
+      "module_id": "cb-c02-m03",
+      "kind": "mcq",
+      "prompt": "Per the module, which blob type is the right choice for Meridian's proof-of-delivery photos, and why?",
+      "choices": [
+        "Block blob, because it is optimized for upload-and-serve workloads like images and documents.",
+        "Append blob, because it is optimized for upload-and-serve workloads like images and documents.",
+        "Page blob, because photos are read frequently and page blobs back disk scenarios.",
+        "Append blob, because photos are written once and append blobs prevent any later overwrite."
+      ],
+      "correct_answers": [
+        "Block blob, because it is optimized for upload-and-serve workloads like images and documents."
+      ]
+    },
+    {
+      "id": "cb-c02-m03-c08",
+      "module_id": "cb-c02-m03",
+      "kind": "mcq",
+      "prompt": "Following the module's guidance on credentials, how should the SDK authenticate to the storage account, and what role assignment does it mention?",
+      "choices": [
+        "Use DefaultAzureCredential with a managed identity and the Storage Blob Data Contributor role, not a connection string with a shared key.",
+        "Use a connection string containing the account's shared key, stored in config rather than in source code.",
+        "Use DefaultAzureCredential but fall back to embedding the account key when running locally.",
+        "Use an account-level SAS token granting the Storage Account Owner role in place of any credential."
+      ],
+      "correct_answers": [
+        "Use DefaultAzureCredential with a managed identity and the Storage Blob Data Contributor role, not a connection string with a shared key."
+      ]
+    },
+    {
+      "id": "cb-c02-m03-c09",
+      "module_id": "cb-c02-m03",
+      "kind": "msq",
+      "prompt": "Based on the module's description of the hot, cool, and cold tiers (setting archive aside), which statements are accurate? (Select all that apply.)",
+      "choices": [
+        "The hot tier has the lowest access cost and the highest storage cost, making it right for frequently read data.",
+        "Cool and cold lower the storage cost in exchange for higher per-access cost and minimum-retention expectations.",
+        "Cool and cold are suited to data accessed infrequently but still occasionally.",
+        "The hot tier has both the lowest storage cost and the lowest access cost, so it is always the cheapest overall."
+      ],
+      "correct_answers": [
+        "The hot tier has the lowest access cost and the highest storage cost, making it right for frequently read data.",
+        "Cool and cold lower the storage cost in exchange for higher per-access cost and minimum-retention expectations.",
+        "Cool and cold are suited to data accessed infrequently but still occasionally."
+      ]
+    },
+    {
+      "id": "cb-c02-m03-c10",
+      "module_id": "cb-c02-m03",
+      "kind": "msq",
+      "prompt": "The module warns about overwriting blobs accidentally or refusing to. Which statements reflect its guidance on the overwrite behavior of upload_blob? (Select all that apply.)",
+      "choices": [
+        "Without overwrite=True, upload_blob fails if the blob already exists.",
+        "With overwrite=True, it silently replaces existing data, so the choice should be made intentionally.",
+        "The module suggests considering conditional requests (ETag) to avoid lost updates.",
+        "Setting overwrite=True automatically creates a versioned backup of the previous blob before replacing it."
+      ],
+      "correct_answers": [
+        "Without overwrite=True, upload_blob fails if the blob already exists.",
+        "With overwrite=True, it silently replaces existing data, so the choice should be made intentionally.",
+        "The module suggests considering conditional requests (ETag) to avoid lost updates."
+      ]
     }
   ],
   "llm": [

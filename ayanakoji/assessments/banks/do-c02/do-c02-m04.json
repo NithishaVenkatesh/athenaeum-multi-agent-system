@@ -79,6 +79,83 @@
       "correct_answers": [
         "A backward-compatibility problem in the mixed-version window (e.g. a non-additive schema change the old version cannot read); make schema changes additive and deploy them ahead of the code that requires them"
       ]
+    },
+    {
+      "id": "do-c02-m04-c06",
+      "module_id": "do-c02-m04",
+      "prompt": "The module describes how a rolling deployment updates instances behind a load balancer. Which statement correctly captures its mechanics and its primary cost?",
+      "kind": "mcq",
+      "choices": [
+        "Instances are updated in batches — taken out of rotation, updated, returned — so capacity stays up with no full outage, at the cost of a window where both the old and new versions run at once",
+        "All instances are updated simultaneously to guarantee every request hits the new version, at the cost of a brief full outage",
+        "A single idle clone of production is warmed and then traffic flips to it all at once, at the cost of running two full environments",
+        "Traffic is routed to only 5% of instances first and widened gradually, at the cost of requiring detailed telemetry to judge health"
+      ],
+      "correct_answers": [
+        "Instances are updated in batches — taken out of rotation, updated, returned — so capacity stays up with no full outage, at the cost of a window where both the old and new versions run at once"
+      ]
+    },
+    {
+      "id": "do-c02-m04-c07",
+      "module_id": "do-c02-m04",
+      "prompt": "Per the module's account of how a canary release progresses, what does the team do at each stage to decide whether to continue?",
+      "kind": "mcq",
+      "choices": [
+        "Release to a small percentage (e.g. 5%) first and watch error rates and latency; if it stays healthy, widen to 25% then 100%, and if it degrades, halt and roll back",
+        "Deploy to the idle environment, smoke-test it, then flip 100% of traffic at once and watch for rollback signals",
+        "Promote audience by audience — ring 0 internal staff, then ring 1 early adopters, then ring 2 everyone — without measuring traffic percentages",
+        "Swap a warmed slot into production and rely on the swap-back as the sole health gate"
+      ],
+      "correct_answers": [
+        "Release to a small percentage (e.g. 5%) first and watch error rates and latency; if it stays healthy, widen to 25% then 100%, and if it degrades, halt and roll back"
+      ]
+    },
+    {
+      "id": "do-c02-m04-c08",
+      "module_id": "do-c02-m04",
+      "prompt": "The module's walkthrough wires App Configuration using DefaultAzureCredential. According to the text, what does this specifically accomplish?",
+      "kind": "mcq",
+      "choices": [
+        "No connection secret lives in code: it resolves a managed identity when running in Azure and the developer's credentials locally",
+        "It warms the deployment slot's caches before the swap so users never hit a cold start",
+        "It centralizes feature flags outside the code so they can target a percentage of users",
+        "It rewrites database schema changes to be additive so old and new versions never conflict"
+      ],
+      "correct_answers": [
+        "No connection secret lives in code: it resolves a managed identity when running in Azure and the developer's credentials locally"
+      ]
+    },
+    {
+      "id": "do-c02-m04-c09",
+      "module_id": "do-c02-m04",
+      "prompt": "Select the pitfalls the module explicitly warns about when running progressive deployments.",
+      "kind": "msq",
+      "choices": [
+        "Swapping a cold slot before the new instances are warmed up, which reintroduces the cold-start latency the slot was meant to avoid",
+        "Running a canary you cannot measure, which is just a slow full rollout because you never see the error rate and latency on the slice",
+        "Pushing all-at-once to 100% of production with no rollback plan, so every user hits a bad change and recovery requires a fresh deploy",
+        "Targeting a feature flag to a named group of users, which the module warns silently corrupts the swap routing"
+      ],
+      "correct_answers": [
+        "Swapping a cold slot before the new instances are warmed up, which reintroduces the cold-start latency the slot was meant to avoid",
+        "Running a canary you cannot measure, which is just a slow full rollout because you never see the error rate and latency on the slice",
+        "Pushing all-at-once to 100% of production with no rollback plan, so every user hits a bad change and recovery requires a fresh deploy"
+      ]
+    },
+    {
+      "id": "do-c02-m04-c10",
+      "module_id": "do-c02-m04",
+      "prompt": "The module says ring deployment 'suits changes where the risk is about real-world usage diversity rather than raw load.' Based on this framing, for which kind of change does the module say rings are the right fit?",
+      "kind": "mcq",
+      "choices": [
+        "A change whose risk comes from the diversity of how real audiences actually use the product, promoted audience by audience to gain confidence",
+        "A change whose risk is purely a sudden spike in request volume, validated by load-testing a single percentage slice",
+        "A change that must cut over instantly and reversibly by flipping all traffic between two identical environments",
+        "A change to the database schema that must be made additive and deployed ahead of the code that requires it"
+      ],
+      "correct_answers": [
+        "A change whose risk comes from the diversity of how real audiences actually use the product, promoted audience by audience to gain confidence"
+      ]
     }
   ],
   "llm": [

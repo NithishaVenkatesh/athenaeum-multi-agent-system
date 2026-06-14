@@ -2,7 +2,7 @@
 name: assessment-authoring
 description: >
   Author module assessment question banks for the Athenaeum learner workspace — a
-  5-question MCQ/MSQ "choices" test and a 3-question open-ended "LLM" test per module,
+  10-question MCQ/MSQ "choices" test and a 3-question open-ended "LLM" test per module,
   as one JSON file grounded purely on that module's own teaching content. Use this skill
   whenever a task says "author the assessment", "write questions for a module", "generate
   the question bank", "build the module test", or hands you a module id to make questions
@@ -48,21 +48,21 @@ Write it to `ayanakoji/assessments/banks/<course_id>/<module_id>.json`.
   "course_id": "cb-c01",
   "module_id": "cb-c01-m01",
   "module_title": "<exact module title>",
-  "choices": [ /* exactly 5 */ ],
+  "choices": [ /* exactly 10 */ ],
   "llm":     [ /* exactly 3 */ ]
 }
 ```
 
 ### ID convention (deterministic — do not improvise)
-- Choice questions: `<module_id>-c01` … `<module_id>-c05`
+- Choice questions: `<module_id>-c01` … `<module_id>-c10`
 - LLM questions:    `<module_id>-l01` … `<module_id>-l03`
 
-## The choices test — 5 questions
+## The choices test — 10 questions
 
 Each question: `{ id, module_id, prompt, kind, choices[4], correct_answers[] }`.
 
 - **`kind`**: `"mcq"` = exactly **one** correct option; `"msq"` = **two or more**
-  correct. Use a deliberate **mix**: aim for ~3–4 MCQ and ~1–2 MSQ per bank. MSQ is
+  correct. Use a deliberate **mix**: aim for ~6–7 MCQ and ~3–4 MSQ per bank. MSQ is
   for "select all that apply" concepts the module genuinely presents as a set.
 - **4 options** each, all distinct, all plausible to someone who skimmed the module.
 - **Distractors must be plausible and wrong for a real reason** — common
@@ -100,7 +100,7 @@ yourself:
 3. **Quality** — distractors are plausible, keys are unambiguously correct, MSQ/MCQ
    `kind` matches the number of correct answers, difficulty is appropriate (not
    trivial), prompts are clear and unambiguous, and the JSON conforms to the schema
-   (5 choices, 3 llm, 4 options each, ids correct).
+   (10 choices, 3 llm, 4 options each, ids correct).
 
 If anything fails, fix it before writing the file.
 

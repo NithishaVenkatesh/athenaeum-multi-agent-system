@@ -42,7 +42,7 @@ const BANK = {
     course_id: { type: 'string' },
     module_id: { type: 'string' },
     module_title: { type: 'string' },
-    choices: { type: 'array', minItems: 5, maxItems: 5, items: CHOICE },
+    choices: { type: 'array', minItems: 10, maxItems: 10, items: CHOICE },
     llm: { type: 'array', minItems: 3, maxItems: 3, items: LLM },
   },
 }
@@ -74,15 +74,15 @@ const REVIEW_SCHEMA = {
 
 const STANDARD = `
 AUTHORING STANDARD (follow exactly):
-- Choices test: EXACTLY 5 questions, each with EXACTLY 4 distinct options.
-  kind "mcq" => EXACTLY 1 correct; kind "msq" => 2+ correct. Mix ~3-4 mcq and 1-2 msq.
+- Choices test: EXACTLY 10 questions, each with EXACTLY 4 distinct options.
+  kind "mcq" => EXACTLY 1 correct; kind "msq" => 2+ correct. Mix ~6-7 mcq and 3-4 msq.
   Distractors plausible and wrong for a real reason; no filler/joke options. Difficulty
   spread (>=1 recall, most application-level, ideally one contrast). Not trivial.
   Every correct_answers entry must appear VERBATIM in that question's choices.
 - LLM test: EXACTLY 3 open-ended questions demanding a real explanation, each with a
   complete correct reference_answer (~3-6 sentences) naming specific services/steps/tradeoffs.
   Cover three DIFFERENT facets.
-- IDs: choices => <module_id>-c01..-c05 ; llm => <module_id>-l01..-l03. Every nested
+- IDs: choices => <module_id>-c01..-c10 ; llm => <module_id>-l01..-l03. Every nested
   module_id equals the module id.
 GROUNDING: use ONLY concepts the module markdown EXPLICITLY discusses; no outside facts.`
 
@@ -93,7 +93,7 @@ Use the Read tool to read TWO files:
 1. The module's teaching content: ${item.content_path}
 2. The candidate bank to review: ${item.candidate_path}
 
-Judge it strictly on relevance_ok, grounding_ok, quality_ok (mcq=1 correct, msq=2+, 5 choices
+Judge it strictly on relevance_ok, grounding_ok, quality_ok (mcq=1 correct, msq=2+, 10 choices
 of 4 options, 3 llm with reference answers, ids <module_id>-c0N/-l0N, grounded only in the
 module). ${STANDARD}
 
@@ -112,7 +112,7 @@ Ground every question and answer strictly in that text.
 ${STANDARD}
 
 Return the bank object: course_id="${item.course_id}", module_id="${item.module_id}",
-module_title="${item.title}", 5 choices, 3 llm.`
+module_title="${item.title}", 10 choices, 3 llm.`
 }
 
 function reviewPrompt(item, bank) {

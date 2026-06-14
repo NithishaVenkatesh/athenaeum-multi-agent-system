@@ -81,6 +81,85 @@
         "Indexing is asynchronous and can take on the order of the video's own duration or more",
         "Code should poll the processing state and only retrieve insights once the state reports completion"
       ]
+    },
+    {
+      "id": "ai-c03-m03-c06",
+      "module_id": "ai-c03-m03",
+      "prompt": "Beyond transcripts, faces, and topics, which of the following does the module explicitly state Azure AI Video Indexer also does to a recorded video? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Splits the video into shots and scenes",
+        "Recognizes labels such as objects and scenes",
+        "Can flag content moderation concerns",
+        "Streams live occupancy events from edge-deployed cameras"
+      ],
+      "correct_answers": [
+        "Splits the video into shots and scenes",
+        "Recognizes labels such as objects and scenes",
+        "Can flag content moderation concerns"
+      ]
+    },
+    {
+      "id": "ai-c03-m03-c07",
+      "module_id": "ai-c03-m03",
+      "prompt": "The module says time-coding is 'what makes the output useful rather than merely interesting.' Which downstream uses does it explicitly cite as enabled by anchoring each insight to a moment? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Building deep links that jump a viewer straight to the relevant scene",
+        "Generating chapter markers automatically",
+        "Feeding the transcript into a search index so a text query returns the exact clip",
+        "Counting how many people dwell in a store zone"
+      ],
+      "correct_answers": [
+        "Building deep links that jump a viewer straight to the relevant scene",
+        "Generating chapter markers automatically",
+        "Feeding the transcript into a search index so a text query returns the exact clip"
+      ]
+    },
+    {
+      "id": "ai-c03-m03-c08",
+      "module_id": "ai-c03-m03",
+      "prompt": "According to the module, how does the output of Azure AI Vision spatial analysis differ in form from that of Video Indexer?",
+      "kind": "mcq",
+      "choices": [
+        "Spatial analysis emits events rather than a searchable transcript",
+        "Spatial analysis returns a time-coded JSON document of topics and labels",
+        "Spatial analysis produces a transcript identifying who each person is",
+        "Spatial analysis returns deep links into recorded media"
+      ],
+      "correct_answers": [
+        "Spatial analysis emits events rather than a searchable transcript"
+      ]
+    },
+    {
+      "id": "ai-c03-m03-c09",
+      "module_id": "ai-c03-m03",
+      "prompt": "In the walkthrough code, how is the value used to poll for processing state and read insights obtained?",
+      "kind": "mcq",
+      "choices": [
+        "It is the video ID returned in the response body of the initial upload POST call",
+        "It is the short-lived access token requested separately for the account",
+        "It is read from the 'state' field once indexing reports 'Processed'",
+        "It is the callback URL the service notifies when indexing completes"
+      ],
+      "correct_answers": [
+        "It is the video ID returned in the response body of the initial upload POST call"
+      ]
+    },
+    {
+      "id": "ai-c03-m03-c10",
+      "module_id": "ai-c03-m03",
+      "prompt": "The module warns against 'confusing the two services.' What does it say results from reaching for the wrong one — for example, using Video Indexer to count store visitors?",
+      "kind": "mcq",
+      "choices": [
+        "A working-but-pointless integration that is slow, expensive, and misses the point",
+        "An immediate authentication failure because spatial analysis tokens are required",
+        "A privacy violation that blocks the upload until Limited Access is granted",
+        "A synchronous response that returns insights before the upload completes"
+      ],
+      "correct_answers": [
+        "A working-but-pointless integration that is slow, expensive, and misses the point"
+      ]
     }
   ],
   "llm": [

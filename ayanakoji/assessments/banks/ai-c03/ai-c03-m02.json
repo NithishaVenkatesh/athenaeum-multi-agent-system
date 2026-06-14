@@ -81,6 +81,85 @@
         "Predictions come back sorted by probability, highest first, so the top entry is the model's best guess",
         "Where you set the threshold is the precision/recall trade-off made operational"
       ]
+    },
+    {
+      "id": "ai-c03-m02-c06",
+      "module_id": "ai-c03-m02",
+      "kind": "mcq",
+      "prompt": "According to the module's opening argument, what circumstance signals that you should stop consuming a prebuilt vision model and train your own custom model instead?",
+      "choices": [
+        "When the prebuilt model returns probabilities that are too low to act on automatically",
+        "When the categories that matter are specific to your business, such as your own SKUs or defect categories",
+        "When you need to count and locate multiple instances within a single image",
+        "When your training dataset contains fewer than roughly 50 images per tag"
+      ],
+      "correct_answers": [
+        "When the categories that matter are specific to your business, such as your own SKUs or defect categories"
+      ]
+    },
+    {
+      "id": "ai-c03-m02-c07",
+      "module_id": "ai-c03-m02",
+      "kind": "mcq",
+      "prompt": "The module distinguishes the two model types by the question each one answers. Which pairing of model type to the question it answers is correct?",
+      "choices": [
+        "Image classification answers 'what is in this image, where, and how many?'",
+        "Object detection answers 'what is this a picture of?' for the whole image",
+        "Image classification answers 'what is this a picture of?' by assigning labels to the whole image",
+        "Object detection answers 'when the model predicts a tag, how often is it right?'"
+      ],
+      "correct_answers": [
+        "Image classification answers 'what is this a picture of?' by assigning labels to the whole image"
+      ]
+    },
+    {
+      "id": "ai-c03-m02-c08",
+      "module_id": "ai-c03-m02",
+      "kind": "mcq",
+      "prompt": "The module says the right balance between precision and recall is a business decision. Which mapping of scenario to the metric it should favor matches the module?",
+      "choices": [
+        "An auto-publish-to-storefront flow should favor recall so it never misses a product",
+        "A returns-fraud screen should favor recall to catch every suspicious item while tolerating false alarms",
+        "A returns-fraud screen should favor precision so it never raises a false alarm",
+        "An auto-publish-to-storefront flow should favor recall, and a fraud screen should favor precision"
+      ],
+      "correct_answers": [
+        "A returns-fraud screen should favor recall to catch every suspicious item while tolerating false alarms"
+      ]
+    },
+    {
+      "id": "ai-c03-m02-c09",
+      "module_id": "ai-c03-m02",
+      "kind": "msq",
+      "prompt": "Based on the module, which statements about object detection labeling and average precision are correct?",
+      "choices": [
+        "For object detection, tight, consistent bounding boxes matter; boxes that include too much background or clip the object teach fuzzy boundaries",
+        "Average precision (AP) summarizes the precision/recall curve into a single comparable number useful for comparing iterations",
+        "For detection, mean AP across tags is reported as a summary metric",
+        "Average precision replaces the need to ever inspect per-tag precision and recall"
+      ],
+      "correct_answers": [
+        "For object detection, tight, consistent bounding boxes matter; boxes that include too much background or clip the object teach fuzzy boundaries",
+        "Average precision (AP) summarizes the precision/recall curve into a single comparable number useful for comparing iterations",
+        "For detection, mean AP across tags is reported as a summary metric"
+      ]
+    },
+    {
+      "id": "ai-c03-m02-c10",
+      "module_id": "ai-c03-m02",
+      "kind": "msq",
+      "prompt": "In the walkthrough's consuming code, which details match what the module shows about authenticating and calling a published Custom Vision iteration?",
+      "choices": [
+        "Authentication uses a Prediction-Key supplied through ApiKeyCredentials",
+        "The prediction call is classify_image, passing the project ID, the published name, and the image bytes",
+        "The CustomVisionPredictionClient is pointed at the prediction endpoint",
+        "The published iteration is selected by passing its numeric iteration ID rather than a published name"
+      ],
+      "correct_answers": [
+        "Authentication uses a Prediction-Key supplied through ApiKeyCredentials",
+        "The prediction call is classify_image, passing the project ID, the published name, and the image bytes",
+        "The CustomVisionPredictionClient is pointed at the prediction endpoint"
+      ]
     }
   ],
   "llm": [

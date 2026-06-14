@@ -81,6 +81,85 @@
         "Hard-coding API keys 'just for now' because temporary keys become permanent leaks",
         "Defaulting to the biggest model for a bounded task, which burns cost and latency"
       ]
+    },
+    {
+      "id": "ai-c01-m01-c06",
+      "module_id": "ai-c01-m01",
+      "kind": "mcq",
+      "prompt": "The module calls the deployment-name indirection 'deliberate and valuable.' What concrete operational benefit does it cite for naming your deployment `support-chat` and having code target that alias?",
+      "choices": [
+        "You can later point `support-chat` at a newer model version or a different capacity tier without touching application code",
+        "You can call `support-chat` from any Azure region without re-provisioning the resource",
+        "You can share one `support-chat` deployment across both chat and embedding model families",
+        "You can omit the `api_version` parameter because the alias pins the version for you"
+      ],
+      "correct_answers": [
+        "You can later point `support-chat` at a newer model version or a different capacity tier without touching application code"
+      ]
+    },
+    {
+      "id": "ai-c01-m01-c07",
+      "module_id": "ai-c01-m01",
+      "kind": "mcq",
+      "prompt": "The module warns that passing the raw model identifier where the deployment name belongs produces a particular error. How does the module characterize that error?",
+      "choices": [
+        "A 'deployment not found' error that looks like a model problem but is actually a naming problem",
+        "An authentication failure because the credential chain cannot resolve the model identifier",
+        "A quota-exceeded error because the model name bypasses the deployment's reserved capacity",
+        "A region-availability error because raw model identifiers are not valid outside their home region"
+      ],
+      "correct_answers": [
+        "A 'deployment not found' error that looks like a model problem but is actually a naming problem"
+      ]
+    },
+    {
+      "id": "ai-c01-m01-c08",
+      "module_id": "ai-c01-m01",
+      "kind": "mcq",
+      "prompt": "Regarding the `api_version` parameter, what guidance does the module give in its 'Common pitfalls' section?",
+      "choices": [
+        "Set it explicitly and verify the current value in the docs, since pinning nothing lets behavior shift and copying a stale version breaks against current features",
+        "Always omit it so the SDK automatically negotiates the newest available version at runtime",
+        "Copy it verbatim from any official sample, because published versions are guaranteed forward-compatible",
+        "Tie it to the model version string so the two always advance together"
+      ],
+      "correct_answers": [
+        "Set it explicitly and verify the current value in the docs, since pinning nothing lets behavior shift and copying a stale version breaks against current features"
+      ]
+    },
+    {
+      "id": "ai-c01-m01-c09",
+      "module_id": "ai-c01-m01",
+      "kind": "msq",
+      "prompt": "According to the module's discussion of choosing a model, which statements about the capability-versus-cost trade are accurate?",
+      "choices": [
+        "Larger, more capable chat models reason better over messy instructions and longer context but cost more per token and respond more slowly",
+        "Smaller models are cheaper and faster and are often entirely sufficient for narrow, well-prompted tasks",
+        "For a support assistant answering bounded questions, a mid-tier model with good prompting usually wins on cost and latency",
+        "The largest available model should be the default for every task to avoid under-provisioning"
+      ],
+      "correct_answers": [
+        "Larger, more capable chat models reason better over messy instructions and longer context but cost more per token and respond more slowly",
+        "Smaller models are cheaper and faster and are often entirely sufficient for narrow, well-prompted tasks",
+        "For a support assistant answering bounded questions, a mid-tier model with good prompting usually wins on cost and latency"
+      ]
+    },
+    {
+      "id": "ai-c01-m01-c10",
+      "module_id": "ai-c01-m01",
+      "kind": "msq",
+      "prompt": "In the CLI walkthrough, the module provisions the resource and then deploys a model. Which statements about those two `az cognitiveservices account` commands are supported by the text?",
+      "choices": [
+        "The resource is created with `--kind OpenAI`, and the first command is what gives you the endpoint",
+        "The deployment command separates `--deployment-name support-chat` from `--model-name gpt-4o-mini` on purpose",
+        "The illustrative model name and version should be checked against `az cognitiveservices account list-models` for availability",
+        "A single `az cognitiveservices account create` call provisions the resource and a default `support-chat` deployment together"
+      ],
+      "correct_answers": [
+        "The resource is created with `--kind OpenAI`, and the first command is what gives you the endpoint",
+        "The deployment command separates `--deployment-name support-chat` from `--model-name gpt-4o-mini` on purpose",
+        "The illustrative model name and version should be checked against `az cognitiveservices account list-models` for availability"
+      ]
     }
   ],
   "llm": [

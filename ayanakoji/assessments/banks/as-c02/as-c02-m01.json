@@ -80,6 +80,83 @@
         "Use a custom role only when no built-in role expresses the intent, such as 'may restart virtual machines but may not delete them'",
         "Use Privileged Identity Management to make privileged roles eligible rather than active, eliminating standing access"
       ]
+    },
+    {
+      "id": "as-c02-m01-c06",
+      "module_id": "as-c02-m01",
+      "prompt": "Meridian's contractors need read access to one resource group for three months. The module recommends Microsoft Entra External ID (B2B collaboration) for these external users. What is the stated advantage of this approach?",
+      "kind": "mcq",
+      "choices": [
+        "Guests authenticate with their own home identity, so Meridian never has to manage their passwords",
+        "Guests are issued a system-assigned managed identity tied to the resource group's lifecycle",
+        "Guests are automatically synchronized into on-premises Active Directory via Entra Connect",
+        "Guests receive a custom RBAC role that grants Owner across the subscription for the engagement"
+      ],
+      "correct_answers": [
+        "Guests authenticate with their own home identity, so Meridian never has to manage their passwords"
+      ]
+    },
+    {
+      "id": "as-c02-m01-c07",
+      "module_id": "as-c02-m01",
+      "prompt": "According to the module, how does Conditional Access work and what does it let you enforce? Select all that apply.",
+      "kind": "msq",
+      "choices": [
+        "It evaluates signals such as user, device, location, and risk, then decides to allow, block, or require multi-factor authentication",
+        "It is where a policy like 'require MFA for administrators' actually gets enforced",
+        "Blocking legacy authentication protocols is described as one of the highest-value, lowest-effort controls",
+        "It copies a hash-of-a-hash of each password into the cloud so sign-in survives an on-premises outage"
+      ],
+      "correct_answers": [
+        "It evaluates signals such as user, device, location, and risk, then decides to allow, block, or require multi-factor authentication",
+        "It is where a policy like 'require MFA for administrators' actually gets enforced",
+        "Blocking legacy authentication protocols is described as one of the highest-value, lowest-effort controls"
+      ]
+    },
+    {
+      "id": "as-c02-m01-c08",
+      "module_id": "as-c02-m01",
+      "prompt": "The module distinguishes system-assigned from user-assigned managed identities. Several of Meridian's services need to be granted the same access to Key Vault. Which identity type does the module describe as suited to this, and why?",
+      "kind": "mcq",
+      "choices": [
+        "A user-assigned identity, because it is a standalone object that can be shared across many resources",
+        "A system-assigned identity, because it is tied to the lifecycle of one resource and can be reused by others",
+        "A user-assigned identity, because it is automatically deleted when any one of the resources is deleted",
+        "A system-assigned identity, because it is a standalone object created independently of any resource"
+      ],
+      "correct_answers": [
+        "A user-assigned identity, because it is a standalone object that can be shared across many resources"
+      ]
+    },
+    {
+      "id": "as-c02-m01-c09",
+      "module_id": "as-c02-m01",
+      "prompt": "In the Meridian walkthrough, the Bicep sets enableRbacAuthorization to true on the Key Vault. According to the module, what is the design benefit of this choice over the legacy alternative?",
+      "kind": "mcq",
+      "choices": [
+        "Vault access is governed by the same RBAC model as everything else, so access reviews and PIM apply uniformly rather than living in a separate access-policy island",
+        "It moves vault access into legacy vault access policies, which the module recommends as the more auditable model",
+        "It grants the application's managed identity Owner on the subscription so it can read every secret beneath it",
+        "It enables pass-through authentication so the vault validates secrets against on-premises Active Directory in real time"
+      ],
+      "correct_answers": [
+        "Vault access is governed by the same RBAC model as everything else, so access reviews and PIM apply uniformly rather than living in a separate access-policy island"
+      ]
+    },
+    {
+      "id": "as-c02-m01-c10",
+      "module_id": "as-c02-m01",
+      "prompt": "The module's 'common pitfalls' section warns against granting Owner when a lesser role would do. What specific reason does it give for why over-granting Owner is dangerous?",
+      "kind": "mcq",
+      "choices": [
+        "Owner includes the right to grant access to others, which quietly turns one over-privileged account into a lateral-movement risk",
+        "Owner automatically disables Conditional Access policies for the assigned principal",
+        "Owner blocks Privileged Identity Management from making any role eligible rather than active",
+        "Owner strips data-plane access from a principal, leaving only control-plane permissions"
+      ],
+      "correct_answers": [
+        "Owner includes the right to grant access to others, which quietly turns one over-privileged account into a lateral-movement risk"
+      ]
     }
   ],
   "llm": [

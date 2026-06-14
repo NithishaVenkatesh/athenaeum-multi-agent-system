@@ -79,6 +79,84 @@
       "correct_answers": [
         "So the model can cite where an answer came from, making answers auditable; without source metadata the model cannot cite and you cannot audit."
       ]
+    },
+    {
+      "id": "ai-c01-m03-c06",
+      "module_id": "ai-c01-m03",
+      "prompt": "The module says that in production you would store the embedded vectors in a vector index rather than the in-memory store used in the walkthrough. Which managed Azure services does the module name as offering vector search for this purpose? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Azure AI Search",
+        "Azure Cosmos DB",
+        "Azure Blob Storage",
+        "Azure Key Vault"
+      ],
+      "correct_answers": [
+        "Azure AI Search",
+        "Azure Cosmos DB"
+      ]
+    },
+    {
+      "id": "ai-c01-m03-c07",
+      "module_id": "ai-c01-m03",
+      "prompt": "In the Northwind walkthrough the code calls embed() with model='support-embed' and the chat completion with model='support-chat'. According to the module, what happens if you instead call the chat deployment for embeddings.create (or use the embedding deployment for chat)?",
+      "kind": "mcq",
+      "choices": [
+        "The call fails, because embeddings and chat are different deployments and each must be deployed and referenced correctly.",
+        "It works but silently lowers cosine similarity scores, so retrieval quality degrades without any error.",
+        "It works, because a single Azure OpenAI deployment can serve both embeddings and chat completions interchangeably.",
+        "The chat model automatically falls back to producing an embedding, so only the response latency increases."
+      ],
+      "correct_answers": [
+        "The call fails, because embeddings and chat are different deployments and each must be deployed and referenced correctly."
+      ]
+    },
+    {
+      "id": "ai-c01-m03-c08",
+      "module_id": "ai-c01-m03",
+      "prompt": "The module recommends a few hundred tokens per chunk with a small overlap between consecutive chunks. What specific problem does the overlap address?",
+      "kind": "mcq",
+      "choices": [
+        "It ensures a sentence split across a chunk boundary is not lost between the two chunks.",
+        "It guarantees that every chunk embeds to a unique vector so no two chunks score identically.",
+        "It reduces the total number of chunks, lowering the one-time cost of embedding the corpus.",
+        "It lets the chat model deduplicate repeated passages before citing a source."
+      ],
+      "correct_answers": [
+        "It ensures a sentence split across a chunk boundary is not lost between the two chunks."
+      ]
+    },
+    {
+      "id": "ai-c01-m03-c09",
+      "module_id": "ai-c01-m03",
+      "prompt": "Per the module, what are the required components of the assembled grounded prompt, and how is 'grounding' defined? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "The retrieved chunks, clearly delimited and each tagged with its source.",
+        "A system instruction to answer only from the provided context, say so if the answer is absent, and cite the source used.",
+        "Grounding is the retrieval combined with the instruction to stay within the retrieved context.",
+        "Grounding is achieved by fine-tuning the model on the retrieved chunks before answering."
+      ],
+      "correct_answers": [
+        "The retrieved chunks, clearly delimited and each tagged with its source.",
+        "A system instruction to answer only from the provided context, say so if the answer is absent, and cite the source used.",
+        "Grounding is the retrieval combined with the instruction to stay within the retrieved context."
+      ]
+    },
+    {
+      "id": "ai-c01-m03-c10",
+      "module_id": "ai-c01-m03",
+      "prompt": "The module frames RAG in relation to the earlier prompt-templating skill. Which description matches how it characterizes RAG mechanically?",
+      "kind": "mcq",
+      "choices": [
+        "RAG is, mechanically, a template with a context slot that you fill from a search.",
+        "RAG is a separate fine-tuning step that permanently updates the model's weights with your documents.",
+        "RAG replaces prompt templates entirely, since retrieved text is sent to the model without any surrounding template.",
+        "RAG is a keyword-matching layer that rewrites the user's question before the model sees it."
+      ],
+      "correct_answers": [
+        "RAG is, mechanically, a template with a context slot that you fill from a search."
+      ]
     }
   ],
   "llm": [

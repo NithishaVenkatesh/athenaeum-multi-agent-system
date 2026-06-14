@@ -81,6 +81,83 @@
         "Co-locate the chatty pair of services in one region so the request travels less distance and fewer hops",
         "Use a private endpoint and VNet peering to keep the cross-service traffic on the Microsoft backbone instead of the public internet"
       ]
+    },
+    {
+      "id": "as-c01-m02-c06",
+      "module_id": "as-c01-m02",
+      "kind": "mcq",
+      "prompt": "According to the module's connectivity section, what is the defining property of VNet peering when connecting two virtual networks?",
+      "choices": [
+        "It connects the two VNets over Microsoft's backbone with low latency, as if on one network, without a gateway hop",
+        "It builds an encrypted IPsec tunnel between the VNets that rides the public internet",
+        "It projects a PaaS service into each VNet behind a private IP so the service is never publicly exposed",
+        "It returns different DNS answers so clients resolve to whichever VNet is closest"
+      ],
+      "correct_answers": [
+        "It connects the two VNets over Microsoft's backbone with low latency, as if on one network, without a gateway hop"
+      ]
+    },
+    {
+      "id": "as-c01-m02-c07",
+      "module_id": "as-c01-m02",
+      "kind": "mcq",
+      "prompt": "The module distinguishes Traffic Manager from the other distributors by noting what it actually directs. What does Traffic Manager route, and what is the consequence?",
+      "choices": [
+        "It routes packets at Layer 4, so it can balance any protocol but cannot terminate TLS",
+        "It routes resolution (DNS), not packets, so it works for any protocol but cannot inspect requests",
+        "It routes HTTP requests at the edge, so it can cache static content but only within a single region",
+        "It routes circuit-level traffic through a connectivity provider, so it never touches the public internet"
+      ],
+      "correct_answers": [
+        "It routes resolution (DNS), not packets, so it works for any protocol but cannot inspect requests"
+      ]
+    },
+    {
+      "id": "as-c01-m02-c08",
+      "module_id": "as-c01-m02",
+      "kind": "mcq",
+      "prompt": "In the Bicep walkthrough, the billing app is placed in its own subnet separate from `GatewaySubnet`. What reason does the module give for this separation?",
+      "choices": [
+        "So the gateway can automatically load-balance traffic across the billing app instances",
+        "So you can later attach network security and routing rules to the billing app independently",
+        "Because Azure requires every application subnet to be at least a /27 like the gateway subnet",
+        "Because a private endpoint can only be created in a subnet that excludes the gateway"
+      ],
+      "correct_answers": [
+        "So you can later attach network security and routing rules to the billing app independently"
+      ]
+    },
+    {
+      "id": "as-c01-m02-c09",
+      "module_id": "as-c01-m02",
+      "kind": "msq",
+      "prompt": "The module describes how internet connectivity should be handled at the VNet boundary. Which statements reflect its guidance on inbound and outbound traffic?",
+      "choices": [
+        "Inbound from the internet typically arrives through a public-facing service such as Application Gateway, Azure Front Door, or a Load Balancer with a public IP, treated as the front door and secured deliberately",
+        "Outbound to the internet should be made explicit, for example through a NAT Gateway or firewall, so egress is predictable and auditable",
+        "A VNet by default has open inbound and outbound internet access that must be disabled service by service",
+        "Outbound traffic is best left implicit so the platform can pick the cheapest egress path automatically"
+      ],
+      "correct_answers": [
+        "Inbound from the internet typically arrives through a public-facing service such as Application Gateway, Azure Front Door, or a Load Balancer with a public IP, treated as the front door and secured deliberately",
+        "Outbound to the internet should be made explicit, for example through a NAT Gateway or firewall, so egress is predictable and auditable"
+      ]
+    },
+    {
+      "id": "as-c01-m02-c10",
+      "module_id": "as-c01-m02",
+      "kind": "msq",
+      "prompt": "The module explains how a private endpoint improves a connection to an Azure PaaS service. According to that explanation, which statements are accurate?",
+      "choices": [
+        "It projects the PaaS service into your VNet behind a private IP so traffic to it stays on the Microsoft network",
+        "It keeps the service from exposing a public surface, improving both security and consistency",
+        "It encrypts traffic in an IPsec tunnel over the public internet so the service stays private",
+        "It caches the service's static responses at edge locations near the user to cut latency"
+      ],
+      "correct_answers": [
+        "It projects the PaaS service into your VNet behind a private IP so traffic to it stays on the Microsoft network",
+        "It keeps the service from exposing a public surface, improving both security and consistency"
+      ]
     }
   ],
   "llm": [

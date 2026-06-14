@@ -81,6 +81,85 @@
         "The workload needs no custom controllers or fine-grained pod control",
         "AKS is powerful but expensive to operate, adding a standing operational cost"
       ]
+    },
+    {
+      "id": "as-c01-m01-c06",
+      "module_id": "as-c01-m01",
+      "prompt": "The module describes three ways Azure runs containers. Which description correctly matches Azure Container Instances (ACI) as the module presents it?",
+      "kind": "mcq",
+      "choices": [
+        "A single short-lived or isolated container with no orchestrator",
+        "Microservices that need scaling, revisions, and scale-to-zero without managing Kubernetes",
+        "Full Kubernetes control that you are prepared to operate yourself",
+        "An always-on web app on a managed platform without the event-driven model"
+      ],
+      "correct_answers": [
+        "A single short-lived or isolated container with no orchestrator"
+      ]
+    },
+    {
+      "id": "as-c01-m01-c07",
+      "module_id": "as-c01-m01",
+      "prompt": "Per the module, which conditions specifically point toward choosing an Azure Virtual Machine because they require owning the OS-level control surface? Select all that apply.",
+      "kind": "msq",
+      "choices": [
+        "The workload requires a specific kernel module you must load",
+        "The workload needs GPU drivers you patch yourself",
+        "Licensing is tied to a particular host",
+        "The workload just needs a Linux process with some dependencies"
+      ],
+      "correct_answers": [
+        "The workload requires a specific kernel module you must load",
+        "The workload needs GPU drivers you patch yourself",
+        "Licensing is tied to a particular host"
+      ]
+    },
+    {
+      "id": "as-c01-m01-c08",
+      "module_id": "as-c01-m01",
+      "prompt": "The module warns against 'treating serverless as free of constraints.' Which constraints does it explicitly attribute to Consumption-plan functions? Select all that apply.",
+      "kind": "msq",
+      "choices": [
+        "Execution-time ceilings (limits)",
+        "Cold starts",
+        "A programming model built around short, event-driven units of work",
+        "Mandatory persistent local disk for every invocation"
+      ],
+      "correct_answers": [
+        "Execution-time ceilings (limits)",
+        "Cold starts",
+        "A programming model built around short, event-driven units of work"
+      ]
+    },
+    {
+      "id": "as-c01-m01-c09",
+      "module_id": "as-c01-m01",
+      "prompt": "In the `az containerapp create` command, the module says `--max-replicas 20` serves what purpose?",
+      "kind": "mcq",
+      "choices": [
+        "It caps the blast radius of a traffic spike",
+        "It eliminates idle cost by scaling to zero when traffic stops",
+        "It exposes the app to external ingress",
+        "It allocates half a CPU core to each replica"
+      ],
+      "correct_answers": [
+        "It caps the blast radius of a traffic spike"
+      ]
+    },
+    {
+      "id": "as-c01-m01-c10",
+      "module_id": "as-c01-m01",
+      "prompt": "How does the module position Azure App Service on the compute spectrum?",
+      "kind": "mcq",
+      "choices": [
+        "For always-on web apps that want a managed platform without the event-driven model",
+        "For deadline-bound parallel work scheduled across a pool of nodes",
+        "For workloads needing full OS-level control and host-tied licensing",
+        "For a single isolated container with no orchestrator"
+      ],
+      "correct_answers": [
+        "For always-on web apps that want a managed platform without the event-driven model"
+      ]
     }
   ],
   "llm": [

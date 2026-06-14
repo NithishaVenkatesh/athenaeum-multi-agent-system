@@ -9,10 +9,10 @@ from app.assessments.validation import validate_bank
 
 
 def make_valid_bank(course_id: str = "cb-c01", module_id: str = "cb-c01-m01") -> dict[str, Any]:
-    """A schema- and semantics-valid bank: 5 choices (4 mcq + 1 msq) and 3 llm."""
+    """A schema- and semantics-valid bank: 10 choices (8 mcq + 2 msq) and 3 llm."""
     choices = []
-    for n in range(1, 6):
-        is_msq = n == 5
+    for n in range(1, 11):
+        is_msq = n % 5 == 0  # n == 5 and n == 10
         choices.append(
             {
                 "id": f"{module_id}-c{n:02d}",

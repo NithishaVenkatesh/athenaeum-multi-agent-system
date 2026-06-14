@@ -81,6 +81,85 @@
         "One or more redirect URIs where tokens may be returned",
         "Credentials such as a client secret, certificate, or federated credential"
       ]
+    },
+    {
+      "id": "cb-c03-m01-c06",
+      "module_id": "cb-c03-m01",
+      "prompt": "According to the module, what is the distinct purpose of an ID token versus an access token?",
+      "kind": "mcq",
+      "choices": [
+        "An ID token answers \"who signed in?\" and is consumed by your app to establish a session, while an access token answers \"what is this caller allowed to do against a specific resource?\" and is sent to an API.",
+        "An ID token is sent to Microsoft Graph in the Authorization: Bearer header, while an access token is kept private and never leaves your app.",
+        "An ID token grants tenant-wide application permissions, while an access token grants only delegated per-user permissions.",
+        "An ID token is a client secret used to authenticate the app, while an access token is the user's password presented to the resource."
+      ],
+      "correct_answers": [
+        "An ID token answers \"who signed in?\" and is consumed by your app to establish a session, while an access token answers \"what is this caller allowed to do against a specific resource?\" and is sent to an API."
+      ]
+    },
+    {
+      "id": "cb-c03-m01-c07",
+      "module_id": "cb-c03-m01",
+      "prompt": "Per the module, a teammate stores a client secret inside a single-page app's JavaScript so it can call Graph. Why is this wrong, and what should they do instead?",
+      "kind": "mcq",
+      "choices": [
+        "A secret in a SPA's JavaScript is public to anyone with dev tools; SPAs must use the authorization code flow with PKCE and no secret.",
+        "A secret in a SPA is fine as long as it is also stored in Key Vault; they should add Key Vault and keep the secret in the JavaScript.",
+        "The problem is the wrong audience on the secret; they should request a Graph-scoped secret instead of a backend-API secret.",
+        "The secret should be replaced by the user's ID token, which the SPA can safely embed and send to Graph instead."
+      ],
+      "correct_answers": [
+        "A secret in a SPA's JavaScript is public to anyone with dev tools; SPAs must use the authorization code flow with PKCE and no secret."
+      ]
+    },
+    {
+      "id": "cb-c03-m01-c08",
+      "module_id": "cb-c03-m01",
+      "prompt": "The module warns about hard-coding the /common authority for a single-tenant internal line-of-business portal. According to the module, what is the consequence and the correct alternative?",
+      "kind": "mcq",
+      "choices": [
+        "Using /common allows any Microsoft account to attempt sign-in; an internal portal should target its specific tenant ID so only that organization's identities are accepted.",
+        "Using /common causes every Graph call to return 403 because no scopes are consented; the fix is to switch to application permissions.",
+        "Using /common forces the implicit flow instead of the authorization code flow; the fix is to add a client secret to the authority URL.",
+        "Using /common silently disables token expiry, so tokens never refresh; the fix is to enable MSAL's token cache."
+      ],
+      "correct_answers": [
+        "Using /common allows any Microsoft account to attempt sign-in; an internal portal should target its specific tenant ID so only that organization's identities are accepted."
+      ]
+    },
+    {
+      "id": "cb-c03-m01-c09",
+      "module_id": "cb-c03-m01",
+      "prompt": "According to the module, which statements about access tokens, their audience, and token lifetime are correct? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "A token's aud claim binds it to one resource, so acquiring a token for your own API and sending it to Graph yields a 401.",
+        "Access tokens expire (commonly around an hour), so you should use MSAL's token cache and refresh tokens to renew silently rather than re-running the full interactive flow each request.",
+        "Because tokens are signed by Entra ID and scoped to a single audience, a token minted for one API is useless against another.",
+        "Once issued, an access token is valid indefinitely and can be reused against any Microsoft API regardless of audience."
+      ],
+      "correct_answers": [
+        "A token's aud claim binds it to one resource, so acquiring a token for your own API and sending it to Graph yields a 401.",
+        "Access tokens expire (commonly around an hour), so you should use MSAL's token cache and refresh tokens to renew silently rather than re-running the full interactive flow each request.",
+        "Because tokens are signed by Entra ID and scoped to a single audience, a token minted for one API is useless against another."
+      ]
+    },
+    {
+      "id": "cb-c03-m01-c10",
+      "module_id": "cb-c03-m01",
+      "prompt": "Based on the module's description of Microsoft Graph and how a resource validates a presented token, which statements are correct? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Microsoft Graph is the unified REST API for Microsoft 365 data such as users, groups, calendars, mail, files, and Teams, called at https://graph.microsoft.com/v1.0/...",
+        "The scopes requested on the token (for example User.Read or Calendars.Read) determine which Graph endpoints succeed, and the scope on the token must line up with the permission on the registration.",
+        "The resource validates the token's signature, issuer, audience, and expiry, and never sees a password.",
+        "Microsoft Graph requires a separate password for each endpoint, which the app must store and send alongside the access token."
+      ],
+      "correct_answers": [
+        "Microsoft Graph is the unified REST API for Microsoft 365 data such as users, groups, calendars, mail, files, and Teams, called at https://graph.microsoft.com/v1.0/...",
+        "The scopes requested on the token (for example User.Read or Calendars.Read) determine which Graph endpoints succeed, and the scope on the token must line up with the permission on the registration.",
+        "The resource validates the token's signature, issuer, audience, and expiry, and never sees a password."
+      ]
     }
   ],
   "llm": [

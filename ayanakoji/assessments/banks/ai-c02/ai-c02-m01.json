@@ -80,6 +80,85 @@
         "Chunk very long text before sending because each document has a character limit",
         "Set confidence thresholds tied to the cost of an error and route low-confidence results to a human"
       ]
+    },
+    {
+      "id": "ai-c02-m01-c06",
+      "module_id": "ai-c02-m01",
+      "kind": "mcq",
+      "prompt": "In the module, what does entity linking add beyond plain named entity recognition?",
+      "choices": [
+        "It ties a recognized entity to a knowledge-base identifier so \"Surface\" the device is disambiguated from \"surface\" the noun",
+        "It returns the salient noun phrases that summarize what the text is about",
+        "It attaches positive or negative sentiment to each recognized entity",
+        "It masks recognized entities and returns a redacted version of the text"
+      ],
+      "correct_answers": [
+        "It ties a recognized entity to a knowledge-base identifier so \"Surface\" the device is disambiguated from \"surface\" the noun"
+      ]
+    },
+    {
+      "id": "ai-c02-m01-c07",
+      "module_id": "ai-c02-m01",
+      "kind": "mcq",
+      "prompt": "According to the module, how is each input shaped when you call an Azure AI Language skill, and how do results come back?",
+      "choices": [
+        "Each skill takes a batch of documents — objects with an id, the text, and an optional language hint — and returns a per-document result keyed by that same id",
+        "Each skill takes a single raw string and streams back tokens as the model reasons over them",
+        "Each skill takes one document per request and returns results keyed by character offset",
+        "Each skill takes a batch of documents but merges them into one combined result with no per-document keys"
+      ],
+      "correct_answers": [
+        "Each skill takes a batch of documents — objects with an id, the text, and an optional language hint — and returns a per-document result keyed by that same id"
+      ]
+    },
+    {
+      "id": "ai-c02-m01-c08",
+      "module_id": "ai-c02-m01",
+      "kind": "mcq",
+      "prompt": "In the walkthrough, the triage function authenticates with DefaultAzureCredential rather than a hardcoded key. What does the module give as the reason?",
+      "choices": [
+        "It means no secret lives in code",
+        "It lets the function bypass the per-document character limit",
+        "It enables translation directly from the Language resource",
+        "It removes the need to set the endpoint as an environment variable"
+      ],
+      "correct_answers": [
+        "It means no secret lives in code"
+      ]
+    },
+    {
+      "id": "ai-c02-m01-c09",
+      "module_id": "ai-c02-m01",
+      "kind": "msq",
+      "prompt": "Based on the module, which statements about Azure AI Language sentiment analysis are correct?",
+      "choices": [
+        "It classifies text as positive, neutral, negative, or mixed",
+        "It returns confidence scores for each class at both the document and sentence level",
+        "Opinion mining attaches sentiment to specific targets, such as positive toward tent and negative toward shipping",
+        "It returns a single hard label with no confidence scores, so you simply trust whichever class it picks"
+      ],
+      "correct_answers": [
+        "It classifies text as positive, neutral, negative, or mixed",
+        "It returns confidence scores for each class at both the document and sentence level",
+        "Opinion mining attaches sentiment to specific targets, such as positive toward tent and negative toward shipping"
+      ]
+    },
+    {
+      "id": "ai-c02-m01-c10",
+      "module_id": "ai-c02-m01",
+      "kind": "msq",
+      "prompt": "According to the module, which of the following are capabilities of Azure AI Translator or recommended practices around the language hint?",
+      "choices": [
+        "Translator can transliterate between scripts",
+        "Translator can translate whole documents while preserving formatting",
+        "When you know a document's language, pass the language hint, because letting the service guess on short or code-switched text adds avoidable error to every downstream skill",
+        "Translator is just one more prebuilt skill exposed over the same Azure AI Language endpoint as language detection"
+      ],
+      "correct_answers": [
+        "Translator can transliterate between scripts",
+        "Translator can translate whole documents while preserving formatting",
+        "When you know a document's language, pass the language hint, because letting the service guess on short or code-switched text adds avoidable error to every downstream skill"
+      ]
     }
   ],
   "llm": [

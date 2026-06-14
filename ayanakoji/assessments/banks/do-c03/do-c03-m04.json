@@ -81,6 +81,84 @@
         "Putting secrets in telemetry, such as logging full request bodies or connection strings",
         "Collecting metrics but defining no alert rules, so telemetry is only watched on a dashboard nobody is looking at"
       ]
+    },
+    {
+      "id": "do-c03-m04-c06",
+      "module_id": "do-c03-m04",
+      "prompt": "Per the module, how does it characterize metrics versus logs as telemetry signals?",
+      "kind": "mcq",
+      "choices": [
+        "Metrics are numeric measurements aggregated over time, cheap to store and ideal for dashboards and alerts; logs are discrete, timestamped events with structured properties, ideal for what exactly happened to a request",
+        "Metrics are discrete timestamped events with structured properties, while logs are numeric values aggregated over time for dashboards",
+        "Metrics and logs are the same signal stored in different tables, distinguished only by which KQL operator queries them",
+        "Metrics record the full per-hop path of a single request, while logs only hold aggregated counts for alerting"
+      ],
+      "correct_answers": [
+        "Metrics are numeric measurements aggregated over time, cheap to store and ideal for dashboards and alerts; logs are discrete, timestamped events with structured properties, ideal for what exactly happened to a request"
+      ]
+    },
+    {
+      "id": "do-c03-m04-c07",
+      "module_id": "do-c03-m04",
+      "prompt": "You want an alert when the rate-quote service's failure rate exceeds a threshold over five minutes. According to the module, which signal underpins that alert and why not query logs directly for each evaluation?",
+      "kind": "mcq",
+      "choices": [
+        "Metrics, because aggregated numeric measurements over time are cheap to evaluate continuously and are what alert rules are designed to threshold, whereas querying raw logs for every evaluation is expensive and slower",
+        "Logs, because each evaluation must re-read every individual request event to compute an accurate failure rate",
+        "Traces, because only the end-to-end transaction view can count failures across the five-minute window",
+        "Metrics, because logs cannot record whether a request succeeded or failed and so carry no failure information"
+      ],
+      "correct_answers": [
+        "Metrics, because aggregated numeric measurements over time are cheap to evaluate continuously and are what alert rules are designed to threshold, whereas querying raw logs for every evaluation is expensive and slower"
+      ]
+    },
+    {
+      "id": "do-c03-m04-c08",
+      "module_id": "do-c03-m04",
+      "prompt": "After calling AddApplicationInsightsTelemetry at startup, what does the module say auto-collection captures without per-call code?",
+      "kind": "mcq",
+      "choices": [
+        "Requests, dependencies, and exceptions",
+        "Metrics, dashboards, and alert rules",
+        "Connection strings, request bodies, and Key Vault secrets",
+        "Correlation IDs, Unix pipes, and KQL projections"
+      ],
+      "correct_answers": [
+        "Requests, dependencies, and exceptions"
+      ]
+    },
+    {
+      "id": "do-c03-m04-c09",
+      "module_id": "do-c03-m04",
+      "prompt": "Based on the module's KQL walkthrough, which statements about how the diagnostic queries are constructed are correct? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "A query starts from a table such as requests, dependencies, exceptions, or traces and pipes it through operators",
+        "The dependencies query filters to the incident window and to success == false, then summarizes failure count and p95 duration by target and type",
+        "The requests query bins failure rate per minute over the hour, revealing a spike at 02:11 two minutes after the 02:09 deploy",
+        "The queries reconstruct the failing request's per-hop path by joining aggregated metrics, since traces are unavailable in KQL"
+      ],
+      "correct_answers": [
+        "A query starts from a table such as requests, dependencies, exceptions, or traces and pipes it through operators",
+        "The dependencies query filters to the incident window and to success == false, then summarizes failure count and p95 duration by target and type",
+        "The requests query bins failure rate per minute over the hour, revealing a spike at 02:11 two minutes after the 02:09 deploy"
+      ]
+    },
+    {
+      "id": "do-c03-m04-c10",
+      "module_id": "do-c03-m04",
+      "prompt": "Which practices does the module recommend regarding sensitive data and trace correlation in telemetry? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Scrub or exclude sensitive fields before they are recorded, because logging full request bodies or connection strings turns the observability store into a secret leak",
+        "Use the framework's instrumented HTTP clients so correlation headers flow automatically across each hop",
+        "Hardcode the Application Insights connection string in Program.cs so telemetry always has a guaranteed endpoint",
+        "Strip trace-context headers from downstream calls to reduce request size, since correlation can be rebuilt later from metrics"
+      ],
+      "correct_answers": [
+        "Scrub or exclude sensitive fields before they are recorded, because logging full request bodies or connection strings turns the observability store into a secret leak",
+        "Use the framework's instrumented HTTP clients so correlation headers flow automatically across each hop"
+      ]
     }
   ],
   "llm": [

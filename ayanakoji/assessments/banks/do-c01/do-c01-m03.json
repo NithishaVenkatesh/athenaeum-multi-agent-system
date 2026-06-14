@@ -79,6 +79,83 @@
       "correct_answers": [
         "Annotated tags carry a message, author, and date and are objects in their own right, preserving release provenance for later audits"
       ]
+    },
+    {
+      "id": "do-c01-m03-c06",
+      "module_id": "do-c01-m03",
+      "prompt": "The module explains why binaries are uniquely costly to keep in Git history. According to its reasoning, why does a 40 MB image that changes ten times add roughly 400 MB to history?",
+      "kind": "mcq",
+      "choices": [
+        "Because binaries don't delta-compress meaningfully, so each version is stored whole rather than as small diffs",
+        "Because Git stores three redundant copies of each binary version to guard against packfile corruption",
+        "Because every clone re-uploads the binary to the LFS store, multiplying its size across collaborators",
+        "Because annotated tags attached to each revision embed a full copy of the file they reference"
+      ],
+      "correct_answers": [
+        "Because binaries don't delta-compress meaningfully, so each version is stored whole rather than as small diffs"
+      ]
+    },
+    {
+      "id": "do-c01-m03-c07",
+      "module_id": "do-c01-m03",
+      "prompt": "The module warns against committing a binary before adding it to `.gitattributes`. Based on the module, why does the order matter, and what is the recommended sequence?",
+      "kind": "mcq",
+      "choices": [
+        "If the file is added before the track rule is in place, it can land in Git instead of LFS; track the path and commit `.gitattributes` first, then add the file",
+        "If `.gitattributes` is committed first, the binary is permanently locked and can never be edited again, so add the file before tracking",
+        "The order is cosmetic because `git lfs install` retroactively moves any earlier-committed binaries into the LFS store on the next push",
+        "Adding the file first triggers a history rewrite automatically, which is why you must add `.gitattributes` afterward to undo it"
+      ],
+      "correct_answers": [
+        "If the file is added before the track rule is in place, it can land in Git instead of LFS; track the path and commit `.gitattributes` first, then add the file"
+      ]
+    },
+    {
+      "id": "do-c01-m03-c08",
+      "module_id": "do-c01-m03",
+      "prompt": "The module distinguishes a tag from a branch. Which statements about tags as the module describes them are accurate? (Choose all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "A tag is a permanent, human-meaningful label for a specific commit and, unlike a branch, does not move",
+        "A tag marks a point in history so you can later check out, build, or compare exactly what shipped",
+        "A tag automatically advances to the newest commit on its branch each time someone pushes",
+        "A tag must be lightweight in order to be checked out later for a rebuild"
+      ],
+      "correct_answers": [
+        "A tag is a permanent, human-meaningful label for a specific commit and, unlike a branch, does not move",
+        "A tag marks a point in history so you can later check out, build, or compare exactly what shipped"
+      ]
+    },
+    {
+      "id": "do-c01-m03-c09",
+      "module_id": "do-c01-m03",
+      "prompt": "A developer copies CI's `git clone --depth 1` habit for their everyday work. According to the module's pitfall, which operations would this break?",
+      "kind": "msq",
+      "choices": [
+        "Running blame across the whole history",
+        "Bisecting to find an old regression",
+        "Cloning a feature branch to open a pull request",
+        "Tracking a new asset path with Git LFS"
+      ],
+      "correct_answers": [
+        "Running blame across the whole history",
+        "Bisecting to find an old regression"
+      ]
+    },
+    {
+      "id": "do-c01-m03-c10",
+      "module_id": "do-c01-m03",
+      "prompt": "The module describes how to actually remove the 3.8 GB of binaries already baked into history. How does it characterize that operation?",
+      "kind": "mcq",
+      "choices": [
+        "A coordinated history rewrite that purges the old blobs, requiring the team to re-clone, done by following the current documented procedure rather than rewriting shared history on a whim",
+        "A single routine command that LFS runs in the background once `.gitattributes` is committed, needing no team coordination",
+        "An automatic side effect of enabling shallow clones on CI, which discards the old history for everyone",
+        "A per-developer cleanup each person runs locally, since the bloat only exists in individual working trees"
+      ],
+      "correct_answers": [
+        "A coordinated history rewrite that purges the old blobs, requiring the team to re-clone, done by following the current documented procedure rather than rewriting shared history on a whim"
+      ]
     }
   ],
   "llm": [

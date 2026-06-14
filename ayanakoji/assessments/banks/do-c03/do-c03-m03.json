@@ -81,6 +81,84 @@
         "Scanning only direct dependencies and missing vulnerabilities that arrive transitively",
         "Scanning only the application source while the container base OS layer carries critical CVEs"
       ]
+    },
+    {
+      "id": "do-c03-m03-c06",
+      "module_id": "do-c03-m03",
+      "kind": "mcq",
+      "prompt": "The module opens with a transitive dependency three levels deep that carried a known remote-code-execution flaw. What point does this story illustrate about why such problems suit automated scanning?",
+      "choices": [
+        "Nobody chose that library — it arrived as a dependency of a dependency — yet automated scanning catches it cheaply on every commit",
+        "The flaw existed because the team skipped code review, which scanning replaces",
+        "Remote-code-execution flaws can only be found by a human researcher, not by tooling",
+        "Transitive dependencies are safe by default, so the scanner mainly checks direct packages"
+      ],
+      "correct_answers": [
+        "Nobody chose that library — it arrived as a dependency of a dependency — yet automated scanning catches it cheaply on every commit"
+      ]
+    },
+    {
+      "id": "do-c03-m03-c07",
+      "module_id": "do-c03-m03",
+      "kind": "mcq",
+      "prompt": "How does the module describe the way CodeQL, used for GitHub code scanning, analyzes source code?",
+      "choices": [
+        "It queries code as if it were a database to find vulnerable patterns such as injection or unsafe deserialization",
+        "It compares your components against vulnerability databases to find packages with known CVEs",
+        "It matches committed strings against recognized secret patterns to block credentials",
+        "It connects to your orgs and aggregates findings into a portfolio security score"
+      ],
+      "correct_answers": [
+        "It queries code as if it were a database to find vulnerable patterns such as injection or unsafe deserialization"
+      ]
+    },
+    {
+      "id": "do-c03-m03-c08",
+      "module_id": "do-c03-m03",
+      "kind": "mcq",
+      "prompt": "In the rate-quote container scan, Trivy is configured with severity 'HIGH,CRITICAL' and exit-code '1'. According to the module, what does the exit-code setting accomplish?",
+      "choices": [
+        "A non-zero exit fails the job and blocks promotion, so a vulnerable image never reaches the registry",
+        "It uploads the container findings to the Security tab for later triage",
+        "It causes Trivy to only warn on HIGH/CRITICAL findings without stopping the pipeline",
+        "It rebuilds the base image automatically when a new OS layer is published"
+      ],
+      "correct_answers": [
+        "A non-zero exit fails the job and blocks promotion, so a vulnerable image never reaches the registry"
+      ]
+    },
+    {
+      "id": "do-c03-m03-c09",
+      "module_id": "do-c03-m03",
+      "kind": "msq",
+      "prompt": "According to the module, what are the two distinct things GitHub's Dependabot does in a dependency (SCA) workflow?",
+      "choices": [
+        "Raises alerts when a vulnerable dependency enters your graph",
+        "Can open update pull requests automatically",
+        "Blocks a commit at push when it contains a recognized secret",
+        "Aggregates findings across the whole portfolio into a security score"
+      ],
+      "correct_answers": [
+        "Raises alerts when a vulnerable dependency enters your graph",
+        "Can open update pull requests automatically"
+      ]
+    },
+    {
+      "id": "do-c03-m03-c10",
+      "module_id": "do-c03-m03",
+      "kind": "msq",
+      "prompt": "The module ties security findings to the quality and release gates from do-c02 so the gates 'have teeth.' Which statements does the module make about giving these gates teeth?",
+      "choices": [
+        "A pull request with an unresolved critical CodeQL alert does not merge",
+        "A build that produces a container image with a high-severity OS package vulnerability does not promote",
+        "A branch protection rule on main requires both the CodeQL check and the image scan to pass",
+        "Findings should be produced for visibility even when nobody is required to act on them"
+      ],
+      "correct_answers": [
+        "A pull request with an unresolved critical CodeQL alert does not merge",
+        "A build that produces a container image with a high-severity OS package vulnerability does not promote",
+        "A branch protection rule on main requires both the CodeQL check and the image scan to pass"
+      ]
     }
   ],
   "llm": [

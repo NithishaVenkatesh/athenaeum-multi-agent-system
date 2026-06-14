@@ -80,6 +80,84 @@
         "`--sku Standard_GRS`",
         "`--access-tier Hot`"
       ]
+    },
+    {
+      "id": "as-c01-m03-c06",
+      "module_id": "as-c01-m03",
+      "prompt": "A workload has normalized orders, invoices, and ledger entries that require multi-row transactions and joins where correctness is non-negotiable. According to the module, which store is the default, and what signal identifies this data shape?",
+      "kind": "mcq",
+      "choices": [
+        "Azure SQL Database, because the signal is needing ACID transactions and querying by relationships",
+        "Azure Cosmos DB, because the signal is schema flexibility and high write throughput",
+        "Azure Blob Storage, because the signal is storing and retrieving whole objects by key",
+        "Azure SQL Database, because the signal is geographically distributed low-latency reads"
+      ],
+      "correct_answers": [
+        "Azure SQL Database, because the signal is needing ACID transactions and querying by relationships"
+      ]
+    },
+    {
+      "id": "as-c01-m03-c07",
+      "module_id": "as-c01-m03",
+      "prompt": "A team proposes storing many JSON files in Blob Storage so they can later filter and join across their attributes. Which pitfall from the module does this represent, and what does the module say to do instead?",
+      "kind": "mcq",
+      "choices": [
+        "Storing query-able data in Blob Storage; blobs are retrieved by key, so if you need to filter or join you need a database, not a container of JSON files",
+        "Leaving cold data in the Hot tier; the files should be moved to Archive to cut storage cost",
+        "Accepting the default redundancy; the account should be upgraded from LRS to GRS",
+        "Over-provisioning a database that sits idle; the workload should move to serverless compute"
+      ],
+      "correct_answers": [
+        "Storing query-able data in Blob Storage; blobs are retrieved by key, so if you need to filter or join you need a database, not a container of JSON files"
+      ]
+    },
+    {
+      "id": "as-c01-m03-c08",
+      "module_id": "as-c01-m03",
+      "prompt": "According to the module, how does zone-redundant storage (ZRS) differ from the other redundancy options described?",
+      "kind": "mcq",
+      "choices": [
+        "ZRS spreads copies across availability zones in one region, surviving a datacenter failure",
+        "ZRS keeps all copies within one datacenter, making it the cheapest option",
+        "ZRS replicates to a paired secondary region, surviving a full regional outage",
+        "ZRS rehydrates copies on read, adding latency before an object can be accessed"
+      ],
+      "correct_answers": [
+        "ZRS spreads copies across availability zones in one region, surviving a datacenter failure"
+      ]
+    },
+    {
+      "id": "as-c01-m03-c09",
+      "module_id": "as-c01-m03",
+      "prompt": "Select all statements the module explicitly makes about the lower (Cool, Cold, Archive) blob access tiers and the consequences of mistiering.",
+      "kind": "msq",
+      "choices": [
+        "Cool lowers storage cost for data accessed infrequently",
+        "Putting actively served content in Archive incurs rehydration delays on every read",
+        "Cold and Archive push storage cost lower still for rarely or almost-never accessed data",
+        "Storing rarely read PDFs in the Hot tier saves money every month compared to Cool"
+      ],
+      "correct_answers": [
+        "Cool lowers storage cost for data accessed infrequently",
+        "Putting actively served content in Archive incurs rehydration delays on every read",
+        "Cold and Archive push storage cost lower still for rarely or almost-never accessed data"
+      ]
+    },
+    {
+      "id": "as-c01-m03-c10",
+      "module_id": "as-c01-m03",
+      "prompt": "In the walkthrough, the module demonstrates moving a concluded event's PDFs with `az storage blob set-tier` by hand. What does it say is the production-preferred way to perform the same tier transition?",
+      "kind": "msq",
+      "choices": [
+        "Automate it with a lifecycle management policy that ages blobs from Hot to Cool to Archive on a schedule",
+        "Make the transition declaratively rather than touching each blob individually",
+        "Run `az storage blob set-tier` manually on each blob as the standard production approach",
+        "Recreate the storage account with a different `--access-tier` to migrate the blobs"
+      ],
+      "correct_answers": [
+        "Automate it with a lifecycle management policy that ages blobs from Hot to Cool to Archive on a schedule",
+        "Make the transition declaratively rather than touching each blob individually"
+      ]
     }
   ],
   "llm": [

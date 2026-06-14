@@ -37,7 +37,7 @@ def test_get_choices_assessment_returns_questions(
     body = resp.json()
     assert body["kind"] == "choices"
     assert body["module_id"] == "cb-c01-m01"
-    assert len(body["choice_questions"]) == 5
+    assert len(body["choice_questions"]) == 10
     assert body["llm_questions"] == []
     first = body["choice_questions"][0]
     assert first["id"] == "cb-c01-m01-c01"

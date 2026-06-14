@@ -1,7 +1,7 @@
 export const meta = {
   name: 'author-assessments',
   description:
-    'Author + adversarially review one assessment question bank per Athenaeum module (5 MCQ/MSQ + 3 LLM), grounded strictly on the module markdown. Returns validated bank JSON per module.',
+    'Author + adversarially review one assessment question bank per Athenaeum module (10 MCQ/MSQ + 3 LLM), grounded strictly on the module markdown. Returns validated bank JSON per module.',
   whenToUse:
     'Run to (re)generate per-module assessment question banks for ayanakoji/assessments. Pass args.modules (course_id, module_id, title, summary, objectives, grounded_skills, content_path).',
   phases: [
@@ -43,7 +43,7 @@ const BANK_SCHEMA = {
     course_id: { type: 'string' },
     module_id: { type: 'string' },
     module_title: { type: 'string' },
-    choices: { type: 'array', minItems: 5, maxItems: 5, items: CHOICE },
+    choices: { type: 'array', minItems: 10, maxItems: 10, items: CHOICE },
     llm: { type: 'array', minItems: 3, maxItems: 3, items: LLM },
   },
 }
@@ -63,9 +63,9 @@ const REVIEW_SCHEMA = {
 // ── Shared standard (kept in sync with .claude/skills/assessment-authoring) ───
 const STANDARD = `
 AUTHORING STANDARD (follow exactly):
-- Choices test: EXACTLY 5 questions. Each has EXACTLY 4 distinct options.
+- Choices test: EXACTLY 10 questions. Each has EXACTLY 4 distinct options.
   - kind "mcq" => EXACTLY 1 correct option; kind "msq" => 2+ correct options.
-  - Use a deliberate mix: about 3-4 mcq and 1-2 msq.
+  - Use a deliberate mix: about 6-7 mcq and 3-4 msq.
   - Distractors must be plausible and wrong for a real reason (common misconceptions,
     adjacent-but-different services, right idea/wrong context). No filler / joke / "none of the above".
   - Difficulty spread: >=1 recall/definition, most at application level, ideally one that
@@ -75,7 +75,7 @@ AUTHORING STANDARD (follow exactly):
   ("Explain why...", "Compare X and Y for...", "Walk through how you would..."). Each has a
   complete, correct reference_answer (~3-6 sentences) naming the specific services/steps/tradeoffs.
   Cover three DIFFERENT facets of the module.
-- IDs (deterministic): choices => <module_id>-c01..-c05 ; llm => <module_id>-l01..-l03.
+- IDs (deterministic): choices => <module_id>-c01..-c10 ; llm => <module_id>-l01..-l03.
   Every nested module_id equals the module's id.
 GROUNDING (critical): Use ONLY concepts, services, commands, limits and tradeoffs that the
 module markdown EXPLICITLY discusses. Do NOT introduce outside Azure facts, pricing, or trivia
@@ -103,7 +103,7 @@ Ground every question and every answer key strictly in that text.
 ${STANDARD}
 
 Return the bank as the structured object: course_id="${mod.course_id}", module_id="${mod.module_id}",
-module_title="${mod.title}", 5 choices, 3 llm. Your structured output IS the deliverable.`
+module_title="${mod.title}", 10 choices, 3 llm. Your structured output IS the deliverable.`
 }
 
 function reviewPrompt(mod, bank) {
@@ -121,7 +121,7 @@ Gate on THREE criteria, being strict:
   module text above. Anything requiring knowledge not in the module => grounding_ok=false.
 - quality_ok: distractors are plausible, keys are unambiguously correct, mcq has exactly 1 correct
   and msq has 2+, difficulty is appropriate (NOT trivial / "too dumb"), prompts are unambiguous,
-  there are exactly 5 choices (4 options each) and 3 llm with reference answers, ids follow
+  there are exactly 10 choices (4 options each) and 3 llm with reference answers, ids follow
   <module_id>-c0N / -l0N.
 
 pass = relevance_ok AND grounding_ok AND quality_ok. List every concrete problem in issues
@@ -142,7 +142,7 @@ ${review.issues.map((i) => '- ' + i).join('\n')}
 
 ${STANDARD}
 
-Return the corrected full bank as the structured object (5 choices, 3 llm). Keep good questions;
+Return the corrected full bank as the structured object (10 choices, 3 llm). Keep good questions;
 only change what the issues require.`
 }
 
@@ -194,7 +194,7 @@ const modules = Array.isArray(parsedArgs)
   ? parsedArgs
   : (parsedArgs && parsedArgs.modules) || []
 log(`args type=${typeof args}; resolved ${modules.length} modules.`)
-log(`Authoring ${modules.length} module banks (5 MCQ/MSQ + 3 LLM each)…`)
+log(`Authoring ${modules.length} module banks (10 MCQ/MSQ + 3 LLM each)…`)
 const results = await parallel(modules.map((m) => () => authorOne(m)))
 
 const passed = results.filter((r) => r && r.review && r.review.pass).length

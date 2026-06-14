@@ -79,6 +79,85 @@
       "correct_answers": [
         "It makes 'promoting' code a merge between long-lived branches, reintroducing the divergence problem; promote artifacts and tags instead"
       ]
+    },
+    {
+      "id": "do-c01-m01-c06",
+      "module_id": "do-c01-m01",
+      "prompt": "The module says you can decide which model fits by asking three diagnostic questions. Which three does it name?",
+      "kind": "msq",
+      "choices": [
+        "How good is the test suite?",
+        "How often do you release?",
+        "Do you support multiple live versions at once?",
+        "How many engineers have push access to the repository?"
+      ],
+      "correct_answers": [
+        "How good is the test suite?",
+        "How often do you release?",
+        "Do you support multiple live versions at once?"
+      ]
+    },
+    {
+      "id": "do-c01-m01-c07",
+      "module_id": "do-c01-m01",
+      "prompt": "The module insists branching strategies are 'not mutually exclusive religions.' Which combination does it offer as the example of a pragmatic team blending models?",
+      "kind": "mcq",
+      "choices": [
+        "Run trunk-based development for daily work and cut a short-lived release branch when stabilizing a version",
+        "Run feature branches for daily work and keep a permanent develop branch as a second integration point",
+        "Run a branch per environment for promotion and trunk-based development inside each environment",
+        "Run release branches for daily work and merge them all together on a fixed 'merge day'"
+      ],
+      "correct_answers": [
+        "Run trunk-based development for daily work and cut a short-lived release branch when stabilizing a version"
+      ]
+    },
+    {
+      "id": "do-c01-m01-c08",
+      "module_id": "do-c01-m01",
+      "prompt": "According to the module, what was Meridian's actual mistake — the thing that caused 'merge day'?",
+      "kind": "mcq",
+      "choices": [
+        "Running feature branches with no discipline about lifetime, letting them drift for two or three weeks",
+        "Choosing feature branching at all, since feature branching is inherently the wrong model",
+        "Using Git instead of a tool better suited to their team size",
+        "Adopting trunk-based development before their test suite could support it"
+      ],
+      "correct_answers": [
+        "Running feature branches with no discipline about lifetime, letting them drift for two or three weeks"
+      ]
+    },
+    {
+      "id": "do-c01-m01-c09",
+      "module_id": "do-c01-m01",
+      "prompt": "The module gives a 'common, sane mapping' of branches to running software for a continuously-deployed service. Which statements describe that recommended mapping?",
+      "kind": "msq",
+      "choices": [
+        "main is always deployable and is what flows to staging on every merge",
+        "A production deployment is a tagged commit on main that has passed staging",
+        "There is deliberately no permanent develop or per-environment branch",
+        "Each environment (dev/qa/prod) gets its own long-lived branch so code can be promoted by merging"
+      ],
+      "correct_answers": [
+        "main is always deployable and is what flows to staging on every merge",
+        "A production deployment is a tagged commit on main that has passed staging",
+        "There is deliberately no permanent develop or per-environment branch"
+      ]
+    },
+    {
+      "id": "do-c01-m01-c10",
+      "module_id": "do-c01-m01",
+      "prompt": "In the walkthrough, the engineer runs 'git pull --rebase origin main' before pushing. What reason does the module give for rebasing here?",
+      "kind": "mcq",
+      "choices": [
+        "Rebase keeps history linear and surfaces conflicts now, while they are still small",
+        "Rebase is required by Git before any push to a shared branch can succeed",
+        "Rebase converts the short-lived branch into a permanent release branch automatically",
+        "Rebase enables the feature flag so the redesign code stays dark in production"
+      ],
+      "correct_answers": [
+        "Rebase keeps history linear and surfaces conflicts now, while they are still small"
+      ]
     }
   ],
   "llm": [

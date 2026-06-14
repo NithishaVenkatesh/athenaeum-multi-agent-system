@@ -78,6 +78,83 @@
       "correct_answers": [
         "The change feed is an ordered log of current item state; for competing-consumer messaging with explicit acks and dead-lettering, use Service Bus or Queue Storage"
       ]
+    },
+    {
+      "id": "cb-c02-m02-c06",
+      "module_id": "cb-c02-m02",
+      "prompt": "The module opens by criticizing a cron job that queries the deliveries container every minute for recently changed rows. Which problems does it attribute to that polling approach? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "It is expensive because it burns RUs scanning for changes that mostly aren't there",
+        "It is laggy, running up to a minute behind the actual write",
+        "It can miss changes when two happen within one poll window and must track by hand what it already saw",
+        "It corrupts the lease container's continuation tokens each time it runs"
+      ],
+      "correct_answers": [
+        "It is expensive because it burns RUs scanning for changes that mostly aren't there",
+        "It is laggy, running up to a minute behind the actual write",
+        "It can miss changes when two happen within one poll window and must track by hand what it already saw"
+      ]
+    },
+    {
+      "id": "cb-c02-m02-c07",
+      "module_id": "cb-c02-m02",
+      "prompt": "According to the module, in what order does the change feed expose creates and updates?",
+      "kind": "mcq",
+      "choices": [
+        "Per logical partition, in the order the writes happened",
+        "Globally across the whole container, strictly by wall-clock timestamp",
+        "In reverse order, newest write first, so the latest state is read soonest",
+        "In an unspecified order that the consumer must re-sort using _ts"
+      ],
+      "correct_answers": [
+        "Per logical partition, in the order the writes happened"
+      ]
+    },
+    {
+      "id": "cb-c02-m02-c08",
+      "module_id": "cb-c02-m02",
+      "prompt": "How does the change feed processor behave with respect to the number of consumer instances you run, according to the module?",
+      "kind": "mcq",
+      "choices": [
+        "It spreads the leases across however many instances you run; run one and it holds them all",
+        "It requires exactly one instance per partition or it refuses to start",
+        "It replicates every lease to every instance so all instances process all partitions",
+        "It caps consumers at the number of leases and ignores any extra instances permanently"
+      ],
+      "correct_answers": [
+        "It spreads the leases across however many instances you run; run one and it holds them all"
+      ]
+    },
+    {
+      "id": "cb-c02-m02-c09",
+      "module_id": "cb-c02-m02",
+      "prompt": "A consumer needs to react to every intermediate revision of an item, not just its latest state. What does the module say you need?",
+      "kind": "mcq",
+      "choices": [
+        "All-versions-and-deletes mode (verifying availability and configuration in the docs), or an append-only write pattern",
+        "A soft-delete flag with a short TTL so each revision arrives as an update",
+        "A second lease container dedicated to holding the intermediate versions",
+        "Switching the consumer from the pull model to a Cosmos DB trigger on an Azure Function"
+      ],
+      "correct_answers": [
+        "All-versions-and-deletes mode (verifying availability and configuration in the docs), or an append-only write pattern"
+      ]
+    },
+    {
+      "id": "cb-c02-m02-c10",
+      "module_id": "cb-c02-m02",
+      "prompt": "After a consumer crashes, how does a new instance know where to resume, according to the module?",
+      "kind": "mcq",
+      "choices": [
+        "It picks up the lease, which still holds the last acknowledged position, and resumes from that bookmarked continuation token",
+        "It restarts from the very beginning of the feed every time to guarantee nothing is missed",
+        "It resumes from \"now,\" skipping any changes written while it was down",
+        "It queries the container by _ts to reconstruct which items it had already processed"
+      ],
+      "correct_answers": [
+        "It picks up the lease, which still holds the last acknowledged position, and resumes from that bookmarked continuation token"
+      ]
     }
   ],
   "llm": [

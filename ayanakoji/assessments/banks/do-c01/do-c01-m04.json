@@ -81,6 +81,85 @@
         "Tag the deployed commit as a permanent anchor for what shipped",
         "Connect the Azure Boards app to the GitHub repository so AB# mentions auto-link"
       ]
+    },
+    {
+      "id": "do-c01-m04-c06",
+      "module_id": "do-c01-m04",
+      "prompt": "The module frames the traceability gap with two complementary failures: an on-call engineer who cannot answer \"what changed?\" and a product manager who cannot tell whether the loyalty-points feature actually shipped. What single underlying problem does the module say these two situations share?",
+      "kind": "mcq",
+      "choices": [
+        "There is no traceable thread connecting a unit of planned work, through the commits and pull request that implemented it, to the deployment that released it",
+        "The team is not deploying often enough, so changes accumulate and become hard to attribute",
+        "The commit messages are well written but the branch names omit the work item ID",
+        "Azure Boards and GitHub are storing duplicate copies of the same work item, causing confusion"
+      ],
+      "correct_answers": [
+        "There is no traceable thread connecting a unit of planned work, through the commits and pull request that implemented it, to the deployment that released it"
+      ]
+    },
+    {
+      "id": "do-c01-m04-c07",
+      "module_id": "do-c01-m04",
+      "prompt": "In the traceability chain, the module identifies the \"deployment\" anchor specifically as something carried over from the previous module. What is that anchor, and why does it serve the role?",
+      "kind": "mcq",
+      "choices": [
+        "The release tag on the deployed commit — it marks exactly what shipped, and from that commit you can find the merged pull requests and then the work items",
+        "The pull request description — it lists every commit, so it records what was released",
+        "The Azure Boards work item state of \"Closed\" — it confirms the work was delivered to production",
+        "The branch name convention — it carries the work item ID forward into the deployment"
+      ],
+      "correct_answers": [
+        "The release tag on the deployed commit — it marks exactly what shipped, and from that commit you can find the merged pull requests and then the work items"
+      ]
+    },
+    {
+      "id": "do-c01-m04-c08",
+      "module_id": "do-c01-m04",
+      "prompt": "Per the module's definitions, which statements about lead time and cycle time are accurate? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Lead time runs from when a request is made (the work item is created) until it is delivered to the customer",
+        "Cycle time is the narrower span from when work actively starts (\"in progress\") until it is done",
+        "Lead time minus cycle time is roughly the queue and wait time, often where the real delay hides",
+        "Cycle time is the customer's view and lead time is the team's view of how long the work itself takes"
+      ],
+      "correct_answers": [
+        "Lead time runs from when a request is made (the work item is created) until it is delivered to the customer",
+        "Cycle time is the narrower span from when work actively starts (\"in progress\") until it is done",
+        "Lead time minus cycle time is roughly the queue and wait time, often where the real delay hides"
+      ]
+    },
+    {
+      "id": "do-c01-m04-c09",
+      "module_id": "do-c01-m04",
+      "prompt": "How does the module define \"time to recovery\" as one of the flow metrics that round out the picture of whether a team is fast and stable?",
+      "kind": "mcq",
+      "choices": [
+        "How long it takes from a production failure until service is restored",
+        "How long it takes to roll back a release tag to a previous version",
+        "How long a work item waits in the backlog before it is picked up",
+        "How long a pull request stays open before it is merged"
+      ],
+      "correct_answers": [
+        "How long it takes from a production failure until service is restored"
+      ]
+    },
+    {
+      "id": "do-c01-m04-c10",
+      "module_id": "do-c01-m04",
+      "prompt": "The module lists pitfalls to avoid when building traceability and dashboards. Which of the following does it explicitly call out as pitfalls? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Leaving linking to human diligence instead of baking it into the branch, commit, and PR convention",
+        "Tagging nothing, so deployments aren't anchored and \"what shipped\" is guesswork",
+        "Weaponizing flow metrics against individuals, which corrupts the data as everyone games their numbers",
+        "Standardizing on the AB#123 syntax before the integration docs confirm it, which permanently breaks all links"
+      ],
+      "correct_answers": [
+        "Leaving linking to human diligence instead of baking it into the branch, commit, and PR convention",
+        "Tagging nothing, so deployments aren't anchored and \"what shipped\" is guesswork",
+        "Weaponizing flow metrics against individuals, which corrupts the data as everyone games their numbers"
+      ]
     }
   ],
   "llm": [

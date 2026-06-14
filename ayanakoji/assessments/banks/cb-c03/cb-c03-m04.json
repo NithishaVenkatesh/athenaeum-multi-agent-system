@@ -81,6 +81,85 @@
         "Event Hubs preserves order only within a partition, not across the whole stream",
         "Queue Storage caps messages at 64 KB, so large payloads should use the claim-check pattern (store the blob, pass a reference)"
       ]
+    },
+    {
+      "id": "cb-c03-m04-c06",
+      "module_id": "cb-c03-m04",
+      "kind": "mcq",
+      "prompt": "The module opens by defining asynchronous integration as the answer to scenarios that do not fit request/response. How does it characterize the decoupling that a broker provides?",
+      "choices": [
+        "The producer is decoupled from the consumer in time and availability",
+        "The producer and consumer are decoupled in programming language and runtime version",
+        "The producer is decoupled from the consumer only in geographic region",
+        "The producer is guaranteed a synchronous reply but on a background thread"
+      ],
+      "correct_answers": [
+        "The producer is decoupled from the consumer in time and availability"
+      ]
+    },
+    {
+      "id": "cb-c03-m04-c07",
+      "module_id": "cb-c03-m04",
+      "kind": "mcq",
+      "prompt": "According to the module, how do Azure Event Hubs consumers track their position in the stream?",
+      "choices": [
+        "They track their position with an offset/checkpoint rather than removing events",
+        "They delete each event from the partition once it has been read",
+        "They acquire a session lock that advances a FIFO cursor for the whole hub",
+        "They rely on Event Grid to push the next event once the prior one is acknowledged"
+      ],
+      "correct_answers": [
+        "They track their position with an offset/checkpoint rather than removing events"
+      ]
+    },
+    {
+      "id": "cb-c03-m04-c08",
+      "module_id": "cb-c03-m04",
+      "kind": "mcq",
+      "prompt": "In the Northwind walkthrough, how does the delivery service authenticate when publishing the ShipmentDelivered event, and where is the topic access key kept?",
+      "choices": [
+        "It uses DefaultAzureCredential with the topic's managed-identity RBAC role granting publish rights, and the access key is stored in Key Vault",
+        "It hardcodes the topic access key in the source so the SDK can sign each request",
+        "It passes the user's login password to EventGridPublisherClient on every send",
+        "It disables authentication because Event Grid custom topics are publicly writable by default"
+      ],
+      "correct_answers": [
+        "It uses DefaultAzureCredential with the topic's managed-identity RBAC role granting publish rights, and the access key is stored in Key Vault"
+      ]
+    },
+    {
+      "id": "cb-c03-m04-c09",
+      "module_id": "cb-c03-m04",
+      "kind": "msq",
+      "prompt": "Per the module, which capabilities does Azure Service Bus offer that distinguish it as an enterprise message broker for reliable workflows?",
+      "choices": [
+        "Topics/subscriptions for publish/subscribe in addition to point-to-point queues",
+        "Duplicate detection and scheduled delivery",
+        "Transactions and dead-lettering for messages that cannot be processed",
+        "Built-in offset/checkpoint replay so multiple teams can re-read the same stream at their own pace"
+      ],
+      "correct_answers": [
+        "Topics/subscriptions for publish/subscribe in addition to point-to-point queues",
+        "Duplicate detection and scheduled delivery",
+        "Transactions and dead-lettering for messages that cannot be processed"
+      ]
+    },
+    {
+      "id": "cb-c03-m04-c10",
+      "module_id": "cb-c03-m04",
+      "kind": "msq",
+      "prompt": "The module describes the claim-check pattern for handling large payloads. Which statements about it and the relevant size constraints are correct?",
+      "choices": [
+        "You store the large payload in Blob Storage and pass a pointer/reference in the message",
+        "Queue Storage messages cap at 64 KB while Service Bus limits vary by tier",
+        "It is the recommended fix because storing a big document inline fails or wastes the broker",
+        "It works by compressing the document so any payload always fits within the broker's inline limit"
+      ],
+      "correct_answers": [
+        "You store the large payload in Blob Storage and pass a pointer/reference in the message",
+        "Queue Storage messages cap at 64 KB while Service Bus limits vary by tier",
+        "It is the recommended fix because storing a big document inline fails or wastes the broker"
+      ]
     }
   ],
   "llm": [

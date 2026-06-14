@@ -79,6 +79,82 @@
       "correct_answers": [
         "`require_code_owner_reviews`"
       ]
+    },
+    {
+      "id": "do-c01-m02-c06",
+      "module_id": "do-c01-m02",
+      "prompt": "The module describes a design principle for matching restrictions to risk: heavier where a mistake is expensive, lighter where it is cheap. What name does it give this principle?",
+      "kind": "mcq",
+      "choices": [
+        "Proportionality",
+        "Least privilege",
+        "Defense in depth",
+        "Separation of duties"
+      ],
+      "correct_answers": [
+        "Proportionality"
+      ]
+    },
+    {
+      "id": "do-c01-m02-c07",
+      "module_id": "do-c01-m02",
+      "prompt": "In Meridian's GitHub protection rule, which fields are described as protecting the history of `main` itself? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "`allow_force_pushes: false`",
+        "`allow_deletions: false`",
+        "`enforce_admins: true`",
+        "`dismiss_stale_reviews: true`"
+      ],
+      "correct_answers": [
+        "`allow_force_pushes: false`",
+        "`allow_deletions: false`"
+      ]
+    },
+    {
+      "id": "do-c01-m02-c08",
+      "module_id": "do-c01-m02",
+      "prompt": "According to the module, what does turning on `enforce_admins` (or its Azure Repos equivalent) accomplish, and what does the module suggest you should have before deliberately leaving it off?",
+      "kind": "mcq",
+      "choices": [
+        "It makes even repo admins satisfy the gate; leaving it off is acceptable only with a deliberate break-glass process",
+        "It grants admins a permanent bypass so they can hotfix production without review",
+        "It requires admins to add themselves as code owners on every protected path",
+        "It automatically escalates a doc-typo PR to require two approvals and a security scan"
+      ],
+      "correct_answers": [
+        "It makes even repo admins satisfy the gate; leaving it off is acceptable only with a deliberate break-glass process"
+      ]
+    },
+    {
+      "id": "do-c01-m02-c09",
+      "module_id": "do-c01-m02",
+      "prompt": "In Meridian's `.github/CODEOWNERS` file, which team is auto-requested as reviewer for changes under `/infra/`?",
+      "kind": "mcq",
+      "choices": [
+        "@meridian/platform",
+        "@meridian/billing-leads",
+        "@meridian/engineers",
+        "@meridian/storefront"
+      ],
+      "correct_answers": [
+        "@meridian/platform"
+      ]
+    },
+    {
+      "id": "do-c01-m02-c10",
+      "module_id": "do-c01-m02",
+      "prompt": "The module says each branch-protection rule closes a specific hole. Which hole does disallowing direct pushes to the protected branch close?",
+      "kind": "mcq",
+      "choices": [
+        "It closes the back door so all changes must flow through pull requests",
+        "It makes a green build a precondition for merging rather than a hope",
+        "It re-runs checks against the merged state so two PRs can't combine into a broken `main`",
+        "It resets a reviewer's approval whenever new commits are pushed"
+      ],
+      "correct_answers": [
+        "It closes the back door so all changes must flow through pull requests"
+      ]
     }
   ],
   "llm": [

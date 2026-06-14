@@ -81,6 +81,85 @@
         "Filesystem logs are fine for a live tail but are not a lasting store, so telemetry should be sent to Application Insights (or a Log Analytics workspace) to survive an incident.",
         "Emitting structured signals such as log levels, request IDs, and meaningful events lets you query the logs later."
       ]
+    },
+    {
+      "id": "cb-c01-m04-c06",
+      "module_id": "cb-c01-m04",
+      "kind": "mcq",
+      "prompt": "The module distinguishes scaling up from scaling out. Which statement correctly describes scaling up (vertical scaling) as the module defines it?",
+      "choices": [
+        "It moves the service to a larger instance with more CPU and memory per instance.",
+        "It adds more instances of the same size and spreads load across them.",
+        "It is a rule engine that adds or removes instances automatically based on a signal.",
+        "It allows a service to scale to zero when there is no traffic."
+      ],
+      "correct_answers": [
+        "It moves the service to a larger instance with more CPU and memory per instance."
+      ]
+    },
+    {
+      "id": "cb-c01-m04-c07",
+      "module_id": "cb-c01-m04",
+      "kind": "mcq",
+      "prompt": "Using the module's decision framework, which compute service does it recommend for a one-off or batch task that runs and then exits?",
+      "choices": [
+        "Container Instances",
+        "Azure Functions",
+        "App Service slots",
+        "Container Apps revisions"
+      ],
+      "correct_answers": [
+        "Container Instances"
+      ]
+    },
+    {
+      "id": "cb-c01-m04-c08",
+      "module_id": "cb-c01-m04",
+      "kind": "mcq",
+      "prompt": "A workload needs gradual rollout and traffic-splitting between versions. According to the module's compute decision guidance, which option directly addresses this need?",
+      "choices": [
+        "Container Apps revisions or App Service slots",
+        "Container Instances for one-off batch runs",
+        "Azure Functions scaling to zero on an event trigger",
+        "Scaling up to a larger instance with more CPU and memory"
+      ],
+      "correct_answers": [
+        "Container Apps revisions or App Service slots"
+      ]
+    },
+    {
+      "id": "cb-c01-m04-c09",
+      "module_id": "cb-c01-m04",
+      "kind": "msq",
+      "prompt": "The module's common pitfalls section warns about autoscale and instance-count mistakes. Which of the following are pitfalls the module explicitly identifies?",
+      "choices": [
+        "Using symmetric, twitchy thresholds (identical thresholds and windows for out and in) that cause the service to flap.",
+        "Setting a minimum of one (or zero) instance for a critical service, leaving no headroom or redundancy.",
+        "Configuring logging but never routing it anywhere durable, so the data is lost after an incident.",
+        "Setting the maximum instance count too high, which prevents autoscale from ever triggering a scale-out."
+      ],
+      "correct_answers": [
+        "Using symmetric, twitchy thresholds (identical thresholds and windows for out and in) that cause the service to flap.",
+        "Setting a minimum of one (or zero) instance for a critical service, leaving no headroom or redundancy.",
+        "Configuring logging but never routing it anywhere durable, so the data is lost after an incident."
+      ]
+    },
+    {
+      "id": "cb-c01-m04-c10",
+      "module_id": "cb-c01-m04",
+      "kind": "msq",
+      "prompt": "The module notes that different platforms expose autoscaling differently. Which statements about how the platforms scale match the module's description?",
+      "choices": [
+        "Container Apps and Functions scale on triggers including HTTP and event-source depth, and can scale to zero.",
+        "App Service uses autoscale rules on its plan.",
+        "A well-designed autoscale rule is symmetric in the sense that it scales out when a metric crosses a high threshold and scales back in when the metric falls, returning to a cheap baseline.",
+        "App Service plans can scale to zero just like Functions when there is no traffic."
+      ],
+      "correct_answers": [
+        "Container Apps and Functions scale on triggers including HTTP and event-source depth, and can scale to zero.",
+        "App Service uses autoscale rules on its plan.",
+        "A well-designed autoscale rule is symmetric in the sense that it scales out when a metric crosses a high threshold and scales back in when the metric falls, returning to a cheap baseline."
+      ]
     }
   ],
   "llm": [

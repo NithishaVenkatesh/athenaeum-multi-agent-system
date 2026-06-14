@@ -79,6 +79,85 @@
       "correct_answers": [
         "An environment approval acting as a release gate — the build is good, but a human controls when it deploys"
       ]
+    },
+    {
+      "id": "do-c02-m03-c06",
+      "module_id": "do-c02-m03",
+      "prompt": "Per the module, why are integration tests placed later in the pipeline than unit tests rather than running first?",
+      "kind": "mcq",
+      "choices": [
+        "They are slower and need provisioned dependencies, so they run after units pass",
+        "They are faster than unit tests but require a clean security scan to begin",
+        "They must run on a schedule rather than on every commit because they are the most expensive layer",
+        "They can only run on the developer's machine, so the pipeline defers them to a later stage"
+      ],
+      "correct_answers": [
+        "They are slower and need provisioned dependencies, so they run after units pass"
+      ]
+    },
+    {
+      "id": "do-c02-m03-c07",
+      "module_id": "do-c02-m03",
+      "prompt": "The module describes automatic release gates as polling an external signal and proceeding only when it is good. Which of the following are given as examples of such signals? Select all that apply.",
+      "kind": "msq",
+      "choices": [
+        "A monitoring system reporting healthy error rates",
+        "A change-management ticket marked approved",
+        "A security scan with no open findings",
+        "A unit-test job finishing in under a minute"
+      ],
+      "correct_answers": [
+        "A monitoring system reporting healthy error rates",
+        "A change-management ticket marked approved",
+        "A security scan with no open findings"
+      ]
+    },
+    {
+      "id": "do-c02-m03-c08",
+      "module_id": "do-c02-m03",
+      "prompt": "The module says pointing integration tests at a long-lived shared database is a pitfall. What problem does it cause, and what does the module recommend instead?",
+      "kind": "mcq",
+      "choices": [
+        "It makes tests order-dependent and flaky; spin up disposable dependencies per run (e.g. containers) so each run starts clean",
+        "It inflates coverage numbers; gate on changed-code coverage rather than total coverage",
+        "It slows the unit layer; move most test mass to the base of the pyramid",
+        "It bypasses the release gate; wire change approval as a release gate before production"
+      ],
+      "correct_answers": [
+        "It makes tests order-dependent and flaky; spin up disposable dependencies per run (e.g. containers) so each run starts clean"
+      ]
+    },
+    {
+      "id": "do-c02-m03-c09",
+      "module_id": "do-c02-m03",
+      "prompt": "According to the module's economic reasoning for the pyramid, which statements are TRUE about the cost of catching a bug at different layers? Select all that apply.",
+      "kind": "msq",
+      "choices": [
+        "A bug caught by a unit test costs seconds",
+        "The same bug caught by a load test costs a provisioned environment and a long run",
+        "The same bug caught in production costs an incident",
+        "A bug caught by a unit test costs a provisioned environment, which is why units run last"
+      ],
+      "correct_answers": [
+        "A bug caught by a unit test costs seconds",
+        "The same bug caught by a load test costs a provisioned environment and a long run",
+        "The same bug caught in production costs an incident"
+      ]
+    },
+    {
+      "id": "do-c02-m03-c10",
+      "module_id": "do-c02-m03",
+      "prompt": "The module advises treating coverage as a 'floor and a trend.' Which practice best reflects that advice?",
+      "kind": "mcq",
+      "choices": [
+        "Fail the build if coverage on changed code drops below a threshold and watch the direction over time, without making 'raise the number' the goal",
+        "Set a single fixed target percentage for the whole repository and reward teams that exceed it",
+        "Measure coverage only on load tests, since they exercise the most realistic paths",
+        "Disable the build when coverage is below 100%, since any untested line is unsafe to ship"
+      ],
+      "correct_answers": [
+        "Fail the build if coverage on changed code drops below a threshold and watch the direction over time, without making 'raise the number' the goal"
+      ]
     }
   ],
   "llm": [
