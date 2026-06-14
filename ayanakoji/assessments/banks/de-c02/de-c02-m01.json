@@ -1,0 +1,104 @@
+{
+  "course_id": "de-c02",
+  "module_id": "de-c02-m01",
+  "module_title": "Ingest and transform with Apache Spark",
+  "choices": [
+    {
+      "id": "de-c02-m01-c01",
+      "module_id": "de-c02-m01",
+      "kind": "mcq",
+      "prompt": "In Spark's lazy evaluation model, at what point does Spark actually execute the chain of transformations you have written?",
+      "choices": [
+        "As soon as each transformation (such as select or withColumn) is written, so the cluster stays busy",
+        "Only when an action such as write, count, collect, or show is called",
+        "When the DataFrame is first created by spark.read, which materializes all downstream steps",
+        "Automatically every few seconds, whenever the Catalyst optimizer decides the plan is large enough"
+      ],
+      "correct_answers": [
+        "Only when an action such as write, count, collect, or show is called"
+      ]
+    },
+    {
+      "id": "de-c02-m01-c02",
+      "module_id": "de-c02-m01",
+      "kind": "mcq",
+      "prompt": "A nightly feed has duplicate transaction_id rows that differ only in their sold_at timestamp, and you must keep the latest arrival for each transaction. Which approach does the module prescribe?",
+      "choices": [
+        "Call dropDuplicates(['transaction_id']) so Spark removes the extra rows automatically",
+        "Call dropDuplicates() on the full row to catch every byte-identical copy",
+        "Define a window partitioned by transaction_id ordered by sold_at descending, add row_number(), and keep where it equals 1",
+        "Use a broadcast join against the source so only the newest row survives the merge"
+      ],
+      "correct_answers": [
+        "Define a window partitioned by transaction_id ordered by sold_at descending, add row_number(), and keep where it equals 1"
+      ]
+    },
+    {
+      "id": "de-c02-m01-c03",
+      "module_id": "de-c02-m01",
+      "kind": "mcq",
+      "prompt": "Greenfork's customer_id is blank for cash purchases, but those are still valid sales and a downstream team needs to know which rows lacked an ID. According to the module, what is the correct way to handle these missing values?",
+      "choices": [
+        "Drop the rows, because a record with no customer_id is useless to downstream consumers",
+        "Flag them with a boolean column (and optionally fill a sentinel) so the gap stays explicit while the valid sales are preserved",
+        "Silently fill customer_id with 0 so aggregates still compute without errors",
+        "Leave the nulls untouched and let downstream aggregates decide how to treat them"
+      ],
+      "correct_answers": [
+        "Flag them with a boolean column (and optionally fill a sentinel) so the gap stays explicit while the valid sales are preserved"
+      ]
+    },
+    {
+      "id": "de-c02-m01-c04",
+      "module_id": "de-c02-m01",
+      "kind": "msq",
+      "prompt": "The module describes denormalizing for the gold/serving layer by enriching the transaction row with product reference data using a broadcast join. Which statements about this denormalization and broadcast strategy are correct?",
+      "choices": [
+        "Denormalizing pre-joins reference data into one wide table so reads are fast and join-free, which suits analytics and the gold layer",
+        "broadcast() ships the lookup table to every executor, so it should be used only on genuinely small dimensions",
+        "Broadcasting a multi-gigabyte table is recommended because it eliminates shuffles regardless of table size",
+        "Normalizing splits a wide, redundant row into related tables so each fact lives once, which suits write-heavy operational stores"
+      ],
+      "correct_answers": [
+        "Denormalizing pre-joins reference data into one wide table so reads are fast and join-free, which suits analytics and the gold layer",
+        "broadcast() ships the lookup table to every executor, so it should be used only on genuinely small dimensions",
+        "Normalizing splits a wide, redundant row into related tables so each fact lives once, which suits write-heavy operational stores"
+      ]
+    },
+    {
+      "id": "de-c02-m01-c05",
+      "module_id": "de-c02-m01",
+      "kind": "mcq",
+      "prompt": "When cleansing the price column with cast('decimal(10,2)'), why does the module insist you count the nulls the cast produced before overwriting the original column?",
+      "choices": [
+        "Because cast raises an exception on bad input, and counting nulls is how you catch and re-raise it",
+        "Because cast turns unparseable junk into NULL silently with no error, so measuring the nulls is the only way to surface what the cast cost you",
+        "Because decimal(10,2) rounds valid prices to NULL unless you first trim whitespace from every row",
+        "Because the Catalyst optimizer drops the cast entirely unless an action counts the resulting nulls"
+      ],
+      "correct_answers": [
+        "Because cast turns unparseable junk into NULL silently with no error, so measuring the nulls is the only way to surface what the cast cost you"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "de-c02-m01-l01",
+      "module_id": "de-c02-m01",
+      "prompt": "A teammate's Spark job reads a DataFrame from the source, then calls .count() three times and .write once, and complains that performance is terrible. Explain what is actually happening under Spark's execution model and the specific fix the module recommends.",
+      "reference_answer": "Spark uses lazy evaluation: the transformations you chain are free and only recorded as a logical plan, while each action triggers execution of the entire chain from the source. Here there are four actions (three count() calls plus the write), so the source is read and the whole lazy chain recomputed four times, which is why it is slow. The fix is to cache() (or persist()) the DataFrame after the expensive transformations, then reuse that cached result for the repeated actions so the costly steps run once. You should also unpersist() it when finished to free the memory. The root cause is that reusing a DataFrame or calling actions repeatedly silently recomputes everything unless the results are persisted."
+    },
+    {
+      "id": "de-c02-m01-l02",
+      "module_id": "de-c02-m01",
+      "prompt": "Compare normalizing versus denormalizing data and explain why the Greenfork batch pipeline denormalizes the transaction feed for its silver/gold output, including the join technique used and its risk.",
+      "reference_answer": "Normalizing splits a wide, redundant row into related tables so each fact lives only once, which is well suited to write-heavy operational stores. Denormalizing does the opposite: it pre-joins reference data into one wide table so reads are fast and join-free, which fits analytics and the gold layer. The Greenfork pipeline denormalizes for serving by enriching each transaction row with the product_name and category from a small dim_product lookup, so the BI tool never has to join at query time. It does this with a broadcast join, which is cheap because the lookup is small and gets shipped to every executor. The risk is broadcasting a table that is not small: a broadcast() on a multi-gigabyte table ships it to every executor and can exhaust executor memory, so broadcast only genuinely small dimensions and otherwise let Spark choose the join strategy."
+    },
+    {
+      "id": "de-c02-m01-l03",
+      "module_id": "de-c02-m01",
+      "prompt": "Walk through how you would cleanse a messy price column that arrives as strings with currency symbols (for example '$3.50'), following the module's discipline of never silently coercing data.",
+      "reference_answer": "The module frames cleansing as a sequence of explicit, deliberate decisions rather than one operation, and the core discipline is to never silently coerce. For the price column you would first strip the currency symbol and commas, for example with F.regexp_replace('price', r'[$,]', ''), then cast the cleaned string into a new decimal column with cast('decimal(10,2)'). Because cast turns any junk it cannot parse into NULL with no error, you must then surface what the cast cost: filter where price isNull() and count those rows (for example print the count of unparseable prices) before trusting the data. Only after you have measured the nulls and decided what they mean should you overwrite or proceed, so a failed cast like '$3.50' becoming NULL is caught immediately instead of being discovered three layers downstream."
+    }
+  ]
+}
