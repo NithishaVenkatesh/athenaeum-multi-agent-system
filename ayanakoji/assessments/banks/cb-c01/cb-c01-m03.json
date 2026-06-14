@@ -1,0 +1,104 @@
+{
+  "course_id": "cb-c01",
+  "module_id": "cb-c01-m03",
+  "module_title": "Containerized solutions: ACR, ACI, and Container Apps",
+  "choices": [
+    {
+      "id": "cb-c01-m03-c01",
+      "module_id": "cb-c01-m03",
+      "kind": "mcq",
+      "prompt": "According to the module, what is the difference between a container image and a container?",
+      "choices": [
+        "An image is a layered, read-only bundle of the application and everything it needs to run, while a container is a running instance of that image.",
+        "An image is the running process, while a container is the static Dockerfile recipe stored on disk.",
+        "An image is a managed registry service, while a container is the network boundary that apps share.",
+        "An image and a container are two names for the same artifact, used interchangeably depending on the registry."
+      ],
+      "correct_answers": [
+        "An image is a layered, read-only bundle of the application and everything it needs to run, while a container is a running instance of that image."
+      ]
+    },
+    {
+      "id": "cb-c01-m03-c02",
+      "module_id": "cb-c01-m03",
+      "kind": "mcq",
+      "prompt": "Northwind Parcel needs to run a one-time database migration that takes about ten minutes and then exits. Per the module, which service fits best and why?",
+      "choices": [
+        "Azure Container Instances, because it runs a single container for its duration and exits with no orchestration overhead.",
+        "Azure Container Apps, because its scale-to-zero feature makes short-lived jobs free to run.",
+        "Azure Container Registry, because the migration can run directly inside the registry where the image lives.",
+        "Azure Container Apps, because a one-off migration needs revisions and traffic-splitting to roll out safely."
+      ],
+      "correct_answers": [
+        "Azure Container Instances, because it runs a single container for its duration and exits with no orchestration overhead."
+      ]
+    },
+    {
+      "id": "cb-c01-m03-c03",
+      "module_id": "cb-c01-m03",
+      "kind": "mcq",
+      "prompt": "In the walkthrough, why is `az acr build` used to publish the tariff-calc image instead of building it locally?",
+      "choices": [
+        "It runs the build in the registry, so you do not need Docker installed locally.",
+        "It automatically pins the image to the `latest` tag so production stays current.",
+        "It deploys the image directly as a Container App, skipping the registry entirely.",
+        "It is the only command that can produce a mutable tag for rapid iteration."
+      ],
+      "correct_answers": [
+        "It runs the build in the registry, so you do not need Docker installed locally."
+      ]
+    },
+    {
+      "id": "cb-c01-m03-c04",
+      "module_id": "cb-c01-m03",
+      "kind": "msq",
+      "prompt": "According to the module, which capabilities does Azure Container Apps provide that make it the right choice for a long-lived, scaling microservice (and that ACI lacks)?",
+      "choices": [
+        "Scaling driven by HTTP traffic or event sources, including scale-to-zero.",
+        "Revisions for safe rollout and traffic-splitting between versions.",
+        "Built-in ingress with TLS and service-to-service discovery.",
+        "A fully managed Kubernetes cluster that you operate and patch yourself."
+      ],
+      "correct_answers": [
+        "Scaling driven by HTTP traffic or event sources, including scale-to-zero.",
+        "Revisions for safe rollout and traffic-splitting between versions.",
+        "Built-in ingress with TLS and service-to-service discovery."
+      ]
+    },
+    {
+      "id": "cb-c01-m03-c05",
+      "module_id": "cb-c01-m03",
+      "kind": "mcq",
+      "prompt": "The walkthrough's `Dockerfile` copies `requirements.txt` and runs `pip install` before copying the rest of the source code. What is the reason this ordering matters?",
+      "choices": [
+        "Ordering layers from least- to most-frequently-changed keeps the expensive dependency-install layer cached when only code changes.",
+        "Copying requirements first reduces the final image size by discarding the application source.",
+        "pip refuses to install dependencies unless requirements.txt is the only file present in the working directory.",
+        "Copying source first is required so that EXPOSE 8000 can detect the application's port at build time."
+      ],
+      "correct_answers": [
+        "Ordering layers from least- to most-frequently-changed keeps the expensive dependency-install layer cached when only code changes."
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "cb-c01-m03-l01",
+      "module_id": "cb-c01-m03",
+      "prompt": "Explain the distinct role each of the three services — Azure Container Registry, Azure Container Instances, and Azure Container Apps — plays, using the module's mental model for choosing between them.",
+      "reference_answer": "The module frames the trio by responsibility: ACR is where the image lives, ACI is where you run a container quickly and simply, and Container Apps is where you run a service that must scale, roll out gradually, and stay up. Azure Container Registry is a private, managed registry for storing and versioning images close to where they will run. Azure Container Instances runs a single container (or small group) directly without any cluster or orchestration layer, billed for the duration it runs, making it ideal for short-lived or bursty work like a batch job, build step, or one-off migration. Azure Container Apps is a managed platform for long-lived microservices that provides traffic- and event-driven scaling (including scale-to-zero), revisions, ingress with TLS, and service discovery without operating Kubernetes. You choose by workload lifecycle and scaling needs: transient task to ACI, persistent scaling service to Container Apps."
+    },
+    {
+      "id": "cb-c01-m03-l02",
+      "module_id": "cb-c01-m03",
+      "prompt": "Walk through how Northwind Parcel containerizes the tariff service, publishes it to ACR, and deploys it on Container Apps, naming the key commands and flags from the walkthrough.",
+      "reference_answer": "First they write a minimal Dockerfile that copies requirements.txt and runs pip install before copying the rest of the code, then EXPOSEs 8000 and sets a gunicorn CMD bound to 0.0.0.0:8000. They create the private registry with `az acr create --name northwindacr --sku Basic`, then build and publish in the registry using `az acr build --registry northwindacr --image tariff-calc:1.4.0 .`, which runs the build in ACR without local Docker and pins an immutable version tag. Next they create the shared environment (the networking and logging boundary) with `az containerapp env create`. Finally they deploy with `az containerapp create`, supplying `--image northwindacr.azurecr.io/tariff-calc:1.4.0`, `--registry-server` for the private-registry pull, `--target-port 8000 --ingress external` for a managed HTTPS endpoint, and `--min-replicas 0 --max-replicas 5` for autoscaling. To ship 1.5.0 they build a new tag and update the app, which creates a new revision they can route traffic to gradually."
+    },
+    {
+      "id": "cb-c01-m03-l03",
+      "module_id": "cb-c01-m03",
+      "prompt": "Compare the tradeoffs of setting `--min-replicas 0` (scale-to-zero) versus a minimum replica count above zero on a Container App, and explain when each is appropriate.",
+      "reference_answer": "Setting `--min-replicas 0` lets the app scale to zero when idle, so like Functions you stop paying for idle compute, but the tradeoff is a cold start: the first request after idling incurs startup latency. This is a money-saving default that fits workloads tolerant of occasional startup delay. The module flags ignoring scale-to-zero cold starts as a pitfall for latency-critical apps: for user-facing paths that must respond instantly, you should set a minimum replica count above zero so a warm instance is always ready. The choice is therefore a cost-versus-latency tradeoff: scale-to-zero when idle savings matter and cold starts are acceptable, a non-zero minimum when instant responsiveness is required."
+    }
+  ]
+}
