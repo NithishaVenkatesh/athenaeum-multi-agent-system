@@ -1,0 +1,103 @@
+{
+  "course_id": "cb-c02",
+  "module_id": "cb-c02-m04",
+  "module_title": "Data lifecycle and storage policies",
+  "choices": [
+    {
+      "id": "cb-c02-m04-c01",
+      "module_id": "cb-c02-m04",
+      "prompt": "According to the module, what is a lifecycle management policy?",
+      "kind": "mcq",
+      "choices": [
+        "A JSON document attached to the storage account, containing rules with filters and age-based actions that the platform enforces continuously",
+        "A nightly script you write and schedule to walk every blob and decide which to move or delete",
+        "A compute job you must run and monitor that paginates through millions of objects",
+        "An immutability setting that prevents any blob from being modified or deleted for a fixed period"
+      ],
+      "correct_answers": [
+        "A JSON document attached to the storage account, containing rules with filters and age-based actions that the platform enforces continuously"
+      ]
+    },
+    {
+      "id": "cb-c02-m04-c02",
+      "module_id": "cb-c02-m04",
+      "prompt": "You save a new lifecycle rule that archives blobs after 90 days, and a few minutes later the tier is unchanged. Based on the module, what is the correct interpretation?",
+      "kind": "mcq",
+      "choices": [
+        "The policy is not broken; lifecycle evaluation runs periodically (roughly daily) and can take up to about a day to first run, acting on the next pass after the threshold",
+        "The policy is broken because a correctly applied rule tiers blobs within seconds of crossing the age threshold",
+        "The rule's filter is wrong because archive actions only apply to page blobs, not block blobs",
+        "Soft delete must be disabled before archive actions can take effect, so the rule is being blocked"
+      ],
+      "correct_answers": [
+        "The policy is not broken; lifecycle evaluation runs periodically (roughly daily) and can take up to about a day to first run, acting on the next pass after the threshold"
+      ]
+    },
+    {
+      "id": "cb-c02-m04-c03",
+      "module_id": "cb-c02-m04",
+      "prompt": "In the Meridian walkthrough, why does the module run the command that enables 14-day soft delete and versioning BEFORE applying the lifecycle policy?",
+      "kind": "mcq",
+      "choices": [
+        "So that if the prefix or a threshold is wrong, blobs deleted by the policy are recoverable rather than gone, since enabling protection after the fact does not protect data already purged",
+        "Because lifecycle policies cannot be created on a storage account until soft delete and versioning are both enabled",
+        "Because soft delete and versioning are required to make the daysAfterModificationGreaterThan age clock start counting",
+        "Because versioning automatically moves overwritten blobs to the archive tier, satisfying the retention requirement"
+      ],
+      "correct_answers": [
+        "So that if the prefix or a threshold is wrong, blobs deleted by the policy are recoverable rather than gone, since enabling protection after the fact does not protect data already purged"
+      ]
+    },
+    {
+      "id": "cb-c02-m04-c04",
+      "module_id": "cb-c02-m04",
+      "prompt": "The module contrasts lifecycle expiry with immutability policies. Which statements correctly reflect that contrast? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Lifecycle deletes blobs on a schedule but does not prevent early deletion",
+        "An immutability policy (time-based retention or legal hold) prevents modification or deletion for a fixed period and is appropriate when retention is a legal requirement",
+        "Lifecycle policies are the correct tool to enforce a legally mandated retention period because they block early deletion",
+        "Immutability policies tier blobs from hot to cool to archive automatically as they age"
+      ],
+      "correct_answers": [
+        "Lifecycle deletes blobs on a schedule but does not prevent early deletion",
+        "An immutability policy (time-based retention or legal hold) prevents modification or deletion for a fixed period and is appropriate when retention is a legal requirement"
+      ]
+    },
+    {
+      "id": "cb-c02-m04-c05",
+      "module_id": "cb-c02-m04",
+      "prompt": "A rule intended only for the proof-of-delivery/ prefix omitted its prefixMatch filter and deletes after 2,555 days. Per the module, what is the risk and the fix?",
+      "kind": "mcq",
+      "choices": [
+        "The rule applies account-wide and will eventually delete blobs in every container; the fix is to add the prefixMatch [\"proof-of-delivery/\"] filter (and the blockBlob type filter) to scope it",
+        "The rule will fail to run at all because a rule with no prefixMatch is invalid JSON and is rejected on apply",
+        "The rule will only delete blobs that have last-access tracking enabled, so the fix is to disable that account setting",
+        "The risk is that archived blobs become unreadable; the fix is to remove the delete action and rely on versioning instead"
+      ],
+      "correct_answers": [
+        "The rule applies account-wide and will eventually delete blobs in every container; the fix is to add the prefixMatch [\"proof-of-delivery/\"] filter (and the blockBlob type filter) to scope it"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "cb-c02-m04-l01",
+      "module_id": "cb-c02-m04",
+      "prompt": "Explain why the module frames lifecycle management as a shift from imperative to declarative data management, and what concrete operational problems this shift removes for a team like Meridian Parcel.",
+      "reference_answer": "The imperative approach means writing a nightly script that loops over blobs and decides which to move or delete, which is fragile: it requires compute to run and monitor, and an off-by-one bug walking a paginated listing of millions of objects can let data linger and run up the bill or get deleted too aggressively and trigger a compliance incident. The declarative lifecycle management policy instead describes the desired end state as JSON rules attached to the storage account, for example that blobs under proof-of-delivery/ unmodified for 30 days belong in cool, archive after 365 days, and delete after 2,555 days. The platform then enforces those rules continuously on its own evaluation schedule. This removes the need to run or monitor a job, eliminates the hand-rolled cleanup code where data is mishandled, and lets storage tier and expire itself correctly without custom compute."
+    },
+    {
+      "id": "cb-c02-m04-l02",
+      "module_id": "cb-c02-m04",
+      "prompt": "Walk through how you would safely apply Meridian's photo retention policy with the Azure CLI, including the ordering of steps and what each step accomplishes.",
+      "reference_answer": "First, author the policy JSON with a rule whose filter scopes it to blobTypes blockBlob and prefixMatch proof-of-delivery/, and whose baseBlob actions form an aging ladder keyed to days since modification: tierToCool after 30 days, tierToArchive after 365 days, and delete after 2,555 days. Before applying it, run az storage account blob-service-properties update with --enable-delete-retention true, --delete-retention-days 14, and --enable-versioning true, so that 14-day soft delete and versioning are on and any mistaken delete is recoverable. Only then run az storage account management-policy create with --policy @pod-lifecycle.json to attach the lifecycle policy to the account. In production you would commit the JSON to source control and apply it through a pipeline, and you should expect the first evaluation pass within roughly a day rather than immediately."
+    },
+    {
+      "id": "cb-c02-m04-l03",
+      "module_id": "cb-c02-m04",
+      "prompt": "Compare blob soft delete and blob versioning as protection features for automated lifecycle deletion, and explain how each contributes to making automated deletion safe.",
+      "reference_answer": "Both are account-level features that turn a mistaken automated deletion from a data-loss event into a quick restore. Blob soft delete retains deleted blobs for a configurable retention period (14 days in the walkthrough), so an accidental delete by a person or by a policy rule can be undone within the window before the data is purged for good. Blob versioning automatically keeps a previous version whenever a blob is overwritten or deleted, so you can restore the prior state. Together they ensure that if a wrong prefix or off-by-one day threshold purges live data, the affected blobs are recoverable, which is why the module insists you turn both on before letting any lifecycle delete action run. They are distinct from an immutability policy, which prevents deletion outright for compliance rather than enabling recovery after the fact."
+    }
+  ]
+}
