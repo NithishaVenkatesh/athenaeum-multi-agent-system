@@ -1,0 +1,105 @@
+{
+  "course_id": "ai-c02",
+  "module_id": "ai-c02-m01",
+  "module_title": "Analyzing and translating text",
+  "choices": [
+    {
+      "id": "ai-c02-m01-c01",
+      "module_id": "ai-c02-m01",
+      "kind": "mcq",
+      "prompt": "A teammate needs typed, positioned facts from inbound messages — recognized people, dates, and order quantities — each with a category, a character offset, and a confidence score, so the app can act on them programmatically. Which Azure AI Language skill fits this requirement?",
+      "choices": [
+        "Named entity recognition (NER)",
+        "Key phrase extraction",
+        "Sentiment analysis",
+        "PII detection"
+      ],
+      "correct_answers": [
+        "Named entity recognition (NER)"
+      ]
+    },
+    {
+      "id": "ai-c02-m01-c02",
+      "module_id": "ai-c02-m01",
+      "kind": "mcq",
+      "prompt": "A customer writes \"the boots fit perfectly but the laces broke on day one,\" and plain document-level sentiment returns \"mixed.\" According to the module, how do you get sentiment attached to boots versus laces individually?",
+      "choices": [
+        "Use opinion mining (aspect-based sentiment), which attaches sentiment to specific target terms",
+        "Lower the confidence threshold until the document label flips to positive",
+        "Run entity linking to disambiguate boots and laces against a knowledge base",
+        "Split the sentence and run language detection on each clause"
+      ],
+      "correct_answers": [
+        "Use opinion mining (aspect-based sentiment), which attaches sentiment to specific target terms"
+      ]
+    },
+    {
+      "id": "ai-c02-m01-c03",
+      "module_id": "ai-c02-m01",
+      "kind": "mcq",
+      "prompt": "Your pipeline must guarantee customer phone numbers never reach the log store, even when detection is imperfect. Following the module's safe default, where do you call PII detection and what do you persist?",
+      "choices": [
+        "Call PII detection before any logging, then persist only the redacted_text and discard the raw message",
+        "Log the raw inbound message first, then call PII detection to flag sensitive spans afterward",
+        "Persist both the raw text and the redacted_text so you can reconcile them later",
+        "Call PII detection only on documents that exceed the per-document character limit"
+      ],
+      "correct_answers": [
+        "Call PII detection before any logging, then persist only the redacted_text and discard the raw message"
+      ]
+    },
+    {
+      "id": "ai-c02-m01-c04",
+      "module_id": "ai-c02-m01",
+      "kind": "msq",
+      "prompt": "According to the module, which statements about Azure AI Language and Azure AI Translator are correct?",
+      "choices": [
+        "Language detection lives in Azure AI Language, but translation is Azure AI Translator, a distinct resource with its own endpoint and key",
+        "Azure AI Translator can auto-detect the source language, translate into multiple target languages in one call, and transliterate between scripts",
+        "Translation and language detection are both skills exposed over the single Azure AI Language endpoint",
+        "Azure AI Language skills reason and follow instructions like a chat model to produce their results"
+      ],
+      "correct_answers": [
+        "Language detection lives in Azure AI Language, but translation is Azure AI Translator, a distinct resource with its own endpoint and key",
+        "Azure AI Translator can auto-detect the source language, translate into multiple target languages in one call, and transliterate between scripts"
+      ]
+    },
+    {
+      "id": "ai-c02-m01-c05",
+      "module_id": "ai-c02-m01",
+      "kind": "msq",
+      "prompt": "The module frames Azure AI Language skills as prebuilt classifiers and extractors rather than a chat model, and stresses how their results should be consumed. Which design practices does it explicitly recommend?",
+      "choices": [
+        "Batch multiple documents in one request to cut round-trips and cost",
+        "Chunk very long text before sending because each document has a character limit",
+        "Set confidence thresholds tied to the cost of an error and route low-confidence results to a human",
+        "Treat confidence scores as binary verdicts so the pipeline can auto-act on every label"
+      ],
+      "correct_answers": [
+        "Batch multiple documents in one request to cut round-trips and cost",
+        "Chunk very long text before sending because each document has a character limit",
+        "Set confidence thresholds tied to the cost of an error and route low-confidence results to a human"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "ai-c02-m01-l01",
+      "module_id": "ai-c02-m01",
+      "prompt": "Explain the difference between key phrase extraction and named entity recognition (NER) in Azure AI Language, and describe a situation where you would deliberately choose one over the other for the Larkspur Outfitters triage scenario.",
+      "reference_answer": "Key phrase extraction answers \"what is this text about?\" — it is unsupervised, needs no schema, and returns salient noun phrases (like \"damaged tent pole\" or \"refund\"), which makes it good for tagging, search, and getting a loose topical sense of a corpus. Named entity recognition answers \"what specific things are named here, and what type is each?\" — it returns spans classified into typed categories such as Person, Location, Organization, DateTime, and Quantity, each with a confidence score and a character offset. For Larkspur, you would choose NER when you need typed, positioned facts the app acts on automatically, such as extracting a person's name or an order quantity to route or populate a ticket. You would choose key phrases when you only need a loose topical summary of what a message is about for tagging or search."
+    },
+    {
+      "id": "ai-c02-m01-l02",
+      "module_id": "ai-c02-m01",
+      "prompt": "Walk through how the triage function should handle a furious inbound message that contains a name, phone number, and email so that no sensitive data is ever persisted in the ticket log, and explain why the ordering of steps matters.",
+      "reference_answer": "You call recognize_pii_entities on the message before any logging happens, because PII detection finds and categorizes sensitive spans (names, phone numbers, email addresses, financial identifiers) and the service itself returns a redacted_text with those spans masked. You then persist only that redacted_text to the ticket log and discard the original raw message. Ordering matters because if you log the raw inbound text first and then run PII detection, the sensitive data has already touched disk — redacting afterward cannot undo that. Redacting first makes the masked copy the only stored form, which is the safe default when you are not certain you are allowed to retain raw customer data. You should also treat low-confidence detections as candidates rather than facts."
+    },
+    {
+      "id": "ai-c02-m01-l03",
+      "module_id": "ai-c02-m01",
+      "prompt": "Compare language detection and translation as the module presents them, and explain why a real Larkspur pipeline that wants to understand a message and then reply in the customer's language must provision two separate Azure resources.",
+      "reference_answer": "Language detection lives inside Azure AI Language and only tells you what language a passage is — it reports the dominant language but does not translate anything. Translation is handled by Azure AI Translator, a distinct resource with its own endpoint and key, which can auto-detect the source language, translate into multiple target languages in one call, transliterate between scripts, and translate whole documents while preserving formatting. Because these are two separate services, a real pipeline calls Language to detect, classify, and route the inbound message, then hands the original text to a Translator client to render the reply in the customer's language. The practical consequence is that if you need both understanding and translation, you must provision both resources; confusing detection with translation, or assuming one resource does both, is a listed pitfall."
+    }
+  ]
+}
