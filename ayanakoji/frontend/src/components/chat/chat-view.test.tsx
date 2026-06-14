@@ -85,6 +85,33 @@ describe("ChatView", () => {
     expect(screen.getByText(/Reasoning & grounding/i)).toBeInTheDocument();
   });
 
+  it("renders the learner's message instantly, before the course is created", async () => {
+    // createCourse stays pending so we can assert the optimistic render happens
+    // up-front rather than after the (potentially slow) create round-trip.
+    let resolveCreate: (c: Course) => void = () => {};
+    mockCreate.mockReturnValue(
+      new Promise<Course>((resolve) => {
+        resolveCreate = resolve;
+      }),
+    );
+    mockStream.mockResolvedValue(undefined);
+
+    render(<ChatView />);
+    const box = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(box, { target: { value: "Explain RAG" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+
+    // The user turn is on screen even though createCourse has not resolved, and
+    // the stream has not started (it waits on the new course id).
+    expect(screen.getByText("Explain RAG")).toBeInTheDocument();
+    expect(mockStream).not.toHaveBeenCalled();
+
+    resolveCreate(course({ id: "c1" }));
+    await waitFor(() =>
+      expect(mockStream).toHaveBeenCalledWith("c1", "Explain RAG", expect.any(Object)),
+    );
+  });
+
   it("shows a course suggestion and enrolls on accept", async () => {
     mockCreate.mockResolvedValue(course());
     mockAccept.mockResolvedValue(course({ catalog_id: "cb-c01", status: 1 }));

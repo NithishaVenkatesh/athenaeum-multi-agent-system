@@ -269,6 +269,10 @@ export function ChatView({
 
   async function handleSend(text: string) {
     setBusy(true);
+    // Render the learner's turn + a streaming placeholder immediately, before any
+    // network call. For a brand-new chat this used to wait on the createCourse
+    // round-trip, leaving the screen blank from Enter until the reply began.
+    setTurns((prev) => [...prev, { kind: "user", text }, emptyAssistantTurn()]);
     let id = activeCourseId;
     try {
       if (!id) {
@@ -280,8 +284,6 @@ export function ChatView({
         window.history.replaceState(null, "", `/chat/${created.id}`);
         void reloadCourses();
       }
-
-      setTurns((prev) => [...prev, { kind: "user", text }, emptyAssistantTurn()]);
 
       await streamMessage(id, text, {
         onPhase: (phase) => patchLastAssistant((t) => ({ ...t, phases: [...t.phases, phase] })),
