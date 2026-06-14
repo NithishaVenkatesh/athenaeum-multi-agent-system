@@ -72,6 +72,13 @@ class Course(SQLModel, table=True):
     # stick across re-plans: {"time_window": [lo,hi]|None, "max_session_minutes":
     # int|None, "excluded_dates": [iso,...]}. The discrete fields above hold the rest.
     plan_constraints: dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
+    # Skill-gap check: source ("fresher"|"assessment") and per-module fraction
+    # correct (module_id → 0..1). Drives the pace-gated time correction.
+    skill_source: str | None = Field(default=None)
+    skill_scores: dict[str, float] = Field(default_factory=dict, sa_type=JSON)
+    # Staged study-plan modules awaiting the learner's approval. Promoted to real
+    # CourseModule rows by POST /plan/approve; the chat path never writes modules.
+    pending_modules: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON)
     messages: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON)
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
