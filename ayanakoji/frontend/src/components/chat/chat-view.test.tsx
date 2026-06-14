@@ -332,14 +332,14 @@ describe("ChatView", () => {
         title: "Functions",
         questions: [{ id: "p1", kind: "mcq", prompt: "Q1?", choices: ["a", "b", "c", "d"] }],
       });
-      handlers.onDone?.({ route: "practise_module" as never, suggested: false });
+      handlers.onDone?.({ route: "practise_module", suggested: false });
     });
     mockPractice.mockImplementation(async (_id, _sel, handlers) => {
       handlers.onToken?.("You scored 1/1. Ready!");
       handlers.onAction?.([
         { kind: "take_evaluation", label: "Take the evaluation", module_id: "cb-c01-m01" },
       ]);
-      handlers.onDone?.({ route: "practise_module" as never, suggested: false });
+      handlers.onDone?.({ route: "practise_module", suggested: false });
     });
 
     render(<ChatView courseId="c1" />);

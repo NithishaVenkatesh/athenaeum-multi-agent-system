@@ -34,6 +34,10 @@ const ROUTE_LABEL: Record<Route, string> = {
   foundry_iq: "Foundry IQ · course content",
   work_iq: "Work IQ · your schedule",
   upcoming: "Upcoming · next module",
+  progress: "Progress · your completion",
+  practise_module: "Practice · current module",
+  take_evaluation: "Evaluation · ready to test",
+  go_to_module: "Module · open to study",
   general: "General",
 };
 
@@ -44,6 +48,10 @@ const ROUTE_DOT: Record<Route, string> = {
   foundry_iq: "bg-chart-3",
   work_iq: "bg-chart-2",
   upcoming: "bg-chart-1",
+  progress: "bg-chart-1",
+  practise_module: "bg-brand",
+  take_evaluation: "bg-chart-5",
+  go_to_module: "bg-chart-3",
   general: "bg-muted-foreground",
 };
 

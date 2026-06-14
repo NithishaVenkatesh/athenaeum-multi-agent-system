@@ -209,6 +209,10 @@ export type Route =
   | "foundry_iq"
   | "work_iq"
   | "upcoming"
+  | "progress"
+  | "practise_module"
+  | "take_evaluation"
+  | "go_to_module"
   | "general";
 
 export interface GroundingSource {
