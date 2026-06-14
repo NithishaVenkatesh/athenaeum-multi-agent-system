@@ -1,0 +1,106 @@
+{
+  "course_id": "cb-c01",
+  "module_id": "cb-c01-m04",
+  "module_title": "Scaling, configuration, and diagnostics",
+  "choices": [
+    {
+      "id": "cb-c01-m04-c01",
+      "module_id": "cb-c01-m04",
+      "kind": "mcq",
+      "prompt": "After the first promotion, Northwind Parcel's bill stays high for days even though traffic has returned to normal. According to the module, what is the most likely autoscale misconfiguration?",
+      "choices": [
+        "A scale-out rule exists but there is no matching scale-in rule (or its threshold is never met), so instances added during the spike are never removed.",
+        "The scale-out rule uses a 5-minute window instead of a 10-minute window, so it adds instances too aggressively.",
+        "The minimum instance count was set to two, which keeps redundant capacity running permanently.",
+        "Application Insights kept the app provisioned by holding open dependency connections after the load test ended."
+      ],
+      "correct_answers": [
+        "A scale-out rule exists but there is no matching scale-in rule (or its threshold is never met), so instances added during the spike are never removed."
+      ]
+    },
+    {
+      "id": "cb-c01-m04-c02",
+      "module_id": "cb-c01-m04",
+      "kind": "mcq",
+      "prompt": "The module contrasts scaling up with scaling out. For stateless web APIs and most cloud services, why is scaling out described as the workhorse?",
+      "choices": [
+        "It adds capacity without a per-box ceiling and improves availability by spreading load across more instances.",
+        "It moves the service to a larger instance with more CPU and memory, removing the per-box ceiling.",
+        "It is the only approach that lets a service scale to zero when there is no traffic.",
+        "It guarantees lower latency than scaling up because each request runs on dedicated hardware."
+      ],
+      "correct_answers": [
+        "It adds capacity without a per-box ceiling and improves availability by spreading load across more instances."
+      ]
+    },
+    {
+      "id": "cb-c01-m04-c03",
+      "module_id": "cb-c01-m04",
+      "kind": "mcq",
+      "prompt": "A teammate proposes running an intermittent, event-triggered image-processing job on an always-on Container App with a fixed two-replica minimum. Per the module, what is the mismatch and what fits better?",
+      "choices": [
+        "The fixed minimum pays for idle replicas; an event-driven, scale-to-zero model such as Azure Functions (or a Container App scaling to zero on a queue trigger) fits better.",
+        "Container Apps cannot process images, so the job should move to Container Instances for the custom OS dependencies.",
+        "The two-replica minimum is too low for availability; the floor should be raised so the always-on plan can absorb the bursts.",
+        "An event-triggered job needs request/response handling, so it should run on a Standard App Service plan with autoscale rules."
+      ],
+      "correct_answers": [
+        "The fixed minimum pays for idle replicas; an event-driven, scale-to-zero model such as Azure Functions (or a Container App scaling to zero on a queue trigger) fits better."
+      ]
+    },
+    {
+      "id": "cb-c01-m04-c04",
+      "module_id": "cb-c01-m04",
+      "kind": "msq",
+      "prompt": "In the walkthrough, Northwind Parcel configures autoscale on its Standard App Service plan with a 5-minute scale-out window and a 10-minute scale-in window, a floor of two instances, and a ceiling of ten. Which statements correctly describe the reasoning the module gives for these choices?",
+      "choices": [
+        "Scaling out on a short 5-minute window protects users from a real load spike, while scaling in on a longer 10-minute window avoids reacting to brief dips and prevents flapping.",
+        "A floor of two instances preserves availability so one unhealthy instance does not take the service down.",
+        "The ceiling of ten caps the blast radius on cost during a surge.",
+        "Identical thresholds and windows for scale-out and scale-in are preferred because symmetric rules are simpler and more predictable."
+      ],
+      "correct_answers": [
+        "Scaling out on a short 5-minute window protects users from a real load spike, while scaling in on a longer 10-minute window avoids reacting to brief dips and prevents flapping.",
+        "A floor of two instances preserves availability so one unhealthy instance does not take the service down.",
+        "The ceiling of ten caps the blast radius on cost during a surge."
+      ]
+    },
+    {
+      "id": "cb-c01-m04-c05",
+      "module_id": "cb-c01-m04",
+      "kind": "msq",
+      "prompt": "The module recommends a destination for application telemetry and warns against one logging anti-pattern. Which statements align with its guidance on diagnostics and logging?",
+      "choices": [
+        "Application Insights is the recommended destination for application insight; it collects requests, dependencies, exceptions, and custom metrics and correlates them to trace a slow request across downstream calls.",
+        "Filesystem logs are fine for a live tail but are not a lasting store, so telemetry should be sent to Application Insights (or a Log Analytics workspace) to survive an incident.",
+        "Emitting structured signals such as log levels, request IDs, and meaningful events lets you query the logs later.",
+        "Unlabeled print statements are sufficient because Application Insights automatically adds log levels and request IDs to them."
+      ],
+      "correct_answers": [
+        "Application Insights is the recommended destination for application insight; it collects requests, dependencies, exceptions, and custom metrics and correlates them to trace a slow request across downstream calls.",
+        "Filesystem logs are fine for a live tail but are not a lasting store, so telemetry should be sent to Application Insights (or a Log Analytics workspace) to survive an incident.",
+        "Emitting structured signals such as log levels, request IDs, and meaningful events lets you query the logs later."
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "cb-c01-m04-l01",
+      "module_id": "cb-c01-m04",
+      "prompt": "Explain why the module designs autoscale rules with asymmetric timing — a 5-minute window for scale-out but a 10-minute window for scale-in — and how a gap between the two CPU thresholds (out at >70%, in at <30%) works together with the windows to keep the orders API both responsive and cheap.",
+      "reference_answer": "The module ties autoscale timing to two competing goals: protecting users during a real load spike and reclaiming idle capacity without thrashing. Scaling out on a short 5-minute window means the plan adds instances quickly as CPU crosses 70%, so users do not feel the spike while latency stabilizes. Scaling in on a longer 10-minute window means a brief dip in CPU does not immediately trigger removal, preventing the service from oscillating. The gap between the high (>70%) and low (<30%) thresholds is the second guard against flapping: identical or twitchy thresholds would make the service add and remove instances repeatedly. Together the asymmetric windows and the threshold gap bias toward availability while still returning capacity to the cheap baseline (the floor of two)."
+    },
+    {
+      "id": "cb-c01-m04-l02",
+      "module_id": "cb-c01-m04",
+      "prompt": "Walk through how you would make the Northwind orders web app observable enough to diagnose a latency spike, and explain why streaming logs alone is not enough. Name the specific commands and destination the module uses, and describe what each tool lets you see during a load test.",
+      "reference_answer": "First, configure platform logging with az webapp log config, enabling application logging and web-server (HTTP) logging on the filesystem at the information level so the app emits HTTP and application logs. During the load test you stream those live with az webapp log tail, which shows live HTTP and application logs as traffic drives CPU up. Streaming alone is not enough because filesystem logs are fine for a live tail but are not a lasting store, so the data is gone after the incident. To fix that, connect the app to Application Insights — the recommended destination — which records the request rate, failures, and dependency timings and correlates them across downstream calls. That correlation is what turns 'the site was slow' into a precise finding like 'the tariff dependency's p95 tripled at 09:14' during a post-incident review."
+    },
+    {
+      "id": "cb-c01-m04-l03",
+      "module_id": "cb-c01-m04",
+      "prompt": "Compare how you would choose a compute service for (a) a long-lived request/response orders API versus (b) an intermittent, event-triggered job, using the module's decision framework. Explain what 'shape and lifecycle' means here and why picking compute by habit is called a pitfall.",
+      "reference_answer": "The module frames compute selection as a deliberate decision driven by the workload's shape and lifecycle rather than a default. For a long-lived request/response orders API, the work is request/response and long-lived, so App Service or Container Apps fits — and on a Standard App Service plan you add autoscale rules to follow load. For an intermittent, event-triggered job, the work is event-triggered and intermittent, so Functions fits because it scales on triggers and can scale to zero, paying nothing while idle (a Container App scaling to zero on a queue trigger is an alternative). 'Shape and lifecycle' means matching the traffic pattern (bursty versus steady, request/response versus event-driven) and how long the work lives to the service's strengths. Picking by habit is a pitfall because mismatches — like running a bursty event job on an always-on plan, or a latency-critical API on scale-to-zero — drive up cost, latency, or operational burden."
+    }
+  ]
+}
