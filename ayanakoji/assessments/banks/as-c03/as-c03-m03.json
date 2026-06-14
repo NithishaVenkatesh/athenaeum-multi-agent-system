@@ -1,0 +1,106 @@
+{
+  "course_id": "as-c03",
+  "module_id": "as-c03-m03",
+  "module_title": "Infrastructure and posture management",
+  "choices": [
+    {
+      "id": "as-c03-m03-c01",
+      "module_id": "as-c03-m03",
+      "prompt": "According to the module, what does the free foundational layer of Microsoft Defender for Cloud (Cloud Security Posture Management) assess connected resources against?",
+      "kind": "mcq",
+      "choices": [
+        "The MCSB (the same benchmark the strategy was mapped to in module one)",
+        "Microsoft Secure Score thresholds defined per subscription",
+        "A custom benchmark generated automatically from runtime telemetry",
+        "The Azure Resource Graph query schema for assessments"
+      ],
+      "correct_answers": [
+        "The MCSB (the same benchmark the strategy was mapped to in module one)"
+      ]
+    },
+    {
+      "id": "as-c03-m03-c02",
+      "module_id": "as-c03-m03",
+      "prompt": "Two recommendations are open: 'MFA missing on some accounts' (high severity, large Secure Score gain) and 'enable diagnostic logging on a test storage account' (low). The team has time for one this sprint. Per the module, which should they fix and why is Secure Score the right arbiter?",
+      "kind": "mcq",
+      "choices": [
+        "Fix the MFA gap, because Secure Score weights recommendations by security impact and point value, encoding impact rather than treating all findings as equal",
+        "Fix the diagnostic logging item first, because low-severity findings are faster to remediate and clear the recommendation list quickly",
+        "Fix whichever appears first in the recommendation stream, since Defender for Cloud already orders findings by deployment date",
+        "Fix neither yet, because a one-time Secure Score is meaningless and no remediation should occur until the trend is established"
+      ],
+      "correct_answers": [
+        "Fix the MFA gap, because Secure Score weights recommendations by security impact and point value, encoding impact rather than treating all findings as equal"
+      ]
+    },
+    {
+      "id": "as-c03-m03-c03",
+      "module_id": "as-c03-m03",
+      "prompt": "The AWS-hosted VMs from an acquired carrier never appear in the posture dashboards. According to the module, what is the most likely architectural cause and the fix?",
+      "kind": "mcq",
+      "choices": [
+        "The AWS environment is not connected to Defender for Cloud (no AWS connector / not Arc-enabled), so it is outside the assessed control plane; connect the AWS account via the multicloud connector",
+        "The Secure Score weighting has suppressed the AWS findings as low impact; raise their severity manually to surface them",
+        "The Connected Machine agent is running but the depot's on-premises servers are masking the AWS resources; remove the on-prem Arc onboarding",
+        "Defender for Cloud's free CSPM tier cannot read any VM configuration; upgrade to the paid servers plan to make AWS VMs visible at all"
+      ],
+      "correct_answers": [
+        "The AWS environment is not connected to Defender for Cloud (no AWS connector / not Arc-enabled), so it is outside the assessed control plane; connect the AWS account via the multicloud connector"
+      ]
+    },
+    {
+      "id": "as-c03-m03-c04",
+      "module_id": "as-c03-m03",
+      "prompt": "Which of the following are described in the module as part of a complete container security design spanning the whole lifecycle? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Scan images for vulnerabilities before they reach a registry",
+        "Enforce that only trusted images run (trusted-registry admission)",
+        "Harden the orchestrator with control-plane access, RBAC, and network policy so pods cannot freely reach each other",
+        "Disable Secure Score weighting for container recommendations so every container finding is treated equally"
+      ],
+      "correct_answers": [
+        "Scan images for vulnerabilities before they reach a registry",
+        "Enforce that only trusted images run (trusted-registry admission)",
+        "Harden the orchestrator with control-plane access, RBAC, and network policy so pods cannot freely reach each other"
+      ]
+    },
+    {
+      "id": "as-c03-m03-c05",
+      "module_id": "as-c03-m03",
+      "prompt": "Which statements about Microsoft Secure Score and Azure Arc are correct per the module? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Secure Score condenses Defender for Cloud posture into a single percentage and weights recommendations by impact so you know what to fix first",
+        "A one-time Secure Score should be treated as meaningless and the trend treated as the truth, since posture decays as new resources deploy",
+        "Once a server is Arc-enabled you can apply Azure Policy to it, onboard it to Defender for Cloud, and assess its posture like an Azure VM",
+        "Azure Arc replaces Defender for Cloud as the posture engine for non-Azure resources, scoring them with its own separate benchmark"
+      ],
+      "correct_answers": [
+        "Secure Score condenses Defender for Cloud posture into a single percentage and weights recommendations by impact so you know what to fix first",
+        "A one-time Secure Score should be treated as meaningless and the trend treated as the truth, since posture decays as new resources deploy",
+        "Once a server is Arc-enabled you can apply Azure Policy to it, onboard it to Defender for Cloud, and assess its posture like an Azure VM"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "as-c03-m03-l01",
+      "module_id": "as-c03-m03",
+      "prompt": "Explain how Microsoft Defender for Cloud and Microsoft Secure Score work together to turn raw posture data into managed remediation work, and why the module insists on managing the trend rather than a one-time score.",
+      "reference_answer": "Defender for Cloud is the posture engine: it continuously evaluates connected resources, and its free foundational Cloud Security Posture Management layer assesses them against the MCSB, producing a stream of recommendations like 'storage account allows public access,' each tied to a control and a severity. Because a list of hundreds of recommendations is paralysis, Secure Score condenses that posture into a single percentage and weights recommendations by impact, grouping each into a security control with a potential point gain so you can answer what the single most valuable thing to remediate this sprint is. Secure Score is therefore a management tool: you baseline it, set an improvement target per phase, and track the trend. The module insists on the trend because a one-time snapshot is meaningless and posture decays as people deploy new resources, so a flat or rising score under growth is the real win rather than any single grade."
+    },
+    {
+      "id": "as-c03-m03-l02",
+      "module_id": "as-c03-m03",
+      "prompt": "Meridian Harbour has on-premises depot servers, AWS VMs, and a Kubernetes cluster outside Azure. Describe how Azure Arc and cloud connectors let you achieve a single posture view, referencing the walkthrough's onboarding and query steps.",
+      "reference_answer": "Azure Arc projects non-Azure resources, on-premises servers, depot VMs, and even other clouds' machines and Kubernetes clusters, into Azure's control plane as first-class resources; for other clouds, Defender for Cloud also connects directly to AWS and GCP accounts to assess their native resources against equivalent benchmarks. In the walkthrough you Arc-enable a depot on-premises server by running azcmagent connect, which installs the Connected Machine agent, after which the server appears as a Microsoft.HybridCompute/machines resource. You then enable the Defender for Cloud servers plan on the subscription so the Arc-connected machine is assessed against the MCSB just like a native VM. Finally a single Azure Resource Graph query over securityresources (microsoft.security/assessments) filtered to Unhealthy returns findings for cloud and depot machines together, because Arc made the on-premises servers Azure resources, delivering one posture view and one policy plane instead of a separate console per environment."
+    },
+    {
+      "id": "as-c03-m03-l03",
+      "module_id": "as-c03-m03",
+      "prompt": "Why does the module treat build-pipeline image scanning as part of container security posture rather than mere CI hygiene, and how does this 'shift left' approach contrast with the pitfall of securing containers only at runtime?",
+      "reference_answer": "A vulnerable image is a standing weakness the moment it could be deployed, so catching it pre-registry prevents the misconfiguration from ever reaching runtime, which is exactly what posture management does: minimize footholds before an attack. Container posture spans the whole lifecycle rather than just runtime, because containers change fast and run in shared clusters, creating failure modes VMs do not have. The complete design scans images before they reach a registry, enforces that only trusted images run, hardens the orchestrator with control-plane access, RBAC, and network policy, and protects the running cluster at runtime, with Defender for Cloud's container plan assessing Kubernetes configuration and registry images and detecting runtime threats. The pitfall of securing containers only at runtime is that catching a malicious image after it runs is too late; shifting left enforces least privilege and assume breach as policy in the pipeline and the cluster rather than as a one-time review of a target that redeploys hourly."
+    }
+  ]
+}
