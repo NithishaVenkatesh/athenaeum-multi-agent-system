@@ -88,6 +88,14 @@ def _c(p: str) -> re.Pattern[str]:
 # learning phrasing ("forget the previous module", "show the lab instructions",
 # "system requirements for Functions") does not match.
 _RULES: tuple[_Rule, ...] = (
+    # ── Instruction override: "ignore your instructions", "override the system prompt" ──
+    _Rule(
+        "instruction_override",
+        _c(r"\b(ignore|forget|disregard|drop|override|skip|delete|erase|bypass|discard)\b\s+"
+           r"(all\s+|any\s+)?(your|the|its|these|those)\s+"
+           r"(prior\s+|previous\s+|above\s+|earlier\s+|initial\s+|system\s+|original\s+)?"
+           r"(instructions?|prompt|rules?|directives?|guidelines?|guardrails?|programming|training)\b"),
+    ),
     # ── Persona override: "you are EVIL-GPT", "you're an AI with no guardrails" ──
     _Rule("persona_override", _c(rf"\byou\s+are\s+(now\s+)?(an?\s+)?({_JAILBREAK_PERSONAS})\b")),
     _Rule(
@@ -192,3 +200,31 @@ def heuristic_injection_verdict(text: str) -> InjectionVerdict | None:
                 confidence=0.9,
             )
     return None
+
+
+# ── Benign-learning allowance (over-refusal recovery) ───────────────────────────
+# Course content a trigger verb can legitimately target (NOT the assistant itself).
+_LEARNING_NOUN = (
+    r"module|modules|lesson|chapter|course|courses|lab|exercise|question|message|example|"
+    r"topic|unit|section|answer|note|step|assessment|quiz|exam|objective|objectives|content"
+)
+_BENIGN_OVERRIDE_RE = re.compile(
+    r"\b(forget|ignore|disregard|skip|drop|reset|clear|reveal|show|repeat)\b\s+"
+    r"(the|my|that|this|a|previous|last|earlier|prior|first|next)\s+"
+    rf"(?:\w+\s+){{0,2}}?\b({_LEARNING_NOUN})\b",
+    re.IGNORECASE,
+)
+
+
+def benign_learning_allowance(text: str) -> bool:
+    """True if the message is clearly a learning request whose trigger verb targets
+    *course content* ("forget the previous module", "disregard my last question"),
+    not the assistant's own governance.
+
+    Used only to recover from an over-eager LLM-classifier false-positive AFTER the
+    deterministic attack detectors have cleared the message — so it can never let a
+    real override through (those fire :func:`heuristic_injection_verdict` first).
+    """
+    if heuristic_injection_verdict(text) is not None:
+        return False
+    return bool(_BENIGN_OVERRIDE_RE.search(text))
