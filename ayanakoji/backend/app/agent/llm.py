@@ -261,7 +261,11 @@ class _OpenAICompatibleProvider:
         # o-series (Azure) reject temperature/top_p and rename the token budget.
         if self._is_azure and _is_reasoning_model(model):
             return {**base, "max_completion_tokens": max_tokens}
-        return {**base, "max_tokens": max_tokens, "temperature": 0.3}
+        # Temperature 0: routing, gating, grounding, and planning are decisions, not
+        # creative writing — the same message must classify and answer the same way every
+        # time (pass^k determinism). A stochastic gate is exactly what made the system-
+        # prompt leak flaky; deterministic decoding removes that whole class of flakiness.
+        return {**base, "max_tokens": max_tokens, "temperature": 0.0}
 
     def _project_messages(self, model: str, messages: Sequence[Message]) -> list[Message]:
         if self._is_azure and _is_reasoning_model(model):

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -189,6 +190,13 @@ class Settings(BaseSettings):
         )
 
 
+@lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Return application settings (instantiated per call; cheap and test-friendly)."""
+    """Return application settings, cached for the process so ``.env`` is read once.
+
+    Every turn touches settings in several nodes (gate, router, answer); without the
+    cache each call re-parses the ``.env`` file. The process env is fixed at startup,
+    so a single cached instance is correct in production. Tests clear the cache between
+    cases (see ``conftest._offline_env``) so per-test env overrides still take effect.
+    """
     return Settings()

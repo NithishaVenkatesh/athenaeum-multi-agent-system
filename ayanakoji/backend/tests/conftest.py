@@ -15,8 +15,15 @@ from sqlmodel import Session
 
 @pytest.fixture(autouse=True)
 def _offline_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Force the deterministic offline LLM path so tests never reach live Azure."""
+    """Force the deterministic offline LLM path so tests never reach live Azure.
+
+    Also clears the cached settings so each test reads its own env (get_settings is
+    process-cached in production, but per-test env overrides must still take effect).
+    """
+    from app.config import get_settings
+
     monkeypatch.setenv("OFFLINE_LLM", "true")
+    get_settings.cache_clear()
 
 
 @pytest.fixture(autouse=True)
