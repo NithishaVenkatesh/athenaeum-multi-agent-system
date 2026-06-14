@@ -1,0 +1,105 @@
+{
+  "course_id": "de-c03",
+  "module_id": "de-c03-m03",
+  "module_title": "Windowing, watermarking, and time",
+  "choices": [
+    {
+      "id": "de-c03-m03-c01",
+      "module_id": "de-c03-m03",
+      "prompt": "The operations team wants 'the average speed of each ferry per minute' as fixed, back-to-back one-minute buckets where each reading belongs to exactly one bucket. Which window shape matches this requirement?",
+      "kind": "mcq",
+      "choices": [
+        "A tumbling window of one minute",
+        "A hopping window of five minutes with a one-minute hop",
+        "A session window that closes after a timeout of inactivity",
+        "A processing-time window keyed to arrival order"
+      ],
+      "correct_answers": [
+        "A tumbling window of one minute"
+      ]
+    },
+    {
+      "id": "de-c03-m03-c02",
+      "module_id": "de-c03-m03",
+      "prompt": "FERRY-07's transponder buffers readings under a bridge, then dumps thirty seconds of data ninety seconds late. The team needs those readings counted in the minutes they actually occurred. Which clock must the windowed aggregate use, and why?",
+      "kind": "mcq",
+      "choices": [
+        "Event time, because bucketing by arrival would credit the late dump to the wrong minute",
+        "Processing time, because it reflects when the engine actually handled the readings",
+        "Either clock, because in practice event time and processing time are always nearly identical",
+        "Processing time, because event time cannot be recovered once a reading is delayed"
+      ],
+      "correct_answers": [
+        "Event time, because bucketing by arrival would credit the late dump to the wrong minute"
+      ]
+    },
+    {
+      "id": "de-c03-m03-c03",
+      "module_id": "de-c03-m03",
+      "prompt": "A streaming aggregation has run for three days with steady throughput but is slowly exhausting memory. It groups by an event-time window but has no watermark. Which statements correctly describe the cause and the fix? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Without a watermark the engine cannot know when a window is 'done', so it keeps every window's state indefinitely in case a straggler arrives",
+        "Adding a watermark lets the engine finalize and drop windows older than the threshold, bounding state",
+        "The memory growth is caused by steady throughput alone and would occur even with a watermark configured",
+        "Switching the grouping from event time to processing time is the only way to release old window state"
+      ],
+      "correct_answers": [
+        "Without a watermark the engine cannot know when a window is 'done', so it keeps every window's state indefinitely in case a straggler arrives",
+        "Adding a watermark lets the engine finalize and drop windows older than the threshold, bounding state"
+      ]
+    },
+    {
+      "id": "de-c03-m03-c04",
+      "module_id": "de-c03-m03",
+      "prompt": "In the walkthrough, the Spark job uses withWatermark('event_ts', '2 minutes') with outputMode('append'). Given this configuration, which outcome is correct?",
+      "kind": "mcq",
+      "choices": [
+        "A reading that arrives ninety seconds late still lands in its correct minute, while one arriving three minutes late is dropped",
+        "Every reading is written to the table immediately as it arrives, regardless of lateness",
+        "A reading arriving three minutes late is still included because append mode waits indefinitely",
+        "Windowed rows are emitted before the watermark passes, so results appear with no delay"
+      ],
+      "correct_answers": [
+        "A reading that arrives ninety seconds late still lands in its correct minute, while one arriving three minutes late is dropped"
+      ]
+    },
+    {
+      "id": "de-c03-m03-c05",
+      "module_id": "de-c03-m03",
+      "prompt": "Which statements about the watermark lateness threshold trade-off, as described in the module, are accurate? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "A longer watermark tolerates later data but delays final results and holds more state",
+        "A shorter watermark emits results sooner and uses less memory but discards more stragglers",
+        "The threshold should be picked from how late real data actually arrives, not from a guess",
+        "A longer watermark always produces more accurate results with no cost to promptness or memory"
+      ],
+      "correct_answers": [
+        "A longer watermark tolerates later data but delays final results and holds more state",
+        "A shorter watermark emits results sooner and uses less memory but discards more stragglers",
+        "The threshold should be picked from how late real data actually arrives, not from a guess"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "de-c03-m03-l01",
+      "module_id": "de-c03-m03",
+      "prompt": "Explain the difference between event time and processing time, and justify why a time-based streaming aggregate such as 'average speed per minute' must use event time. Reference how Stream Analytics and Spark let you declare the event-time column.",
+      "reference_answer": "Event time is when the thing actually happened — the timestamp the ferry's transponder stamped on the reading — while processing time is when the engine got around to handling it. In a perfect network the two are nearly identical, but buffering, retries, network delays, and back-pressure push processing time later than event time, sometimes by a lot. For any time-based aggregate, event time is almost always the correct clock: if you bucket FERRY-07's delayed dump by processing time, thirty seconds of harbour-crossing data is credited to the wrong minute and the per-minute average is wrong in exactly the windows you care about. Stream Analytics declares the event-time column with TIMESTAMP BY, and Spark uses withWatermark on an event-time column. The cost of using event time is that the engine must hold a window open long enough to receive late events, which is what watermarking governs."
+    },
+    {
+      "id": "de-c03-m03-l02",
+      "module_id": "de-c03-m03",
+      "prompt": "Describe what a watermark is and explain the two distinct problems it solves at once for an event-time aggregation. What goes wrong if you run an event-time windowed aggregation with no watermark?",
+      "reference_answer": "A watermark is the engine's moving estimate that 'event time has progressed at least this far; I will not wait indefinitely for events older than this.' It is configured as an allowed-lateness threshold (say two minutes); the engine tracks the maximum event time it has seen, subtracts the threshold, and considers any window whose end is older than that watermark complete — finalizing its result and dropping its state. It solves two problems at once: it lets late-but-not-too-late events still land in their correct window, and it lets the engine forget old windows so state does not grow forever. Without a watermark, an event-time aggregation must keep every window open indefinitely in case a straggler arrives, so state grows without bound and a forever-running job eventually exhausts memory. Adding the watermark is precisely what lets old state be released."
+    },
+    {
+      "id": "de-c03-m03-l03",
+      "module_id": "de-c03-m03",
+      "prompt": "Contrast tumbling, hopping, and session windows, giving the metric each one fits from the Tidewater context. Then explain why append output mode introduces an inherent delay and what alternative the module suggests when sooner results are needed.",
+      "reference_answer": "Tumbling windows are fixed-size and non-overlapping — back-to-back one-minute buckets where each event belongs to exactly one window — fitting the 'average speed per minute' requirement. Hopping (sliding) windows are fixed-size but overlap by advancing a smaller hop, such as a five-minute window emitting every one minute, so each event can fall into several windows; they fit a smoothed five-minute moving average refreshed each minute. Session windows have no fixed size — they group events separated by gaps shorter than a timeout and close after inactivity — fitting activity bursts like grouping a vessel's continuous movement into 'trips' separated by idle time at a dock. With append output mode, a windowed result is emitted only after the watermark passes the window's end (once the engine is confident no more in-time events will arrive), so there is an inherent delay. If you need running, updatable results sooner, the module suggests using the update output mode and understanding its semantics."
+    }
+  ]
+}
