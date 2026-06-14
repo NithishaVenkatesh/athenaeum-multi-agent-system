@@ -355,6 +355,8 @@ describe("ChatView", () => {
     await waitFor(() =>
       expect(screen.getByRole("link", { name: /take the evaluation/i })).toBeInTheDocument(),
     );
+    // The card hides once submitted (practiceDone) so it can't be re-graded.
+    expect(screen.queryByText("Q1?")).toBeNull();
   });
 
   it("restores an in-progress skill check from skill_check_active on reload", async () => {
