@@ -3,7 +3,14 @@
 from __future__ import annotations
 
 import pytest
-from app.config import FoundryConfig, GroqConfig, Settings, _is_placeholder, get_settings
+from app.config import (
+    FoundryConfig,
+    GroqConfig,
+    SearchConfig,
+    Settings,
+    _is_placeholder,
+    get_settings,
+)
 
 
 def test_defaults() -> None:
@@ -113,3 +120,87 @@ def test_llm_offline_true_when_no_provider() -> None:
 def test_offline_forced_overrides_configured_providers() -> None:
     settings = Settings(_env_file=None, groq_api_key="gsk_realkey", offline_llm=True)  # type: ignore[call-arg]
     assert settings.llm_offline is True
+
+
+# --- Azure AI Search / Foundry IQ knowledge base ---------------------------
+
+
+def test_search_not_configured_by_default() -> None:
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.search_configured is False
+    with pytest.raises(RuntimeError) as exc:
+        settings.require_search()
+    message = str(exc.value)
+    assert "SEARCH_ENDPOINT" in message
+    assert "SEARCH_ADMIN_KEY" in message
+
+
+def test_search_configured_and_require_returns_config() -> None:
+    settings = Settings(
+        _env_file=None,  # type: ignore[call-arg]
+        search_endpoint="https://athenaeum-search.search.windows.net",
+        search_admin_key="real-admin-key",
+    )
+    assert settings.search_configured is True
+    config = settings.require_search()
+    assert isinstance(config, SearchConfig)
+    assert config.endpoint == "https://athenaeum-search.search.windows.net"
+    assert config.index_name == "athenaeum-courses"
+    assert config.semantic_config == "athenaeum-semantic"
+    assert config.knowledge_base_name == "athenaeum-knowledge-base"
+    assert config.reasoning_effort == "low"
+
+
+def test_search_placeholder_endpoint_is_not_configured() -> None:
+    settings = Settings(
+        _env_file=None,  # type: ignore[call-arg]
+        search_endpoint="<your-search-endpoint>",
+        search_admin_key="real-admin-key",
+    )
+    assert settings.search_configured is False
+
+
+def test_foundry_iq_enabled_requires_toggle_creds_and_online() -> None:
+    base = {
+        "search_endpoint": "https://s.search.windows.net",
+        "search_admin_key": "real-admin-key",
+        # an online provider so llm_offline is False
+        "groq_api_key": "gsk_realkey",
+        "offline_llm": False,
+    }
+    on = Settings(_env_file=None, **base)  # type: ignore[arg-type]
+    assert on.foundry_iq_enabled is True
+
+    # Forced offline → never make a live Search call, even when configured.
+    off = Settings(_env_file=None, **{**base, "offline_llm": True})  # type: ignore[arg-type]
+    assert off.foundry_iq_enabled is False
+
+    # Toggle off keeps the app on the offline lexical retriever.
+    toggled = Settings(_env_file=None, **{**base, "foundry_iq_live": False})  # type: ignore[arg-type]
+    assert toggled.foundry_iq_enabled is False
+
+    # No Search creds → disabled regardless of toggle.
+    no_creds = Settings(_env_file=None, groq_api_key="gsk_realkey", offline_llm=False)  # type: ignore[call-arg]
+    assert no_creds.foundry_iq_enabled is False
+
+
+def test_evaluation_available_requires_aoai_and_online() -> None:
+    aoai = {
+        "foundry_project_endpoint": "https://r.services.ai.azure.com/api/projects/p",
+        "azure_openai_endpoint": "https://r.openai.azure.com/",
+        "azure_openai_api_key": "real-key-123",
+    }
+    on = Settings(_env_file=None, offline_llm=False, **aoai)  # type: ignore[arg-type]
+    assert on.evaluation_available is True
+
+    # Offline → no live evaluator calls.
+    off = Settings(_env_file=None, offline_llm=True, **aoai)  # type: ignore[arg-type]
+    assert off.evaluation_available is False
+
+    # Groq-only (no AOAI judge) → evaluation can't run.
+    groq_only = Settings(_env_file=None, groq_api_key="gsk_realkey", offline_llm=False)  # type: ignore[call-arg]
+    assert groq_only.evaluation_available is False
+
+    # Explicitly disabled.
+    disabled = Settings(_env_file=None, evaluation_enabled=False, offline_llm=False, **aoai)  # type: ignore[arg-type]
+    assert disabled.evaluation_available is False

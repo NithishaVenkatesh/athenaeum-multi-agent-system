@@ -40,6 +40,25 @@ class GroqConfig:
     model_reasoning: str
 
 
+@dataclass(frozen=True)
+class SearchConfig:
+    """Validated Azure AI Search / Foundry IQ knowledge-base configuration.
+
+    The live grounding host: the agentic-retrieve knowledge base plus the underlying
+    vector+semantic index the offline lexical retriever mirrors. Consumed by the cloud
+    adapter (``app.agent.grounding_azure``) only when ``search_configured`` is true.
+    """
+
+    endpoint: str
+    admin_key: str
+    index_name: str
+    semantic_config: str
+    api_version: str
+    knowledge_base_name: str
+    knowledge_source_name: str
+    reasoning_effort: str
+
+
 class Settings(BaseSettings):
     """Runtime settings. Values come from environment variables or a git-ignored .env."""
 
@@ -116,6 +135,41 @@ class Settings(BaseSettings):
     content_safety_endpoint: str | None = None
     content_safety_api_key: str | None = None
     content_safety_api_version: str = "2024-09-01"
+
+    # --- Azure AI Search / Foundry IQ knowledge base (the LIVE grounding host) ---
+    # When set, the foundry_iq route grounds course answers on the real agentic-retrieve
+    # knowledge base (LLM-planned subqueries → hybrid search → semantic rerank → cited
+    # references) instead of the offline lexical Foundry-IQ-pattern retriever. Unset →
+    # the deterministic lexical retriever, honestly labelled. Auth is the Search admin key.
+    search_endpoint: str | None = None
+    search_admin_key: str | None = None
+    search_index_name: str = "athenaeum-courses"
+    search_semantic_config: str = "athenaeum-semantic"
+    search_api_version: str = "2025-08-01-preview"
+    knowledge_base_name: str = "athenaeum-knowledge-base"
+    knowledge_source_name: str = "athenaeum-course-source"
+    # The knowledge_base_retrieve MCP endpoint the KB exposes (informational / Foundry agents).
+    knowledge_base_mcp_endpoint: str | None = None
+    # Master toggle: use the live KB on the answer path when it is configured. Off keeps
+    # the app on the offline lexical retriever even if Search creds are present.
+    foundry_iq_live: bool = True
+    # Agentic-retrieve reasoning effort: minimal (no LLM planning) | low (default) | medium.
+    foundry_iq_reasoning_effort: str = "low"
+    # Cap the live retrieval so a slow agentic plan can't stall a turn (seconds).
+    foundry_iq_timeout_seconds: float = 20.0
+
+    # --- Azure AI evaluation (groundedness / relevance / retrieval scoring) ---
+    # Score each live foundry answer with azure-ai-evaluation evaluators (Groundedness,
+    # Relevance, Retrieval; GroundednessPro when Content Safety is provisioned). Drives
+    # the claim-support disclaimer and surfaces scores in the trace. Off → the
+    # deterministic lexical groundedness proxy stands in (offline / CI).
+    evaluation_enabled: bool = True
+    # Below this groundedness score (1..5 scale) the answer is treated as ungrounded and
+    # gets the honesty disclaimer even when it cites a real module id.
+    groundedness_min_score: float = 3.0
+    # Cap evaluation so a slow judge can't stall a turn (seconds).
+    evaluation_timeout_seconds: float = 20.0
+
     # Per-call model timeout (seconds) so a hung provider can't stall a whole turn.
     llm_timeout_seconds: float = 30.0
     # Safety ceiling for LLM-grader exchanges per question. The grader calls
@@ -148,9 +202,32 @@ class Settings(BaseSettings):
     def content_safety_configured(self) -> bool:
         """True when Azure Content Safety (Prompt Shields) endpoint + key are present."""
         return not any(
-            _is_placeholder(v)
-            for v in (self.content_safety_endpoint, self.content_safety_api_key)
+            _is_placeholder(v) for v in (self.content_safety_endpoint, self.content_safety_api_key)
         )
+
+    @property
+    def search_configured(self) -> bool:
+        """True only when the Azure AI Search endpoint + admin key are present."""
+        return not any(_is_placeholder(v) for v in (self.search_endpoint, self.search_admin_key))
+
+    @property
+    def foundry_iq_enabled(self) -> bool:
+        """Live Foundry IQ retrieval on the answer path: toggled on, configured, not offline.
+
+        Gated by ``llm_offline`` so the zero-credential / forced-offline demo lane never
+        makes a live Search call; the offline lexical retriever answers instead.
+        """
+        return self.foundry_iq_live and self.search_configured and not self.llm_offline
+
+    @property
+    def evaluation_available(self) -> bool:
+        """Azure-ai-evaluation can score answers: enabled, an AOAI judge is configured, online.
+
+        The Groundedness/Relevance/Retrieval evaluators need an Azure OpenAI model
+        deployment (``foundry_configured``); GroundednessPro additionally needs a Content
+        Safety resource (``content_safety_configured``), checked separately at call time.
+        """
+        return self.evaluation_enabled and self.foundry_configured and not self.llm_offline
 
     @property
     def llm_offline(self) -> bool:
@@ -207,6 +284,35 @@ class Settings(BaseSettings):
             model_workhorse=self.groq_model_workhorse,
             model_fast=self.groq_model_fast,
             model_reasoning=self.groq_model_reasoning,
+        )
+
+    def require_search(self) -> SearchConfig:
+        """Return a validated SearchConfig or raise loudly listing what is missing.
+
+        Used by the live grounding adapter so a half-configured Search resource fails at
+        the boundary with a clear message instead of an opaque SDK error mid-request.
+        """
+        missing = [
+            name
+            for name, value in (
+                ("SEARCH_ENDPOINT", self.search_endpoint),
+                ("SEARCH_ADMIN_KEY", self.search_admin_key),
+            )
+            if _is_placeholder(value)
+        ]
+        if missing:
+            raise RuntimeError("Azure AI Search not configured — missing: " + ", ".join(missing))
+        assert self.search_endpoint is not None
+        assert self.search_admin_key is not None
+        return SearchConfig(
+            endpoint=self.search_endpoint,
+            admin_key=self.search_admin_key,
+            index_name=self.search_index_name,
+            semantic_config=self.search_semantic_config,
+            api_version=self.search_api_version,
+            knowledge_base_name=self.knowledge_base_name,
+            knowledge_source_name=self.knowledge_source_name,
+            reasoning_effort=self.foundry_iq_reasoning_effort,
         )
 
 

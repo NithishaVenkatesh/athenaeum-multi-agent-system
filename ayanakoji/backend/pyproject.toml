@@ -29,6 +29,10 @@ foundry = [
     "azure-identity>=1.19",
     "azure-ai-projects>=1.0.0",
     "azure-storage-blob>=12",
+    # Live Foundry IQ grounding host: agentic-retrieve knowledge base + vector/semantic index.
+    "azure-search-documents>=11.7.0b2",
+    # Groundedness / Relevance / Retrieval scoring of grounded answers (NLI-style judges).
+    "azure-ai-evaluation>=1.0.0",
 ]
 
 [build-system]
@@ -72,4 +76,13 @@ markers = ["integration: tests that hit live Azure/Foundry (need creds + foundry
 # app/foundry.py is a cloud adapter exercised by the live smoke + integration test,
 # not the offline unit gate (its SDKs aren't installed in CI). Keep it out of the
 # offline coverage number so the gate measures deterministic, testable logic.
-omit = ["app/foundry.py", "app/assessments/azure_blob.py", "tests/*", "scripts/*"]
+# grounding_azure.py (agentic-retrieve client) and grounding_verifier.py's Azure
+# evaluator path are the same shape: live-only adapters, exercised by integration smoke.
+omit = [
+    "app/foundry.py",
+    "app/assessments/azure_blob.py",
+    "app/agent/grounding_azure.py",
+    "app/agent/grounding_verifier.py",
+    "tests/*",
+    "scripts/*",
+]
