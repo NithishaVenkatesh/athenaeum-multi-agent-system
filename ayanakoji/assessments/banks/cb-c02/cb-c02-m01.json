@@ -1,0 +1,106 @@
+{
+  "course_id": "cb-c02",
+  "module_id": "cb-c02-m01",
+  "module_title": "Working with Azure Cosmos DB",
+  "choices": [
+    {
+      "id": "cb-c02-m01-c01",
+      "module_id": "cb-c02-m01",
+      "prompt": "According to the module, what does an Azure Cosmos DB container hold?",
+      "kind": "mcq",
+      "choices": [
+        "Items — schemaless JSON documents",
+        "Tables with a fixed relational schema",
+        "Blobs of binary data with a pointer index",
+        "Stored procedures that define the partition key"
+      ],
+      "correct_answers": [
+        "Items — schemaless JSON documents"
+      ]
+    },
+    {
+      "id": "cb-c02-m01-c02",
+      "module_id": "cb-c02-m01",
+      "prompt": "Meridian's nightly bulk import throws HTTP 429 errors even though the account has plenty of total RU/s capacity. Based on the module, what is the most likely cause?",
+      "kind": "mcq",
+      "choices": [
+        "The import fires thousands of writes into one logical partition faster than that partition's share of RU/s allows",
+        "The account default consistency level was set to strong, which rejects bulk writes",
+        "The items exceed the maximum item size, so Cosmos rejects them as 429s",
+        "DefaultAzureCredential expired mid-import and the writes were unauthorized"
+      ],
+      "correct_answers": [
+        "The import fires thousands of writes into one logical partition faster than that partition's share of RU/s allows"
+      ]
+    },
+    {
+      "id": "cb-c02-m01-c03",
+      "module_id": "cb-c02-m01",
+      "prompt": "In the walkthrough, what must be supplied to perform the cheapest possible point read with container.read_item?",
+      "kind": "mcq",
+      "choices": [
+        "Both the item id and the partition key value",
+        "Only the item id, since Cosmos infers the partition",
+        "Only the partition key value, which uniquely identifies the item",
+        "A SQL query string filtering on the partition key"
+      ],
+      "correct_answers": [
+        "Both the item id and the partition key value"
+      ]
+    },
+    {
+      "id": "cb-c02-m01-c04",
+      "module_id": "cb-c02-m01",
+      "prompt": "Which statements about consistency levels does the module make? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Session is the default and guarantees that within a single client session you read your own writes",
+        "Strong guarantees a read always sees the latest committed write but costs more RUs and adds latency",
+        "Eventual is the most expensive level but offers the strongest guarantee across regions",
+        "Cosmos offers five consistency levels along a spectrum from strong to eventual"
+      ],
+      "correct_answers": [
+        "Session is the default and guarantees that within a single client session you read your own writes",
+        "Strong guarantees a read always sees the latest committed write but costs more RUs and adds latency",
+        "Cosmos offers five consistency levels along a spectrum from strong to eventual"
+      ]
+    },
+    {
+      "id": "cb-c02-m01-c05",
+      "module_id": "cb-c02-m01",
+      "prompt": "Which of the following are listed as common pitfalls in the module? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Choosing a low-cardinality or time-based partition key, which creates hot partitions and 429s",
+        "Querying without the partition key, which forces an expensive cross-partition fan-out query",
+        "Storing huge items instead of putting large blobs in Blob Storage with a pointer in Cosmos",
+        "Provisioning throughput with autoscale, which the module warns prevents the SDK from retrying 429s"
+      ],
+      "correct_answers": [
+        "Choosing a low-cardinality or time-based partition key, which creates hot partitions and 429s",
+        "Querying without the partition key, which forces an expensive cross-partition fan-out query",
+        "Storing huge items instead of putting large blobs in Blob Storage with a pointer in Cosmos"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "cb-c02-m01-l01",
+      "module_id": "cb-c02-m01",
+      "prompt": "A container partitioned by /orderDate throttles with 429s every night at midnight even though total provisioned RU/s is barely used. Explain why this happens and how you would fix it.",
+      "reference_answer": "Throughput in Cosmos DB is provisioned and enforced per physical partition, not just per account, so a time-based key like /orderDate funnels every write at a given moment onto a single logical partition value. That creates a hot partition that exhausts its own share of RU/s while the other partitions sit idle, producing 429 Too Many Requests even though account-wide capacity looks fine. The durable fix is to repartition on a high-cardinality key aligned with the common query filter (for example /customerId) so writes spread evenly across partitions. You can also pace the import, spread writes across partition-key values, or raise throughput with autoscale to absorb the midnight spike."
+    },
+    {
+      "id": "cb-c02-m01-l02",
+      "module_id": "cb-c02-m01",
+      "prompt": "Compare session consistency and eventual consistency, and explain which one resolves Meridian's dashboard showing a delivery as both 'in transit' and 'delivered' at the lowest cost.",
+      "reference_answer": "Eventual consistency is the cheapest and lowest-latency level, but a read may return an older value for a while because a replica hasn't caught up yet — exactly what caused the dashboard glitch when it read across two regions during a write. Session consistency, the account default, guarantees read-your-own-writes within a single client session, giving the monotonic behavior the workload actually assumed it had. Choosing session (or bounded staleness with a defined lag) fixes the stale-read problem at much lower RU cost than strong consistency, which would add extra RUs and cross-region latency. Since the requirement is just to stop seeing stale values, session is the cheapest level that resolves it."
+    },
+    {
+      "id": "cb-c02-m01-l03",
+      "module_id": "cb-c02-m01",
+      "prompt": "Walk through how you would create a delivery item, read it back cheaply, and update its status using the azure-cosmos Python SDK, and explain how you would measure the real RU cost of the update.",
+      "reference_answer": "First create the client with CosmosClient using the endpoint and DefaultAzureCredential so no keys live in code, then create the database and a 'deliveries' container with create_container_if_not_exists, setting partition_key to PartitionKey(path='/customerId') and offer_throughput to 400 (the manual-throughput minimum). Create the delivery with container.create_item(body=delivery), ensuring the partition-key property (customerId) is present on the document. Read it back with container.read_item(item='dlv-90187', partition_key='cust-4521'); supplying both the id and the partition key makes this a single-partition point read costing about 1 RU instead of a fan-out query. To update, set item['status'] = 'delivered' and call container.replace_item, then read container.client_connection.last_response_headers['x-ms-request-charge'] to measure the real RU cost rather than guessing."
+    }
+  ]
+}
