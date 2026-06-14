@@ -1,0 +1,106 @@
+{
+  "course_id": "do-c03",
+  "module_id": "do-c03-m04",
+  "module_title": "Instrumentation and monitoring",
+  "choices": [
+    {
+      "id": "do-c03-m04-c01",
+      "module_id": "do-c03-m04",
+      "prompt": "According to the module, where does Application Insights land the telemetry it collects, and what is the consequence for how you query it?",
+      "kind": "mcq",
+      "choices": [
+        "In a Log Analytics workspace, where every signal is queryable with KQL in the same place, so you can pivot from a metric spike to the exact failing requests without changing tools",
+        "In a dedicated metrics-only store, so traces and logs must be exported separately before they can be correlated",
+        "In Azure Key Vault, so that telemetry inherits the same secret-protection guarantees described in module 2",
+        "In per-service local log files that an engineer must grep across machines during an incident"
+      ],
+      "correct_answers": [
+        "In a Log Analytics workspace, where every signal is queryable with KQL in the same place, so you can pivot from a metric spike to the exact failing requests without changing tools"
+      ]
+    },
+    {
+      "id": "do-c03-m04-c02",
+      "module_id": "do-c03-m04",
+      "prompt": "The rate-quote API's own server-side duration looks healthy, but users report slow responses. Per the module, which telemetry signal and view should the engineer reach for?",
+      "kind": "mcq",
+      "choices": [
+        "A distributed trace shown in the end-to-end transaction view, which breaks the request into per-dependency durations across services",
+        "Aggregated metrics on a latency dashboard, because p95 latency is the only way to see where time is spent",
+        "Raw logs filtered by severity, because each healthy request already records its full per-hop timing",
+        "An alert rule, because thresholds on the failure-rate metric reveal which downstream hop is slow"
+      ],
+      "correct_answers": [
+        "A distributed trace shown in the end-to-end transaction view, which breaks the request into per-dependency durations across services"
+      ]
+    },
+    {
+      "id": "do-c03-m04-c03",
+      "module_id": "do-c03-m04",
+      "prompt": "In the module's KQL model, what does the pipe symbol (|) express and how does a query read?",
+      "kind": "mcq",
+      "choices": [
+        "It pipes rows through operators like Unix pipes, and the query reads top-to-bottom with each line transforming the rows produced by the line above",
+        "It combines two independent tables by joining them on a shared correlation ID before any filtering happens",
+        "It marks an alternative condition, so the engine evaluates each branch and returns whichever produces more rows",
+        "It denotes a comment boundary, separating the human-readable intent from the executable portion of the query"
+      ],
+      "correct_answers": [
+        "It pipes rows through operators like Unix pipes, and the query reads top-to-bottom with each line transforming the rows produced by the line above"
+      ]
+    },
+    {
+      "id": "do-c03-m04-c04",
+      "module_id": "do-c03-m04",
+      "prompt": "Which statements about distributed tracing and correlation, as described in the module, are correct? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Application Insights stitches a request into one trace by propagating a correlation identifier across each hop, largely automatically via auto-instrumentation and the W3C Trace Context standard",
+        "Each operation gets an operation ID, and child calls carry the parent's context so the backend can reassemble the tree",
+        "Bypassing the instrumented client or stripping headers loses trace-context propagation, so the dependency appears disconnected",
+        "Correlation is reconstructed after the fact by aggregating metrics over time, which is why traces are cheaper to store than metrics"
+      ],
+      "correct_answers": [
+        "Application Insights stitches a request into one trace by propagating a correlation identifier across each hop, largely automatically via auto-instrumentation and the W3C Trace Context standard",
+        "Each operation gets an operation ID, and child calls carry the parent's context so the backend can reassemble the tree",
+        "Bypassing the instrumented client or stripping headers loses trace-context propagation, so the dependency appears disconnected"
+      ]
+    },
+    {
+      "id": "do-c03-m04-c05",
+      "module_id": "do-c03-m04",
+      "prompt": "Which of the following are listed as common pitfalls in the module? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Logging everything at full volume instead of using adaptive sampling and capturing rich detail mainly on errors",
+        "Putting secrets in telemetry, such as logging full request bodies or connection strings",
+        "Collecting metrics but defining no alert rules, so telemetry is only watched on a dashboard nobody is looking at",
+        "Storing telemetry in a Log Analytics workspace instead of keeping each signal in its own purpose-built store"
+      ],
+      "correct_answers": [
+        "Logging everything at full volume instead of using adaptive sampling and capturing rich detail mainly on errors",
+        "Putting secrets in telemetry, such as logging full request bodies or connection strings",
+        "Collecting metrics but defining no alert rules, so telemetry is only watched on a dashboard nobody is looking at"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "do-c03-m04-l01",
+      "module_id": "do-c03-m04",
+      "prompt": "Explain why the module says you must match the telemetry signal to the question, contrasting metrics, logs, and traces. Give the kind of question each signal is best suited to answer.",
+      "reference_answer": "The module describes three signals, each best for a different kind of question. Metrics are numeric measurements aggregated over time (request rate, p95 latency, CPU) that are cheap to store and ideal for dashboards and alerts answering 'is something wrong and how much.' Logs are discrete, timestamped events with structured properties, ideal for 'what exactly happened to this request.' Traces connect the events of a single operation across service boundaries, ideal for 'where did the time go and which hop failed.' Confusing them wastes time: trying to reconstruct a single request's path from aggregated metrics, or trending latency by scanning raw logs, is the wrong tool each way, so you reach for the signal that matches the question."
+    },
+    {
+      "id": "do-c03-m04-l02",
+      "module_id": "do-c03-m04",
+      "prompt": "Walk through how the on-call engineer used Application Insights and KQL to diagnose the 02:14 failure, from instrumentation to root cause.",
+      "reference_answer": "First the team instruments the ASP.NET Core rate-quote API with a few lines at startup (AddApplicationInsightsTelemetry, with the connection string supplied via configuration or Key Vault, never hardcoded), so auto-collection captures requests, dependencies, and exceptions without per-call code. With telemetry flowing, the engineer opens Logs and runs a KQL query over the dependencies table filtered to the incident window and success == false, summarizing failure counts and p95 duration by target and type, which names the pricing-api HTTP dependency as the culprit. To confirm the trigger, they query the requests table, binning failure rate per minute, and see it spike at 02:11, two minutes after a 02:09 deploy of the pricing service. Finally the end-to-end transaction view for one failing request shows the exact timed-out call and its exception, making the fix (roll back the pricing deploy) obvious and evidenced, all in minutes."
+    },
+    {
+      "id": "do-c03-m04-l03",
+      "module_id": "do-c03-m04",
+      "prompt": "A teammate wrote a custom HTTP client for downstream calls, but those calls never appear linked to their parent request in the transaction view. Explain what most likely broke and how to fix it, grounding your answer in how distributed tracing works.",
+      "reference_answer": "Distributed tracing stitches a request into one trace by propagating a correlation identifier across each hop, relying on the W3C Trace Context standard where each operation gets an operation ID and child calls carry the parent's context. A hand-rolled HTTP client that bypasses the instrumented client or strips headers loses that trace-context propagation, so the downstream call has no parent correlation and appears disconnected in the transaction view. The fix is to use the framework's instrumented HTTP client so correlation headers flow automatically, or otherwise forward the trace-context headers, so context propagation is restored across the hop. The module lists this as a common pitfall: breaking trace correlation with hand-rolled HTTP calls."
+    }
+  ]
+}
