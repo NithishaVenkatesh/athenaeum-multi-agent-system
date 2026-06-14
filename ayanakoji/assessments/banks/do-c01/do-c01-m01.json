@@ -1,0 +1,104 @@
+{
+  "course_id": "do-c01",
+  "module_id": "do-c01-m01",
+  "module_title": "Choosing a branching strategy",
+  "choices": [
+    {
+      "id": "do-c01-m01-c01",
+      "module_id": "do-c01-m01",
+      "prompt": "According to the module, what is the single variable that most directly drives merge risk when comparing branching strategies?",
+      "kind": "mcq",
+      "choices": [
+        "How long code lives in isolation before it integrates (branch lifetime)",
+        "The total number of branches that exist in the repository",
+        "Whether the team uses rebase or merge commits when integrating",
+        "The number of engineers who have push access to the repository"
+      ],
+      "correct_answers": [
+        "How long code lives in isolation before it integrates (branch lifetime)"
+      ]
+    },
+    {
+      "id": "do-c01-m01-c02",
+      "module_id": "do-c01-m01",
+      "prompt": "A team supports four live customer versions of on-prem software, patching 2.3 while 2.5 is in development. Based on the module's reasoning, which strategy genuinely fits this constraint?",
+      "kind": "mcq",
+      "choices": [
+        "Release-branch development, because they must patch shipped versions independently of ongoing development",
+        "Strict trunk-based development, because it is the industry best practice for every team",
+        "A branch per environment (dev/qa/prod), so each customer version maps to its own environment",
+        "A long-lived develop branch, to give shipped versions a second integration point"
+      ],
+      "correct_answers": [
+        "Release-branch development, because they must patch shipped versions independently of ongoing development"
+      ]
+    },
+    {
+      "id": "do-c01-m01-c03",
+      "module_id": "do-c01-m01",
+      "prompt": "In the Meridian walkthrough, why can the unfinished checkout redesign be merged into main before it is 'done'?",
+      "kind": "mcq",
+      "choices": [
+        "A feature flag (isEnabled(\"checkout-redesign\")) keeps the new code dark in production, returning the legacy summary until the flag is flipped",
+        "The redesign is merged into a long-lived release branch instead of main, so production is never affected",
+        "The pull request is left open and unmerged until the redesign is fully complete and tested",
+        "The code is committed to a permanent develop branch that production never deploys from"
+      ],
+      "correct_answers": [
+        "A feature flag (isEnabled(\"checkout-redesign\")) keeps the new code dark in production, returning the legacy summary until the flag is flipped"
+      ]
+    },
+    {
+      "id": "do-c01-m01-c04",
+      "module_id": "do-c01-m01",
+      "prompt": "Select every statement the module makes about preconditions and pitfalls for trunk-based development.",
+      "kind": "msq",
+      "choices": [
+        "It depends on a fast, trustworthy automated test suite and continuous integration as its safety net",
+        "Adopting it with a slow, flaky build just moves the pain from merge day to every day",
+        "A team with flaky tests should run disciplined short-lived feature branches while investing in test speed",
+        "It requires a permanent develop branch to serve as a second integration point before main"
+      ],
+      "correct_answers": [
+        "It depends on a fast, trustworthy automated test suite and continuous integration as its safety net",
+        "Adopting it with a slow, flaky build just moves the pain from merge day to every day",
+        "A team with flaky tests should run disciplined short-lived feature branches while investing in test speed"
+      ]
+    },
+    {
+      "id": "do-c01-m01-c05",
+      "module_id": "do-c01-m01",
+      "prompt": "The module advises against creating a branch per environment (dev/qa/prod). What is its stated reason?",
+      "kind": "mcq",
+      "choices": [
+        "It makes 'promoting' code a merge between long-lived branches, reintroducing the divergence problem; promote artifacts and tags instead",
+        "It violates Git's internal rules about how many branches a repository may contain",
+        "Environment branches cannot be protected by pull-request policies or CI gates",
+        "It forces the team to abandon feature flags, which are required for trunk-based development"
+      ],
+      "correct_answers": [
+        "It makes 'promoting' code a merge between long-lived branches, reintroducing the divergence problem; promote artifacts and tags instead"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "do-c01-m01-l01",
+      "module_id": "do-c01-m01",
+      "prompt": "Explain why merge difficulty grows faster than linearly (super-linearly) with branch lifetime, rather than simply proportionally. Ground your answer in the module's reasoning about divergence.",
+      "reference_answer": "The module frames the core variable as branch lifetime: how long code lives in isolation before integrating. The longer a branch lives apart, the more the rest of the codebase moves underneath it, so two branches that share no commits for three weeks have three weeks of independent change to reconcile. Reconciliation cost rises faster than linearly because conflicts interact — independent changes accumulate on both sides and overlapping edits compound, so as more divergent commits pile up the cost rises super-linearly rather than proportionally. This is presented not as a Git quirk but as a fact about divergence, which is why divergence (not raw branch count) drives merge cost."
+    },
+    {
+      "id": "do-c01-m01-l02",
+      "module_id": "do-c01-m01",
+      "prompt": "A team has a slow, occasionally flaky test suite and deploys once every two weeks. Walk through whether they should adopt strict trunk-based development today and what they should do instead, citing the module's reasoning.",
+      "reference_answer": "No, not today. Trunk-based development's safety net is a fast, trustworthy CI gate: because everyone commits to main constantly, the model relies on a broken commit being caught in minutes and reverted. This team lacks that safety net — committing to main all day with a slow, thirty-minute, flaky build would just move the pain from merge day to every day and block the team constantly. The more honest fit is disciplined short-lived feature branches with a solid pull-request gate while they invest in test speed and CI reliability, then revisit trunk-based once the safety net exists. The module stresses reasoning from constraints (test maturity, cadence, version support) rather than adopting trunk-based by fashion."
+    },
+    {
+      "id": "do-c01-m01-l03",
+      "module_id": "do-c01-m01",
+      "prompt": "A SaaS team wants main to always be deployable but also needs to ship an urgent fix to a version already running in production. Walk through a branching arrangement that satisfies both without long-lived environment branches, and explain the recommended branch-to-environment mapping.",
+      "reference_answer": "Keep main always deployable for daily work — main flows to staging on every merge, and a production deployment is a tagged commit on main that has passed staging, with deliberately no permanent develop or per-environment branch. To patch the in-production version, cut a short-lived release branch (for example release/3.1) only when needed, make the fix there independently of ongoing development, then bring the fix back to main. This isolates version maintenance without creating permanent dev/qa/prod branches, which the module warns turn promotion into a merge between long-lived branches and reintroduce divergence. The principle is to promote artifacts and tags, not branches, keeping the system legible and avoiding the merge-day pain by design."
+    }
+  ]
+}
