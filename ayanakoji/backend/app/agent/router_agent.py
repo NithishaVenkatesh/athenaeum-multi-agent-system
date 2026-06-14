@@ -34,6 +34,21 @@ _AFFIRM_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Accepting a just-offered course suggestion is looser than a bare affirmation: it
+# allows a trailing object ("yes, start that one", "let's begin", "sign me up"), so a
+# natural multi-turn accept enrolls the course instead of dead-ending (R2).
+_ACCEPT_RE = re.compile(
+    r"^\s*(yes|yep|yeah|yup|sure|ok(ay)?|absolutely|definitely|please|sounds?\s+good|"
+    r"that\s+works|go\s+ahead|do\s+it|let'?s\s+(do|go|start|begin)|start|begin|enroll|"
+    r"sign\s+me\s+up|i'?ll\s+take|i\s+want\s+(to\s+start|that|this))\b",
+    re.IGNORECASE,
+)
+
+
+def is_acceptance(text: str) -> bool:
+    """True if the message reads as accepting a just-offered course suggestion."""
+    return bool(_ACCEPT_RE.search(text))
+
 # "Help me choose / explore courses" signals → Recommend (profile- or topic-scoped).
 _RECOMMEND_RE = re.compile(
     r"\b(suggest|recommend|which)\b.{0,40}\bcourse"
@@ -165,6 +180,15 @@ def classify(
         return RouteDecision(
             route=Route.STUDY_PLAN,
             reasoning="Affirmation after a pace question — proceed to build the plan.",
+            off_topic=0.0,
+            confidence=0.8,
+        )
+    # Accepting a course suggestion ("yes, start that one") begins the course setup;
+    # the courses layer links the course, then this routes to the first setup step.
+    if pending == "suggestion" and is_acceptance(text):
+        return RouteDecision(
+            route=Route.STUDY_PLAN,
+            reasoning="Accepted a course suggestion — start the course and begin setup.",
             off_topic=0.0,
             confidence=0.8,
         )
@@ -308,6 +332,8 @@ def _parse_decision(
     """Parse the model's JSON; correct it when it over-rejects an on-platform topic."""
     # Deterministic, high-signal intents win over the LLM regardless of its call.
     if pending == "pace" and _AFFIRM_RE.search(text):
+        return classify(text, grounding=grounding, pending=pending)
+    if pending == "suggestion" and is_acceptance(text):
         return classify(text, grounding=grounding, pending=pending)
     if is_plan_intent(text):
         return _study_plan_decision()

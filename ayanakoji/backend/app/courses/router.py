@@ -21,6 +21,7 @@ from sqlmodel import Session
 from app.agent.clock import today_in_timezone
 from app.agent.contracts import Pace, PlanEvent, ScheduledBlock, TakenCourse, TokenEvent
 from app.agent.orchestrator import run_pipeline
+from app.agent.router_agent import is_acceptance
 from app.agent.schedule_edit import parse_adjustment, parse_pace
 from app.agent.state import derive_course_state
 from app.agent.study_plan import occupied_intervals
@@ -245,11 +246,29 @@ def _pace_choice_pending(course: Course) -> bool:
     return False
 
 
+def _suggested_catalog_id(course: Course) -> str | None:
+    """Catalog id of a single-course suggestion the last assistant turn offered.
+
+    Returns None if the chat is already linked, the last assistant turn made no
+    suggestion, or it offered several courses (a bare "yes" would be ambiguous).
+    """
+    if course.catalog_id:
+        return None
+    for message in reversed(course.messages):
+        if message.get("role") == "assistant":
+            options = ((message.get("meta") or {}).get("suggestion") or {}).get("options") or []
+            if len(options) == 1:
+                return (options[0] or {}).get("catalog_id")
+            return None
+    return None
+
+
 def _conversation_context(course: Course) -> tuple[list[dict[str, str]], str | None]:
     """Recent turns + what the last assistant turn proposed (for follow-up routing).
 
-    ``pending`` is "pace" when the last assistant turn asked the pace, so a bare
-    "yes" resolves to building the plan instead of being read as a new greeting.
+    ``pending`` is "pace" when the last assistant turn asked the pace, or "suggestion"
+    when it offered a single course to start, so a bare "yes" resolves to building the
+    plan / accepting the course instead of being read as a fresh greeting.
     """
     history = [
         {"role": str(m.get("role", "")), "content": str(m.get("content", ""))}
@@ -262,6 +281,8 @@ def _conversation_context(course: Course) -> tuple[list[dict[str, str]], str | N
             meta = message.get("meta") or {}
             if meta.get("pace_request"):
                 pending = "pace"
+            elif _suggested_catalog_id(course) is not None:
+                pending = "suggestion"
             break
     return history, pending
 
@@ -435,6 +456,17 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
         # like a bare "yes". The trailing turn is the current message itself.
         history, pending = _conversation_context(current)
         history = history[:-1] if history else []
+        # Conversational course accept (R2): "yes, start that one" after a single-course
+        # suggestion links that course here, the same as clicking the suggestion button.
+        if pending == "suggestion" and is_acceptance(content):
+            suggested = _suggested_catalog_id(current)
+            if suggested and is_valid_course_id(suggested):
+                linked = get_catalog_course(suggested)
+                current.catalog_id = suggested
+                current.status = STATUS_FIRST_ATTEMPT
+                if linked is not None:
+                    current.chat_name = linked.title
+                stream_repo.save(current)
         existing_modules = stream_repo.list_modules(current.id)
         course_state = derive_course_state(
             catalog_id=current.catalog_id,
