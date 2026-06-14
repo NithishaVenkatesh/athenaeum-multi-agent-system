@@ -2,7 +2,52 @@
 
 from __future__ import annotations
 
-from app.agent.grounding import CourseGrounding, get_grounding
+from app.agent.grounding import (
+    LEXICAL_PROVIDER,
+    CourseGrounding,
+    RetrievalResult,
+    get_grounding,
+)
+
+
+def test_retrieve_returns_sources_with_lexical_query_plan() -> None:
+    g = CourseGrounding()
+    result = g.retrieve("How do I use Azure Functions triggers and bindings?")
+    assert isinstance(result, RetrievalResult)
+    # Same sources as search() — retrieve() just adds the activity.
+    assert [s.ref for s in result.sources] == [
+        s.ref for s in g.search("How do I use Azure Functions triggers and bindings?")
+    ]
+    assert result.sources[0].ref == "cb-c01-m02"
+    # The activity is the honestly-labelled offline query plan.
+    assert result.activity.provider == LEXICAL_PROVIDER
+    assert result.activity.live is False
+    labels = [s.label for s in result.activity.steps]
+    assert "Query plan · lexical" in labels
+    plan = next(s for s in result.activity.steps if s.label == "Query plan · lexical")
+    # The plan surfaces the actual content terms it retrieved on.
+    assert "functions" in plan.detail.lower()
+    assert "triggers" in plan.detail.lower()
+    overlap = next(s for s in result.activity.steps if "overlap" in s.label.lower())
+    assert overlap.passed is True
+    assert "cb-c01-m02" in overlap.detail
+
+
+def test_retrieve_off_topic_reports_empty_plan() -> None:
+    g = CourseGrounding()
+    result = g.retrieve("who won the cricket world cup final")
+    assert result.sources == []
+    assert result.activity.live is False
+    overlap = next(s for s in result.activity.steps if "overlap" in s.label.lower())
+    assert overlap.passed is False
+    assert "cleared the relevance floor" in overlap.detail
+
+
+def test_retrieve_respects_catalog_scope() -> None:
+    g = CourseGrounding()
+    result = g.retrieve("storage and data", catalog_id="cb-c02")
+    assert result.sources
+    assert all(s.ref.startswith("cb-c02") for s in result.sources)
 
 
 def test_search_surfaces_relevant_module_first() -> None:

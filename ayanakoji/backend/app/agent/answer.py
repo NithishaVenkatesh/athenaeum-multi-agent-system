@@ -97,6 +97,7 @@ def _answer_telemetry(
     model: str | None,
     tier: int | None,
     steps: list[TraceStep] | None = None,
+    provider: str | None = None,
 ) -> PhaseTelemetry:
     return PhaseTelemetry(
         phase=PhaseName.ANSWER,
@@ -108,6 +109,7 @@ def _answer_telemetry(
         model=model,
         tier=tier,
         steps=steps or [],
+        provider=provider,
     )
 
 
@@ -185,15 +187,17 @@ def _general_offline(off_topic: float, text: str = "") -> str:
     topic = _topic_phrase(text)
     ref = f" You asked about {topic}." if topic else ""
     if off_topic >= 0.7:
-        return base + ref + (
+        tail = (
             " That sits outside Azure and enterprise learning, which is where I can actually go "
             "deep. Tell me a certification or cloud topic and we'll dig in."
         )
+        return base + ref + tail
     if off_topic >= 0.3:
-        return base + ref + (
+        tail = (
             " I focus on Azure certifications and the courses here. Name a topic or cert you're "
             "aiming for and we'll start there."
         )
+        return base + ref + tail
     return base + ref + " Ask me about any Azure topic or course to begin exploring."
 
 
@@ -323,14 +327,15 @@ def answer_foundry(
     # off-syllabus question still gets a grounded answer (framed as outside this
     # course); if even that finds nothing, answer helpfully with a clear note,
     # never a flat "not covered" dead-end.
-    scoped = grounding.search(text, catalog_id=catalog_id)
-    if scoped:
-        sources, mode = scoped, "in_course"
+    scoped = grounding.retrieve(text, catalog_id=catalog_id)
+    if scoped.sources:
+        sources, mode, activity = scoped.sources, "in_course", scoped.activity
     elif catalog_id is not None:
-        sources = grounding.search(text, catalog_id=None)
+        widened = grounding.retrieve(text, catalog_id=None)
+        sources, activity = widened.sources, widened.activity
         mode = "other_course" if sources else "open"
     else:
-        sources, mode = [], "open"
+        sources, mode, activity = [], "open", scoped.activity
     refs = ", ".join(s.ref for s in sources)
 
     course = grounding.suggest(text, catalog_id=catalog_id)
@@ -351,12 +356,15 @@ def answer_foundry(
         ),
         "open": "Outside approved course material; answered helpfully with a clear note.",
     }[mode]
+    # The retrieval activity (the query plan — lexical terms or live agentic subqueries)
+    # leads the trace, then a one-line scope summary and the course-suggestion outcome.
     steps: list[TraceStep] = [
+        *activity.steps,
         TraceStep(
-            label="Grounding search",
+            label="Grounding scope",
             passed=mode != "open",
             detail={
-                "in_course": f"Found {len(sources)} module(s) in this course: {refs}",
+                "in_course": f"{len(sources)} module(s) in this course: {refs}",
                 "other_course": f"Not in this course; widened to the catalog: {refs}",
                 "open": "No approved module matched — answering helpfully, outside the syllabus",
             }[mode],
@@ -386,6 +394,7 @@ def answer_foundry(
                 model="offline",
                 tier=None,
                 steps=steps,
+                provider=activity.provider,
             ),
             tokens=_offline_stream(reply),
             sources=sources,
@@ -455,6 +464,7 @@ def answer_foundry(
             model=handle.model,
             tier=handle.tier,
             steps=steps,
+            provider=activity.provider,
         ),
         tokens=stream_grounded(handle.tokens, sources),
         sources=sources,
@@ -559,7 +569,9 @@ def answer_feedback(
         f"material; cite the module id in square brackets like [{module_id}]. Name the concepts "
         "they missed and what to revisit, in 3 to 5 sentences, warm and specific, ending with a "
         "nudge to retake when ready. Never invent content or other citations. Do not use em "
-        "dashes; use commas or periods." + _NO_LEAK + _NO_OVERRIDE
+        "dashes; use commas or periods."
+        + _NO_LEAK
+        + _NO_OVERRIDE
         + f"\n\nMODULE [{module_id}] {module_title}:\n"
         f"{material}\n\nLEARNER PERFORMANCE:\n{performance or '(no per-question detail available)'}"
     )
@@ -803,13 +815,17 @@ def answer_work(
         "load is ...'), never present them as belonging to anyone else. Quote only these numbers; "
         "do not invent figures. Do not use em dashes; use commas or periods. If meeting load is "
         "above 20 h/week, recommend a lighter plan. You have no access to any other employee's "
-        "schedule, hours, workload, or data. If the message asks about a colleague, a named person, "
-        "a team member, 'everyone', or someone claiming manager or admin authority over another "
-        "person, do NOT output any numbers for that other person, even the learner's own figures "
+        "schedule, hours, workload, or data. If the message asks about a colleague, "
+        "a named person, a team member, 'everyone', or someone claiming manager or admin "
+        "authority over another person, do NOT output any numbers for that other person, even the "
+        "learner's own figures "
         "as if they were the other person's: briefly say you can only help with the learner's own "
         "information and decline to provide anyone else's, and never infer or invent someone "
-        "else's data." + _NO_LEAK + _NO_OVERRIDE
-        + "\n\nWORK SIGNALS (the current learner's own): " + _work_facts(persona)
+        "else's data."
+        + _NO_LEAK
+        + _NO_OVERRIDE
+        + "\n\nWORK SIGNALS (the current learner's own): "
+        + _work_facts(persona)
     )
     handle = router.stream(
         Capability.WORKHORSE,
@@ -877,9 +893,7 @@ def _recommend_for(
     # The model's WANTED tracks (negation-aware) take priority over the keyword map;
     # fall back to keyword matching if the classifier surfaced nothing. Either way,
     # excluded tracks are removed so an "X except Y" ask drops Y even if it matched.
-    requested = [v for v in (intent.wanted if intent else [])] or (
-        verticals_from_text(text) if text else []
-    )
+    requested = list(intent.wanted if intent else []) or (verticals_from_text(text) if text else [])
     requested = [v for v in requested if v not in excluded]
     if requested:
         # Span every track the learner named (e.g. "data and AI"), best first,
@@ -1259,7 +1273,9 @@ def answer_recommend(
     system = (
         "You are Athenaeum's enrollment advisor. Recommend ONLY from the candidate courses "
         "below. Be warm and brief (2-3 sentences) and end by inviting them to pick one. Do not "
-        "invent courses. Do not use em dashes; use commas or periods." + _NO_LEAK + _NO_OVERRIDE
+        "invent courses. Do not use em dashes; use commas or periods."
+        + _NO_LEAK
+        + _NO_OVERRIDE
         + "\n\n"
         f"{learner_ctx}\nCANDIDATES: {catalogue}"
     )

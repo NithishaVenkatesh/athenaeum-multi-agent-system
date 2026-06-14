@@ -20,9 +20,14 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-from app.agent.contracts import CourseSuggestion, GroundingSource
+from app.agent.contracts import CourseSuggestion, GroundingSource, TraceStep
 from app.catalog.loader import default_catalog_path
 from app.config import Settings, get_settings
+
+# Honest provider labels — what *actually* retrieved the sources, surfaced in the trace.
+# The offline lexical backend mirrors the Foundry IQ knowledge base's index; the live
+# adapter (``grounding_azure``) flips these to the Azure agentic-retrieve labels.
+LEXICAL_PROVIDER = "Foundry-IQ-pattern · offline lexical retrieval"
 
 # Tokens that carry no retrieval signal (wrapped for readability).
 _STOPWORD_TEXT = """
@@ -88,6 +93,28 @@ class GroundingDoc:
     title: str  # module title
     snippet: str  # module summary + objectives (the material an answer grounds on)
     text: str  # lowercased index text for scoring
+
+
+@dataclass(frozen=True)
+class RetrievalActivity:
+    """How a set of grounding sources was retrieved — the query plan, surfaced in the trace.
+
+    The lexical backend reports its IDF-weighted keyword plan; the live Azure adapter
+    reports the agentic-retrieve plan (LLM-decomposed subqueries + reranker scores). Both
+    fill the same shape so the pipeline trace renders ``include_activity`` either way.
+    """
+
+    provider: str  # honest label of what retrieved the sources
+    live: bool  # True only when a live Azure AI Search call produced this
+    steps: tuple[TraceStep, ...] = ()
+
+
+@dataclass(frozen=True)
+class RetrievalResult:
+    """Grounding sources plus the retrieval activity (query plan) that produced them."""
+
+    sources: list[GroundingSource]
+    activity: RetrievalActivity
 
 
 def _tokenize(text: str) -> list[str]:
@@ -357,6 +384,72 @@ class CourseGrounding:
             )
             for d in ranked
         ]
+
+    def retrieve(
+        self, query: str, *, catalog_id: str | None = None, k: int = _TOP_K
+    ) -> RetrievalResult:
+        """Top-k sources for ``query`` plus the lexical query-plan activity (for the trace).
+
+        Same retrieval as :meth:`search`, but it also reports *how* it retrieved — the
+        content terms it planned on, any synonym expansion, and the IDF-weighted overlap
+        scores of the chosen modules — so the pipeline trace surfaces the offline
+        retrieval's reasoning, the way the live agentic-retrieve adapter surfaces its
+        LLM-planned subqueries.
+        """
+        ranked = self._ranked(query, catalog_id)[:k]
+        sources = [
+            GroundingSource(
+                ref=d.ref,
+                title=f"{d.course_title}: {d.title}",
+                snippet=d.snippet,
+                kind="course",
+            )
+            for d in ranked
+        ]
+        return RetrievalResult(sources=sources, activity=self._lexical_activity(query, ranked))
+
+    def _lexical_activity(self, query: str, ranked: tuple[GroundingDoc, ...]) -> RetrievalActivity:
+        """Build the lexical query-plan trace for ``query`` over its retrieved ``ranked`` docs."""
+        q_terms = tuple(dict.fromkeys(_tokenize(query)))
+        terms = _expand(q_terms)
+        cert_blob = re.sub(r"[^a-z0-9]", "", query.lower())
+        synonyms = tuple(t for t in terms if t not in q_terms)
+        plan = ", ".join(q_terms) or "(no content terms)"
+        plan_detail = f"{len(q_terms)} content term(s): {plan}"
+        if synonyms:
+            plan_detail += f"  ·  +synonyms: {', '.join(synonyms)}"
+        steps = [
+            TraceStep(
+                label="Query plan · lexical",
+                passed=True,
+                detail=plan_detail,
+                model="lexical",
+            )
+        ]
+        if ranked:
+            top = ranked[0]
+            scored = ", ".join(f"{d.ref}={_score(terms, d, cert_blob)}" for d in ranked)
+            steps.append(
+                TraceStep(
+                    label="IDF-weighted keyword overlap",
+                    passed=True,
+                    detail=(
+                        f"Top course '{top.course_title}' ({top.cert or 'no cert'}); "
+                        f"module overlap scores: {scored}"
+                    ),
+                    model="lexical",
+                )
+            )
+        else:
+            steps.append(
+                TraceStep(
+                    label="IDF-weighted keyword overlap",
+                    passed=False,
+                    detail="No module cleared the relevance floor",
+                    model="lexical",
+                )
+            )
+        return RetrievalActivity(provider=LEXICAL_PROVIDER, live=False, steps=tuple(steps))
 
     def suggest(self, query: str, *, catalog_id: str | None = None) -> CourseSuggestion | None:
         """Best-matching catalog course to offer as the 'pursue this?' tool, if any."""

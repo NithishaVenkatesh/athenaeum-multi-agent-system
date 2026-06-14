@@ -256,6 +256,18 @@ def test_answer_foundry_offline_grounds_and_suggests() -> None:
     assert "".join(reply.tokens)
 
 
+def test_answer_foundry_surfaces_retrieval_provider_and_query_plan() -> None:
+    from app.agent.grounding import LEXICAL_PROVIDER
+
+    reply = answer_foundry("how do azure functions triggers work")
+    # The honest retrieval provider label is surfaced in telemetry (UI MetaChip).
+    assert reply.telemetry.provider == LEXICAL_PROVIDER
+    # The query plan (include_activity surface) leads the answer trace.
+    labels = [s.label for s in reply.telemetry.steps]
+    assert "Query plan · lexical" in labels
+    assert any("overlap" in label.lower() for label in labels)
+
+
 def test_answer_foundry_online_streams_grounded() -> None:
     router = FakeRouter(tokens=["Azure ", "Functions ", "[cb-c01-m02]"])
     reply = answer_foundry("azure functions", router=router, settings=_online())
@@ -728,12 +740,21 @@ _PORTFOLIO = ProgressSnapshot(
             is_current=True,
         ),
         CourseProgress(
-            catalog_id="de-c01", title="Data Engineering", passed=True, modules_total=4,
-            modules_completed=4, is_current=False,
+            catalog_id="de-c01",
+            title="Data Engineering",
+            passed=True,
+            modules_total=4,
+            modules_completed=4,
+            is_current=False,
         ),
         CourseProgress(
-            catalog_id="ai-c01", title="AI Foundations", modules_total=5, modules_completed=2,
-            next_module_title="Prompting", next_module_due="2026-08-01", is_current=False,
+            catalog_id="ai-c01",
+            title="AI Foundations",
+            modules_total=5,
+            modules_completed=2,
+            next_module_title="Prompting",
+            next_module_due="2026-08-01",
+            is_current=False,
         ),
     ],
 )
