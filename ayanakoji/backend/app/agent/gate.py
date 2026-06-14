@@ -5,8 +5,12 @@ retrieves, plans, or calls a downstream tool. Defense in depth (master-plan §15
 ordered so the *purpose-built* detector leads and the general LLM backs it up:
 
 1. **Regex pre-filter** — $0, offline, deterministic. Catches blatant overrides
-   *and* social-engineering paraphrases a probability classifier underweights
-   (e.g. "pretend the rules don't apply").
+   that carry an explicit instruction/rule object ("ignore previous instructions").
+1b. **Heuristic detector** (:mod:`app.agent.gate_heuristic`) — $0, deterministic,
+   runs in every mode. High-precision patterns for the paraphrased attacks the
+   regex underweights (persona-override, policy-nullification, system-prompt
+   exfiltration, mode-switch, roleplay-jailbreak). This is the degraded-mode net
+   (S1) and a deterministic exfil catch so the online leak isn't flaky (S2).
 2. **Prompt Guard 2** (Groq ``llama-prompt-guard-2``) — a model *trained* for
    injection/jailbreak detection; returns a 0..1 score. The **primary online
    detector and authoritative on a block**: a confident jailbreak is caught by
@@ -32,6 +36,7 @@ from functools import lru_cache
 from typing import Any
 
 from app.agent.contracts import InjectionVerdict, PhaseName, PhaseStatus, PhaseTelemetry, TraceStep
+from app.agent.gate_heuristic import heuristic_injection_verdict
 from app.agent.llm import AllProvidersDown, Capability, ModelRouter
 from app.config import Settings, get_settings
 
@@ -190,10 +195,33 @@ def screen(
         )
     )
 
+    # 1b) Heuristic detector — paraphrase-robust, deterministic, runs in EVERY mode.
+    #     The regex needs an explicit instruction-object; this catches the same
+    #     intent in paraphrase ("set aside the earlier directives", "you are
+    #     EVIL-GPT"), closing the degraded-mode window (S1) and giving the online
+    #     lane a deterministic exfil catch so the system-prompt leak isn't flaky (S2).
+    heuristic = heuristic_injection_verdict(text)
+    if heuristic is not None:
+        steps.append(
+            TraceStep(label="Heuristic detector", passed=False, detail=heuristic.reason)
+        )
+        return heuristic, _build_telemetry(
+            heuristic, model="heuristic-detector", tier=None, steps=steps
+        )
+    steps.append(
+        TraceStep(
+            label="Heuristic detector",
+            passed=True,
+            detail="No paraphrased override / exfiltration / roleplay-jailbreak pattern matched.",
+        )
+    )
+
     # 2) Offline: the pre-filter is the whole gate (no model available).
     if settings.llm_offline:
-        verdict = InjectionVerdict(blocked=False, reason="Passed regex pre-filter (offline).")
-        return verdict, _build_telemetry(verdict, model="regex-prefilter", tier=None, steps=steps)
+        verdict = InjectionVerdict(
+            blocked=False, reason="Passed regex + heuristic pre-filters (offline)."
+        )
+        return verdict, _build_telemetry(verdict, model="regex+heuristic", tier=None, steps=steps)
 
     # 3) Prompt Guard 2 FIRST — the purpose-built specialist, authoritative on a
     #    block. A confident jailbreak is caught here and short-circuits before the
