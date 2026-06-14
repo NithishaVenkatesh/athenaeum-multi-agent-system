@@ -670,6 +670,9 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
         meta_pace: dict[str, object] | None = None
         meta_skill_gate: dict[str, object] | None = None
         meta_new_chat: dict[str, object] | None = None
+        meta_practice: dict[str, object] | None = None
+        meta_actions: dict[str, object] | None = None
+        practice_state: dict[str, object] | None = None
         agent_constraints: dict[str, object] | None = None
         modules_as_dicts: list[dict[str, object]] = [
             {
@@ -736,6 +739,26 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
                     meta_skill_gate = payload
                 elif event.type == "new_chat":
                     meta_new_chat = payload
+                elif event.type == "practice":
+                    # payload is the client-safe dump (answer key excluded). The full
+                    # round, with the key, is read off the live event for grading.
+                    meta_practice = payload
+                    practice_state = {
+                        "module_id": event.module_id,
+                        "title": event.title,
+                        "questions": [
+                            {
+                                "id": q.id,
+                                "prompt": q.prompt,
+                                "choices": list(q.choices),
+                                "correct": q.correct,
+                                "explanation": q.explanation,
+                            }
+                            for q in event.questions
+                        ],
+                    }
+                elif event.type == "action":
+                    meta_actions = payload
                 yield _sse(payload)
                 # Terminal, non-token messages become the persisted transcript text.
                 if event.type == "blocked":
@@ -754,6 +777,9 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
             # across re-plans (the online replacement for the regex persistence).
             if agent_constraints:
                 _persist_agent_constraints(stream_repo, current, agent_constraints)
+            if practice_state is not None:
+                current.practice_active = practice_state
+                stream_repo.save(current)
             answer = "".join(answer_parts).strip() or final_text
             if answer:
                 meta: dict[str, object] = {
@@ -763,6 +789,8 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
                     "pace_request": meta_pace,
                     "skill_gate": meta_skill_gate,
                     "new_chat": meta_new_chat,
+                    "practice": meta_practice,
+                    "actions": meta_actions,
                 }
                 if not completed:
                     meta["interrupted"] = True
