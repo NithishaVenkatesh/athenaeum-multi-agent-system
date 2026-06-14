@@ -96,6 +96,7 @@ def _dispatch(
     exclude_days: frozenset[str],
     skip_weeks: frozenset[int],
     exam_date: date | None,
+    plan_constraints: dict[str, object] | None,
     modules: list[dict[str, object]],
     router: ModelRouter | None,
     grounding: CourseGrounding,
@@ -130,6 +131,7 @@ def _dispatch(
             skip_weeks=skip_weeks,
             reserved=reserved,
             exam_date=exam_date,
+            plan_constraints=plan_constraints,
             router=router,
             settings=settings,
         )
@@ -155,6 +157,7 @@ def run_pipeline(
     exclude_days: frozenset[str] = frozenset(),
     skip_weeks: frozenset[int] = frozenset(),
     exam_date: date | None = None,
+    plan_constraints: dict[str, object] | None = None,
     modules: list[dict[str, object]] | None = None,
     course_state: CourseState | None = None,
     history: list[dict[str, str]] | None = None,
@@ -223,6 +226,7 @@ def run_pipeline(
                 exclude_days=exclude_days,
                 skip_weeks=skip_weeks,
                 exam_date=exam_date,
+                plan_constraints=plan_constraints,
                 modules=modules or [],
                 router=router,
                 grounding=grounding,
@@ -252,7 +256,7 @@ def run_pipeline(
 
     # ── Structured study plan (rendered as a schedule card) ────────────────────
     if reply.plan is not None:
-        yield PlanEvent(plan=reply.plan)
+        yield PlanEvent(plan=reply.plan, constraints=reply.plan_constraints)
 
     # ── The course-selection tool (1+ choosable courses) ───────────────────────
     if reply.suggestion is not None:

@@ -64,6 +64,9 @@ class AgentReply:
     plan: StudyPlan | None = None
     pace_request: PaceRequestEvent | None = None
     new_chat: NewChatEvent | None = None
+    # Scheduling constraints the agent inferred this turn (persisted by the courses
+    # layer so they stick across re-plans).
+    plan_constraints: dict[str, object] | None = None
 
 
 def _offline_stream(text: str) -> Iterator[str]:
@@ -1034,6 +1037,7 @@ def answer_study_plan(
     skip_weeks: frozenset[int] = frozenset(),
     reserved: frozenset[tuple[str, int, int]] = frozenset(),
     exam_date: date | None = None,
+    plan_constraints: dict[str, object] | None = None,
     router: ModelRouter | None = None,
     repo: WorkIQRepository | None = None,
     settings: Settings | None = None,
@@ -1180,9 +1184,12 @@ def answer_study_plan(
     # Agentic path: an LLM tool-calling agent infers the scheduling constraints
     # from free text (open vocabulary, no regex) and calls a deterministic tool to
     # build the plan — so the model adapts while every number stays auditable.
-    from app.agent.scheduler import SchedulerContext, run_scheduler_agent
+    from app.agent.scheduler import SchedulerContext, baseline_from_constraints, run_scheduler_agent
 
     router = router or ModelRouter(settings)
+    # Persisted richer constraints (time window, max session, excluded dates) form
+    # the agent's baseline so a prior edit sticks across re-plans.
+    time_window, max_session, excluded_dates = baseline_from_constraints(plan_constraints)
     ctx = SchedulerContext(
         persona=persona,
         catalog_id=course.id,
@@ -1195,6 +1202,9 @@ def answer_study_plan(
         exclude_days=exclude_days,
         skip_weeks=skip_weeks,
         exam_date=exam_date,
+        time_window=time_window,
+        max_session_minutes=max_session,
+        excluded_dates=excluded_dates,
     )
     agent = run_scheduler_agent(text, ctx, router, settings=settings)
     # The agent's plan (built from the constraints it inferred) is authoritative;
@@ -1232,4 +1242,5 @@ def answer_study_plan(
         ),
         tokens=_offline_stream(narration),
         plan=final_plan,
+        plan_constraints=agent.constraints or None,
     )

@@ -253,10 +253,15 @@ class ErrorEvent(BaseModel):
 
 
 class PlanEvent(BaseModel):
-    """A generated study plan rendered as a structured schedule card."""
+    """A generated study plan rendered as a structured schedule card.
+
+    ``constraints`` carries the scheduling constraints the agent inferred this turn
+    so the courses layer can persist them; they then stick across re-plans.
+    """
 
     type: Literal["plan"] = "plan"
     plan: StudyPlan
+    constraints: dict[str, object] | None = None
 
 
 class PaceRequestEvent(BaseModel):

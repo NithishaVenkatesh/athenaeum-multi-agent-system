@@ -338,6 +338,47 @@ def test_typing_is_blocked_while_a_pace_choice_is_pending(client: TestClient) ->
     assert "plan" in [e["type"] for e in _parse_sse(ok.text)]
 
 
+def test_agent_constraints_persist_and_reload_as_baseline(db_engine: object) -> None:
+    """The scheduler agent's constraints are persisted onto the course and read back
+    as the next turn's baseline, so an agentic edit sticks across re-plans (C4/4)."""
+    from app.agent.scheduler import baseline_from_constraints
+    from app.courses.repository import CourseRepository
+    from app.courses.router import _persist_agent_constraints
+    from app.db import session_scope
+
+    constraints = {
+        "pace": "faster",
+        "start_date": "2026-07-01",
+        "exclude_days": ["mon", "tue"],
+        "skip_weeks": [2],
+        "exam_date": "2026-08-15",
+        "time_window": [1080, 1320],  # 18:00–22:00
+        "max_session_minutes": 45,
+        "excluded_dates": ["2026-07-04"],
+    }
+    with session_scope() as s:
+        repo = CourseRepository(s)
+        course = repo.create(persona_id="EMP-001", chat_name="c")
+        course.catalog_id = "cb-c01"
+        _persist_agent_constraints(repo, course, constraints)
+        course_id = course.id
+
+    with session_scope() as s:
+        reloaded = CourseRepository(s).get(course_id)
+        assert reloaded is not None
+        # Discrete fields mapped through.
+        assert reloaded.pace == "faster"
+        assert reloaded.plan_start == "2026-07-01"
+        assert reloaded.plan_excludes == ["mon", "tue"]
+        assert reloaded.plan_skip_weeks == [2]
+        assert reloaded.plan_exam_date == "2026-08-15"
+        # Richer constraints round-trip through baseline_from_constraints.
+        window, max_session, dates = baseline_from_constraints(reloaded.plan_constraints)
+        assert window == (1080, 1320)
+        assert max_session == 45
+        assert dates == frozenset({"2026-07-04"})
+
+
 def test_oversized_message_is_rejected_422(client: TestClient) -> None:
     """A message past MAX_MESSAGE_CHARS is rejected at the boundary, never stored (C2)."""
     from app.courses.schemas import MAX_MESSAGE_CHARS

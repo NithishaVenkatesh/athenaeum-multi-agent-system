@@ -24,6 +24,7 @@ from app.agent.orchestrator import run_pipeline
 from app.agent.schedule_edit import parse_adjustment, parse_pace
 from app.agent.state import derive_course_state
 from app.agent.study_plan import occupied_intervals
+from app.config import get_settings
 from app.workiq.repository import get_repository
 from app.catalog.content import get_module_content
 from app.catalog.loader import get_course as get_catalog_course
@@ -193,6 +194,38 @@ def _apply_schedule_edit(
         course.plan_exam_date = adj.exam_date.isoformat()
     repo.save(course)
     return course
+
+
+def _persist_agent_constraints(
+    repo: CourseRepository, course: Course, constraints: dict[str, object]
+) -> None:
+    """Persist the scheduler agent's chosen constraints onto the course (online).
+
+    The discrete fields keep their existing meaning (read by the reserved-interval
+    and state logic); the richer ones (time window, max session, excluded dates)
+    live in ``plan_constraints``. This is what makes an agentic edit stick across
+    re-plans, replacing the old regex persistence on the online path.
+    """
+    pace = constraints.get("pace")
+    if isinstance(pace, str):
+        course.pace = pace
+    start = constraints.get("start_date")
+    if isinstance(start, str):
+        course.plan_start = start
+    exclude = constraints.get("exclude_days")
+    if isinstance(exclude, list):
+        course.plan_excludes = sorted(str(d) for d in exclude)
+    skip = constraints.get("skip_weeks")
+    if isinstance(skip, list):
+        course.plan_skip_weeks = sorted(int(w) for w in skip if isinstance(w, int))
+    exam = constraints.get("exam_date")
+    course.plan_exam_date = exam if isinstance(exam, str) else None
+    course.plan_constraints = {
+        "time_window": constraints.get("time_window"),
+        "max_session_minutes": constraints.get("max_session_minutes"),
+        "excluded_dates": constraints.get("excluded_dates") or [],
+    }
+    repo.save(course)
 
 
 def _pace_choice_pending(course: Course) -> bool:
@@ -382,16 +415,17 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
         reserved = _reserved_intervals(
             stream_repo, current.persona_id, exclude_id=current.id, today=today
         )
-        # A pace change in the message ("revert to a slower pace") updates the
-        # course pace before planning, so the re-plan honors it.
-        requested_pace = parse_pace(content)
-        if requested_pace is not None and current.catalog_id:
-            current.pace = requested_pace.value
-            stream_repo.save(current)
+        # Online, the LLM scheduler agent extracts scheduling intent from free text
+        # (no regex). The deterministic regex parsers are the OFFLINE fallback only,
+        # since the mock has no model to interpret natural language.
+        offline = get_settings().llm_offline
+        if offline:
+            requested_pace = parse_pace(content)
+            if requested_pace is not None and current.catalog_id:
+                current.pace = requested_pace.value
+                stream_repo.save(current)
+            current = _apply_schedule_edit(stream_repo, current, content, today=today)
         pace = Pace(current.pace) if current.pace else None
-        # Apply any natural-language schedule edit ("start after June 30",
-        # "skip Mondays", "remove week 2") and persist it across re-plans.
-        current = _apply_schedule_edit(stream_repo, current, content, today=today)
         start_date = (
             date.fromisoformat(current.plan_start) if current.plan_start else today
         )
@@ -420,6 +454,7 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
         meta_plan: dict[str, object] | None = None
         meta_pace: dict[str, object] | None = None
         meta_new_chat: dict[str, object] | None = None
+        agent_constraints: dict[str, object] | None = None
         modules_as_dicts: list[dict[str, object]] = [
             {
                 "module_id": m.module_id,
@@ -445,6 +480,7 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
                 exclude_days=exclude_days,
                 skip_weeks=skip_weeks,
                 exam_date=exam_date,
+                plan_constraints=current.plan_constraints or None,
                 modules=modules_as_dicts,
                 course_state=course_state,
                 history=history or None,
@@ -456,6 +492,7 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
                 elif isinstance(event, PlanEvent):
                     plan_modules = [m.model_dump(mode="json") for m in event.plan.modules]
                     meta_plan = payload["plan"]
+                    agent_constraints = event.constraints
                 elif event.type == "phase":
                     phases.append(payload["phase"])
                 elif event.type == "suggestion":
@@ -478,6 +515,10 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
             # No `yield` may run here — the generator may be mid-teardown.
             if plan_modules is not None:
                 stream_repo.replace_modules(current.id, plan_modules)
+            # Persist the constraints the scheduler agent chose so the edit sticks
+            # across re-plans (the online replacement for the regex persistence).
+            if agent_constraints:
+                _persist_agent_constraints(stream_repo, current, agent_constraints)
             answer = "".join(answer_parts).strip() or final_text
             if answer:
                 meta: dict[str, object] = {

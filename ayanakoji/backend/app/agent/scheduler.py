@@ -45,6 +45,31 @@ def _iso_date(value: object) -> date | None:
         return None
 
 
+def baseline_from_constraints(
+    constraints: dict[str, object] | None,
+) -> tuple[tuple[int, int] | None, int | None, frozenset[str]]:
+    """Read the persisted richer constraints (time window, max session, excluded
+    dates) back into the agent's baseline so a prior edit sticks across re-plans."""
+    if not constraints:
+        return None, None, frozenset()
+    raw_window = constraints.get("time_window")
+    window: tuple[int, int] | None = None
+    if isinstance(raw_window, (list, tuple)) and len(raw_window) == 2:
+        try:
+            window = (int(raw_window[0]), int(raw_window[1]))
+        except (TypeError, ValueError):
+            window = None
+    raw_max = constraints.get("max_session_minutes")
+    max_session = int(raw_max) if isinstance(raw_max, int) and raw_max > 0 else None
+    raw_dates = constraints.get("excluded_dates")
+    dates = (
+        frozenset(d for d in raw_dates if _iso_date(d) is not None)
+        if isinstance(raw_dates, list)
+        else frozenset()
+    )
+    return window, max_session, dates
+
+
 # The one tool the scheduling agent drives. All fields optional: the model omits a
 # field to keep the plan's current value for it.
 PROPOSE_PLAN_TOOL: dict[str, object] = {
@@ -121,6 +146,9 @@ class SchedulerContext:
     exclude_days: frozenset[str] = frozenset()
     skip_weeks: frozenset[int] = frozenset()
     exam_date: date | None = None
+    time_window: tuple[int, int] | None = None
+    max_session_minutes: int | None = None
+    excluded_dates: frozenset[str] = frozenset()
 
 
 @dataclass
@@ -168,7 +196,7 @@ def build_plan_from_args(
     ) or ctx.skip_weeks
     exam = _iso_date(args.get("exam_date")) or ctx.exam_date
 
-    time_window: tuple[int, int] | None = None
+    time_window: tuple[int, int] | None = ctx.time_window
     lo = _to_minutes(args["earliest_time"]) if isinstance(args.get("earliest_time"), str) else None
     hi = _to_minutes(args["latest_time"]) if isinstance(args.get("latest_time"), str) else None
     if lo is not None or hi is not None:
@@ -177,13 +205,13 @@ def build_plan_from_args(
     max_session = (
         int(args["max_session_minutes"])
         if isinstance(args.get("max_session_minutes"), int) and args["max_session_minutes"] > 0  # type: ignore[operator]
-        else None
+        else ctx.max_session_minutes
     )
     extra_dates = (
         frozenset(d for d in args["excluded_dates"] if _iso_date(d) is not None)
         if isinstance(args.get("excluded_dates"), list)
         else frozenset()
-    )
+    ) or ctx.excluded_dates
 
     plan = build_study_plan(
         catalog_id=ctx.catalog_id,
