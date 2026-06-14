@@ -1,0 +1,105 @@
+{
+  "course_id": "as-c02",
+  "module_id": "as-c02-m01",
+  "module_title": "Designing identity and access",
+  "choices": [
+    {
+      "id": "as-c02-m01-c01",
+      "module_id": "as-c02-m01",
+      "prompt": "Meridian needs cloud sign-in to keep working even if its on-premises domain controllers go offline during a data-center outage. Which Microsoft Entra Connect authentication method does the module recommend for this requirement, and why?",
+      "kind": "mcq",
+      "choices": [
+        "Password hash synchronization, because authentication happens entirely in Entra ID using synchronized hashes and does not depend on on-premises availability",
+        "Pass-through authentication, because it validates the password against on-premises Active Directory in real time",
+        "Federation with AD FS, because it hands authentication to the on-premises identity provider entirely",
+        "Conditional Access, because it evaluates signals and decides whether to allow or block sign-in"
+      ],
+      "correct_answers": [
+        "Password hash synchronization, because authentication happens entirely in Entra ID using synchronized hashes and does not depend on on-premises availability"
+      ]
+    },
+    {
+      "id": "as-c02-m01-c02",
+      "module_id": "as-c02-m01",
+      "prompt": "According to the module, what does Azure role-based access control (RBAC) require you to combine to grant permissions?",
+      "kind": "mcq",
+      "choices": [
+        "A role assigned to a security principal at a scope",
+        "A Conditional Access policy assigned to a device at a location",
+        "An eligible role activated just-in-time with approval and justification",
+        "A managed identity assigned to a resource with a vault access policy"
+      ],
+      "correct_answers": [
+        "A role assigned to a security principal at a scope"
+      ]
+    },
+    {
+      "id": "as-c02-m01-c03",
+      "module_id": "as-c02-m01",
+      "prompt": "An application on Azure Container Apps must read a connection string from Key Vault, and the security team forbids any secret in configuration. Which TWO design elements does the module say combine to achieve this credential-free access?",
+      "kind": "msq",
+      "choices": [
+        "A managed identity assigned to the container app so the app authenticates as itself with no stored secret",
+        "An RBAC data-plane role such as Key Vault Secrets User scoped to the vault granting that identity read access",
+        "A federation trust with AD FS so the app delegates authentication to an on-premises provider",
+        "A Conditional Access policy that requires multi-factor authentication before the app reads the secret"
+      ],
+      "correct_answers": [
+        "A managed identity assigned to the container app so the app authenticates as itself with no stored secret",
+        "An RBAC data-plane role such as Key Vault Secrets User scoped to the vault granting that identity read access"
+      ]
+    },
+    {
+      "id": "as-c02-m01-c04",
+      "module_id": "as-c02-m01",
+      "prompt": "The module warns against confusing the control plane and the data plane. Which statement correctly reflects that distinction as described?",
+      "kind": "mcq",
+      "choices": [
+        "A principal with Contributor on a storage account can change its configuration but may still be unable to read the blobs if data-plane RBAC is enforced",
+        "Granting Owner on a subscription automatically grants data-plane access to all encrypted data beneath it",
+        "The data plane (managing the resource through Azure Resource Manager) is governed by RBAC, while the control plane reads the actual blobs",
+        "Control-plane and data-plane access are always governed by the same single role assignment, so they never need to be designed separately"
+      ],
+      "correct_answers": [
+        "A principal with Contributor on a storage account can change its configuration but may still be unable to read the blobs if data-plane RBAC is enforced"
+      ]
+    },
+    {
+      "id": "as-c02-m01-c05",
+      "module_id": "as-c02-m01",
+      "prompt": "Which design recommendations does the module make for building a least-privilege authorization model? Select all that apply.",
+      "kind": "msq",
+      "choices": [
+        "Prefer built-in roles, and prefer assigning them to groups rather than individuals so access follows group membership",
+        "Use a custom role only when no built-in role expresses the intent, such as 'may restart virtual machines but may not delete them'",
+        "Use Privileged Identity Management to make privileged roles eligible rather than active, eliminating standing access",
+        "Default to granting Owner so that an account can also grant access to others without needing further assignments"
+      ],
+      "correct_answers": [
+        "Prefer built-in roles, and prefer assigning them to groups rather than individuals so access follows group membership",
+        "Use a custom role only when no built-in role expresses the intent, such as 'may restart virtual machines but may not delete them'",
+        "Use Privileged Identity Management to make privileged roles eligible rather than active, eliminating standing access"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "as-c02-m01-l01",
+      "module_id": "as-c02-m01",
+      "prompt": "Meridian's CISO requires single sign-on for hybrid users while ensuring cloud sign-in survives an on-premises outage. Compare the three Microsoft Entra Connect authentication methods described in the module and explain which you would recommend by default and why.",
+      "reference_answer": "Entra Connect synchronizes on-premises identities into the cloud directory, and the key choice is the authentication method. Password hash synchronization copies a hash-of-a-hash of each password into the cloud so authentication happens entirely in Entra ID even if the on-premises domain controllers are down, making it the most resilient option. Pass-through authentication validates the password against on-premises Active Directory in real time, which couples cloud sign-in to on-premises availability. Federation with AD FS hands authentication to an on-premises identity provider entirely and is the most complex to operate, rarely the right default anymore. The module's rule of thumb is to recommend password hash synchronization unless a concrete requirement forbids it, which fits Meridian's need for cloud sign-in to keep working during a data-center outage."
+    },
+    {
+      "id": "as-c02-m01-l02",
+      "module_id": "as-c02-m01",
+      "prompt": "Walk through how you would redesign Meridian's warehouse app so it stores no secrets, retrieves them from Key Vault, and gives the operations team only just-in-time vault access. Name the specific design elements and why each matters.",
+      "reference_answer": "Today the database connection string and shipping-API key sit in plain-text app settings, so the redesign provisions an Azure Key Vault with enableRbacAuthorization set to true so vault access uses the same RBAC model as everything else, letting access reviews and PIM apply uniformly. You assign a user-assigned managed identity to the app and grant it the built-in Key Vault Secrets User data-plane role scoped to the vault, not the subscription, for least privilege. The application then uses DefaultAzureCredential to acquire a token for its managed identity and read the secret, so there is no secret stored in the app at all. Separately you configure PIM so the Key Vault Administrator role is eligible rather than active for the operations team, with approval required, satisfying the CISO's 'no standing admin access' requirement. This combination removes credentials from code while keeping vault management just-in-time and auditable."
+    },
+    {
+      "id": "as-c02-m01-l03",
+      "module_id": "as-c02-m01",
+      "prompt": "The operations team needs occasional Key Vault administration but the CISO forbids standing administrative access. Explain why Privileged Identity Management is the right recommendation and what it provides beyond just-in-time activation.",
+      "reference_answer": "Standing privilege is the enemy for privileged roles, and permanent high-privilege assignments like standing global administrators defeat the purpose of just-in-time access. Privileged Identity Management makes a role eligible rather than active, so an administrator activates it just-in-time for a bounded window rather than holding it permanently. This directly satisfies the CISO's 'no standing administrative access' requirement without preventing admins from doing their jobs. Beyond just-in-time activation, PIM gives you approval workflows, time-bounded sessions, optional justification, and a complete audit trail in which every activation is logged. Applied to Meridian, the Key Vault Administrator role is configured as eligible with approval required, so operations can manage the vault only when needed and every use is accountable."
+    }
+  ]
+}
