@@ -35,7 +35,7 @@ master plan ([kb/planning/master-plan.md](../kb/planning/master-plan.md)).
 | Uses Foundry SDK and/or MAF | ✅ Azure OpenAI via Foundry SDK (Azure-first). MAF deferred (plain-Python spine = build-spec CORE) |
 | Reasoning + multi-step across agents | ✅ State-conditioned graph + inspectable trace |
 | Integrates external tools / APIs / MCP | 🟡 Deterministic grounding/recommender as tools; **MS Learn MCP** + live MCP retrieval not wired |
-| ≥1 Microsoft IQ layer | ✅ Foundry-IQ-pattern grounding + Work IQ provider (honestly labelled) |
+| ≥1 Microsoft IQ layer | ✅ **Live Foundry IQ** (Azure AI Search agentic retrieve) on the answer path + offline lexical fallback; Work IQ provider (honestly labelled) |
 | Synthetic data only | ✅ |
 | Demoable; interactions explained | ✅ Live app + trace panel |
 | Documentation (agents, flow, tools, data) | 🟡 In code + this doc; a top-level architecture README pending |

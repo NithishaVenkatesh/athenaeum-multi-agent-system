@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 
 from app.agent.contracts import (
@@ -365,8 +365,13 @@ def verify_grounding(
             from app.agent.grounding_verifier import azure_grounding
 
             return azure_grounding(query, answer, sources, settings)
-        except Exception:  # noqa: BLE001 — any eval failure degrades to the lexical floor
-            pass
+        except Exception as exc:  # noqa: BLE001 — degrade LOUDLY, never block the answer
+            verdict = lexical_groundedness(answer, sources)
+            note = (
+                f"live Azure evaluation unavailable ({type(exc).__name__}); "
+                "used the deterministic lexical floor"
+            )
+            return replace(verdict, reason=f"{note}. {verdict.reason}")
     return lexical_groundedness(answer, sources)
 
 
