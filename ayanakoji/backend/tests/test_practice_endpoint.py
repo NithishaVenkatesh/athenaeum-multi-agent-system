@@ -95,3 +95,28 @@ def test_submit_without_active_round_returns_409(client, session) -> None:
 def test_submit_missing_course_returns_404(client) -> None:
     resp = client.post("/api/courses/nonexistent-id/practice/submit", json={"selections": {}})
     assert resp.status_code == 404
+
+
+def test_practise_then_submit_full_loop(client, session) -> None:
+    course_id = _make_course_with_module(session)
+
+    # 1) Chat: ask to practise → a practice event is streamed and persisted.
+    with client.stream(
+        "POST", f"/api/courses/{course_id}/messages", json={"content": "quiz me on this module"}
+    ) as resp:
+        chat_body = "".join(resp.iter_text())
+    assert '"type": "practice"' in chat_body
+    assert '"correct":' not in chat_body  # answer-key field never crosses the wire
+
+    with session_scope() as s:
+        active = CourseRepository(s).get(course_id).practice_active
+    selections = {q["id"]: [q["correct"]] for q in active["questions"]}  # all correct
+
+    # 2) Submit → ready verdict + take_evaluation CTA, round cleared.
+    with client.stream(
+        "POST", f"/api/courses/{course_id}/practice/submit", json={"selections": selections}
+    ) as resp:
+        submit_body = "".join(resp.iter_text())
+    assert "take_evaluation" in submit_body
+    with session_scope() as s:
+        assert not CourseRepository(s).get(course_id).practice_active
