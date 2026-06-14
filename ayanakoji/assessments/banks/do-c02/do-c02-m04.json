@@ -1,0 +1,104 @@
+{
+  "course_id": "do-c02",
+  "module_id": "do-c02-m04",
+  "module_title": "Progressive deployment strategies",
+  "choices": [
+    {
+      "id": "do-c02-m04-c01",
+      "module_id": "do-c02-m04",
+      "prompt": "In a blue-green deployment as the module describes it, what is the single biggest advantage of keeping the idle 'blue' environment running after you flip all traffic to 'green'?",
+      "kind": "mcq",
+      "choices": [
+        "Rollback is near-instant: if green misbehaves you flip back to blue, which is still running the old version",
+        "It lets you expose the new version to only 5% of real traffic at first while you watch error rates",
+        "It avoids running two full environments, cutting infrastructure cost in half",
+        "It guarantees that bugs missed by smoke tests will never reach any user"
+      ],
+      "correct_answers": [
+        "Rollback is near-instant: if green misbehaves you flip back to blue, which is still running the old version"
+      ]
+    },
+    {
+      "id": "do-c02-m04-c02",
+      "module_id": "do-c02-m04",
+      "prompt": "The module contrasts canary and ring deployments. Which statement best captures how ring deployment differs from canary?",
+      "kind": "mcq",
+      "choices": [
+        "Ring deployment generalizes canary to audiences (ring 0 internal staff, ring 1 opt-in early adopters, ring 2 everyone) rather than just a raw percentage of traffic",
+        "Ring deployment flips all traffic at once between two identical environments, while canary moves gradually",
+        "Ring deployment requires no telemetry, while canary cannot work without watching error rate and latency",
+        "Ring deployment is a routing change between a slot and production, while canary redeploys the app"
+      ],
+      "correct_answers": [
+        "Ring deployment generalizes canary to audiences (ring 0 internal staff, ring 1 opt-in early adopters, ring 2 everyone) rather than just a raw percentage of traffic"
+      ]
+    },
+    {
+      "id": "do-c02-m04-c03",
+      "module_id": "do-c02-m04",
+      "prompt": "According to the module, what specifically makes a deployment slot swap a low-downtime technique and 'a lightweight blue-green'?",
+      "kind": "mcq",
+      "choices": [
+        "The new code is fully started and warmed in the slot before the swap, so the swap is just a routing change to already-warm instances rather than a cold start",
+        "The swap automatically rewrites the database schema so old and new versions never conflict",
+        "The swap deploys the new build fresh into production at the moment of cutover, ensuring the latest code",
+        "The swap exposes the new version to only a small percentage of users while monitoring latency"
+      ],
+      "correct_answers": [
+        "The new code is fully started and warmed in the slot before the swap, so the swap is just a routing change to already-warm instances rather than a cold start"
+      ]
+    },
+    {
+      "id": "do-c02-m04-c04",
+      "module_id": "do-c02-m04",
+      "prompt": "Select all statements that the module makes about feature flags and Azure App Configuration's Feature Manager.",
+      "kind": "msq",
+      "choices": [
+        "Deploying code and releasing a feature are different events: you can ship code disabled behind a flag and turn it on later without another deployment",
+        "Feature Manager centralizes flags outside your code and can target audiences such as a percentage of users or a named group",
+        "Flags should be treated as temporary and removed once a feature is fully rolled out and stable, to avoid permanent technical debt",
+        "Turning a feature off requires a fresh redeployment of the application to production"
+      ],
+      "correct_answers": [
+        "Deploying code and releasing a feature are different events: you can ship code disabled behind a flag and turn it on later without another deployment",
+        "Feature Manager centralizes flags outside your code and can target audiences such as a percentage of users or a named group",
+        "Flags should be treated as temporary and removed once a feature is fully rolled out and stable, to avoid permanent technical debt"
+      ]
+    },
+    {
+      "id": "do-c02-m04-c05",
+      "module_id": "do-c02-m04",
+      "prompt": "During a rolling deployment, a small percentage of requests start failing intermittently and the errors disappear once the rollout completes. Per the module, what does this most likely indicate, and what is the prescribed prevention?",
+      "kind": "mcq",
+      "choices": [
+        "A backward-compatibility problem in the mixed-version window (e.g. a non-additive schema change the old version cannot read); make schema changes additive and deploy them ahead of the code that requires them",
+        "A cold-start problem; warm the slot fully before performing the swap",
+        "A canary measured without telemetry; define in advance what 'unhealthy' means and watch error rate and latency",
+        "A permanent feature flag left in the code; remove the dead branch once the feature is stable"
+      ],
+      "correct_answers": [
+        "A backward-compatibility problem in the mixed-version window (e.g. a non-additive schema change the old version cannot read); make schema changes additive and deploy them ahead of the code that requires them"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "do-c02-m04-l01",
+      "module_id": "do-c02-m04",
+      "prompt": "Larkspur must ship a high-risk change and wants both a small initial blast radius AND the ability to disable the new behavior in seconds without redeploying. Explain which two techniques combine to give them this, and what each one specifically contributes.",
+      "reference_answer": "The two techniques are canary (or ring) exposure plus a feature flag backed by Azure App Configuration's Feature Manager. Canary or ring exposure shrinks the initial blast radius: the change is released to only a small slice first (e.g. 5% of traffic, or ring 0 internal staff) so that if it degrades, only a fraction of users are affected before you halt and roll back. The feature flag decouples release from deploy: the new code ships to production disabled behind the flag, and you turn the new behavior on for a chosen audience without another deployment, then turn it off instantly if it misbehaves. The flag-off is a configuration change measured in seconds rather than a redeploy, which is what gives the instant kill-switch. Together, progressive exposure limits who is hit while the flag provides near-instant reversibility."
+    },
+    {
+      "id": "do-c02-m04-l02",
+      "module_id": "do-c02-m04",
+      "prompt": "Compare blue-green deployment with canary deployment for shrinking blast radius. Walk through the tradeoffs the module identifies for each, including their cost and what they require to work well.",
+      "reference_answer": "Both strategies answer how much of production sees the new version and how fast you can undo it, but with different tradeoffs. Blue-green runs two identical production environments; you deploy and warm the new version on the idle 'green', smoke-test it, then flip all traffic at once, which gives a near-instant rollback by flipping back to the still-running 'blue'. Its costs are running two full environments and an all-or-nothing cutover, so a bug that smoke tests miss still hits everyone, just reversibly. Canary instead releases to a small percentage of real traffic first (say 5%), widening to 25% then 100% only if it stays healthy, so the initial blast radius is much smaller. Canary trades blue-green's instant-flip simplicity for that smaller exposure and crucially requires good telemetry: you must watch error rate and latency on the canary slice and define in advance what 'unhealthy' means and what halts the rollout, otherwise it is just a slow full rollout."
+    },
+    {
+      "id": "do-c02-m04-l03",
+      "module_id": "do-c02-m04",
+      "prompt": "Walk through how Larkspur ships the rewritten route planner with two independent safety layers using a deployment slot and a feature flag, and explain the role of DefaultAzureCredential in the App Configuration wiring.",
+      "reference_answer": "Larkspur layers a slot swap with an App Configuration feature flag. The pipeline deploys the new build to a 'staging' slot (deployToSlotOrASE with slotName 'staging') rather than directly to production; warm-up happens in the slot, then an AzureAppServiceManage Swap Slots step exchanges the warmed instances into production as a routing change, so users never hit a cold start and a bad swap can be swapped back. The application reads the 'NewRoutePlanner' flag at runtime via IFeatureManager.IsEnabledAsync and only runs the new algorithm when the flag is on, so even after the code is live everywhere the new behavior stays off until Larkspur enables it for ring 0 (internal robots in the test warehouse), watches telemetry, then widens the percentage, and can kill it in seconds with no deployment. DefaultAzureCredential authenticates the App Configuration connection without any connection secret in code: it resolves a managed identity when running in Azure and the developer's credentials locally."
+    }
+  ]
+}
