@@ -20,7 +20,7 @@ export function TypingIndicator() {
       <div
         role="status"
         aria-label="Assistant is thinking"
-        className="bg-card border-border flex items-center gap-1.5 rounded-2xl rounded-bl-md border px-4 py-3.5"
+        className="flex items-center gap-1.5 rounded-2xl rounded-bl-md px-4 py-3.5"
       >
         {[0, 1, 2].map((i) => (
           <motion.span
