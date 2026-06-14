@@ -93,3 +93,104 @@ def test_course_persists_practice_active(session) -> None:
     reloaded = repo.get(course.id)
     assert reloaded is not None
     assert reloaded.practice_active["module_id"] == "cb-c01-m01"
+
+
+def test_resolve_current_module_returns_first_incomplete() -> None:
+    from app.agent.assessor import resolve_current_module
+
+    modules = [
+        {"module_id": "m1", "title": "One", "completed": True},
+        {"module_id": "m2", "title": "Two", "completed": False},
+        {"module_id": "m3", "title": "Three", "completed": False},
+    ]
+    current = resolve_current_module(modules)
+    assert current is not None and current["module_id"] == "m2"
+
+
+def test_resolve_current_module_none_when_empty_or_all_done() -> None:
+    from app.agent.assessor import resolve_current_module
+
+    assert resolve_current_module([]) is None
+    assert resolve_current_module([{"module_id": "m1", "completed": True}]) is None
+
+
+def _drain(reply) -> str:
+    return "".join(reply.tokens)
+
+
+def test_generate_practice_offline_makes_five_keyed_mcqs(monkeypatch) -> None:
+    from app.agent import assessor
+    from app.catalog.content import ModuleContent
+
+    monkeypatch.setattr(
+        assessor,
+        "get_module_content",
+        lambda mid: ModuleContent(module_id=mid, title="Functions", body="Body about functions."),
+    )
+    reply = assessor.generate_practice(module_id="cb-c01-m01", module_title="Functions")
+    assert reply.practice is not None
+    assert len(reply.practice.questions) == 5
+    for q in reply.practice.questions:
+        assert q.kind == "mcq"
+        assert len(q.choices) == 4
+        assert q.correct in q.choices
+    assert "practice" in _drain(reply).lower()
+
+
+def test_generate_practice_no_content_returns_go_to_module_cta(monkeypatch) -> None:
+    from app.agent import assessor
+
+    monkeypatch.setattr(assessor, "get_module_content", lambda mid: None)
+    reply = assessor.generate_practice(module_id="cb-c01-m01", module_title="Functions")
+    assert reply.practice is None
+    assert reply.actions is not None
+    assert reply.actions.actions[0].kind == "go_to_module"
+
+
+def test_generate_practice_online_parses_model_json(monkeypatch) -> None:
+    import json
+
+    from app.agent import assessor
+    from app.catalog.content import ModuleContent
+    from app.config import Settings
+
+    monkeypatch.setattr(
+        assessor,
+        "get_module_content",
+        lambda mid: ModuleContent(module_id=mid, title="Functions", body="Body."),
+    )
+    questions = [
+        {
+            "prompt": f"Q{i}",
+            "choices": [f"a{i}", f"b{i}", f"c{i}", f"d{i}"],
+            "answer_index": 1,
+            "explanation": "e",
+        }
+        for i in range(5)
+    ]
+    fake = FakeRouter(complete_text=json.dumps({"questions": questions}))
+    online = Settings(_env_file=None, offline_llm=False, groq_api_key="gsk_x")  # type: ignore[call-arg]
+    reply = assessor.generate_practice(
+        module_id="cb-c01-m01", module_title="Functions", router=fake, settings=online
+    )
+    assert reply.practice is not None and len(reply.practice.questions) == 5
+    assert reply.practice.questions[0].correct == "b0"
+
+
+def test_generate_practice_online_bad_json_returns_cta(monkeypatch) -> None:
+    from app.agent import assessor
+    from app.catalog.content import ModuleContent
+    from app.config import Settings
+
+    monkeypatch.setattr(
+        assessor,
+        "get_module_content",
+        lambda mid: ModuleContent(module_id=mid, title="Functions", body="Body."),
+    )
+    fake = FakeRouter(complete_text="not json")
+    online = Settings(_env_file=None, offline_llm=False, groq_api_key="gsk_x")  # type: ignore[call-arg]
+    reply = assessor.generate_practice(
+        module_id="cb-c01-m01", module_title="Functions", router=fake, settings=online
+    )
+    assert reply.practice is None
+    assert reply.actions is not None and reply.actions.actions[0].kind == "go_to_module"
