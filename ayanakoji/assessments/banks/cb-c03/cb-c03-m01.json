@@ -1,0 +1,106 @@
+{
+  "course_id": "cb-c03",
+  "module_id": "cb-c03-m01",
+  "module_title": "Authentication with the Microsoft identity platform",
+  "choices": [
+    {
+      "id": "cb-c03-m01-c01",
+      "module_id": "cb-c03-m01",
+      "prompt": "According to the module, the Microsoft identity platform implements two open standards. Which standard is responsible for AUTHENTICATION (proving who a user is), as opposed to authorization?",
+      "kind": "mcq",
+      "choices": [
+        "OpenID Connect",
+        "OAuth 2.0",
+        "SAML 2.0",
+        "JSON Web Token (JWT)"
+      ],
+      "correct_answers": [
+        "OpenID Connect"
+      ]
+    },
+    {
+      "id": "cb-c03-m01-c02",
+      "module_id": "cb-c03-m01",
+      "prompt": "The Northwind expense portal is a server-side confidential web app that signs a human employee in to read their own calendar. Per the module's decision rule, which OAuth 2.0 flow should it use?",
+      "kind": "mcq",
+      "choices": [
+        "Authorization code flow",
+        "Client credentials flow",
+        "Authorization code flow with PKCE and no secret",
+        "Implicit flow"
+      ],
+      "correct_answers": [
+        "Authorization code flow"
+      ]
+    },
+    {
+      "id": "cb-c03-m01-c03",
+      "module_id": "cb-c03-m01",
+      "prompt": "A Graph call returns a 403 in the Northwind portal. Based on the module, what is the most likely cause?",
+      "kind": "mcq",
+      "choices": [
+        "A missing or unconsented scope on the access token",
+        "The access token was sent for the wrong audience (aud claim)",
+        "The client secret was committed to source control",
+        "The app hard-coded the /common authority instead of the tenant ID"
+      ],
+      "correct_answers": [
+        "A missing or unconsented scope on the access token"
+      ]
+    },
+    {
+      "id": "cb-c03-m01-c04",
+      "module_id": "cb-c03-m01",
+      "prompt": "Which statements about delegated versus application permissions are correct according to the module? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Delegated permissions mean the app acts as the signed-in user and can do only what that user is allowed to do.",
+        "Application permissions mean the app acts as itself with no user and typically apply tenant-wide.",
+        "Application permissions usually require an administrator to consent.",
+        "Delegated permissions are the right choice for an unattended daemon with no signed-in user."
+      ],
+      "correct_answers": [
+        "Delegated permissions mean the app acts as the signed-in user and can do only what that user is allowed to do.",
+        "Application permissions mean the app acts as itself with no user and typically apply tenant-wide.",
+        "Application permissions usually require an administrator to consent."
+      ]
+    },
+    {
+      "id": "cb-c03-m01-c05",
+      "module_id": "cb-c03-m01",
+      "prompt": "Per the module, what does an app registration in Entra ID provide to give an application its own identity? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "A client ID, described as the application's public username",
+        "One or more redirect URIs where tokens may be returned",
+        "Credentials such as a client secret, certificate, or federated credential",
+        "The signed-in user's password, stored securely for later reuse"
+      ],
+      "correct_answers": [
+        "A client ID, described as the application's public username",
+        "One or more redirect URIs where tokens may be returned",
+        "Credentials such as a client secret, certificate, or federated credential"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "cb-c03-m01-l01",
+      "module_id": "cb-c03-m01",
+      "prompt": "A nightly daemon service at Northwind runs with no user present and must read all employees' mailboxes tenant-wide. Explain which permission type and OAuth flow you would use and why, and contrast this with how the per-user expense portal handles permissions.",
+      "reference_answer": "The daemon should use application permissions with the client credentials flow, because there is no signed-in user, so the app must act as itself rather than as a delegate. Application permissions apply tenant-wide and are designed for unattended daemons, but because they are far more powerful they usually require an administrator to consent. The interactive expense portal, by contrast, has a human in the loop, so it uses delegated permissions and the authorization code flow, acting as the signed-in user and able to do only what that user is allowed. Choosing delegated whenever a user is present is the principle of least privilege made concrete; granting Calendars.Read as an application permission to a per-user portal would over-grant by letting it read everyone's data."
+    },
+    {
+      "id": "cb-c03-m01-l02",
+      "module_id": "cb-c03-m01",
+      "prompt": "Walk through how the Northwind confidential web app uses MSAL and the authorization code flow to acquire a token and call Microsoft Graph to read the signed-in employee's calendar, and explain why the code never sees the user's password.",
+      "reference_answer": "First the app is registered in Entra ID to obtain a client ID, tenant, redirect URI, and a client secret, which are stored as environment variables rather than in source. Using MSAL's ConfidentialClientApplication, the app calls get_authorization_request_url to send the browser to Entra ID's sign-in page for the Calendars.Read scope. The user authenticates and consents at Entra ID, which redirects back to the redirect URI with an authorization code; the callback handler calls acquire_token_by_authorization_code to exchange that code plus the client secret for an access token. The app then calls https://graph.microsoft.com/v1.0/me/events with the token in the Authorization: Bearer header, and /me resolves to the signed-in user precisely because the token is delegated. The code never sees the password because authentication happens entirely at Entra ID, which returns a signed token instead of any credential."
+    },
+    {
+      "id": "cb-c03-m01-l03",
+      "module_id": "cb-c03-m01",
+      "prompt": "Compare an ID token and an access token as described in the module, and explain why a token minted for one API is useless against another and what symptom appears if you send a token to the wrong resource.",
+      "reference_answer": "An ID token answers 'who signed in?' and is consumed by your own app to establish a user session, while an access token answers 'what is this caller allowed to do against a specific resource?' and is sent to an API like Microsoft Graph in the Authorization: Bearer header. Both are signed JSON Web Tokens issued by Entra ID, and the resource validates the token's signature, issuer, audience, and expiry rather than ever seeing a password. A token is bound to a single audience by its aud claim, so a token minted for one API is useless against another because the second resource will reject a token whose audience does not match it. Concretely, if you acquire a token for your own backend API and send it to Graph, the call fails with a 401; the fix is to request scopes for the resource you actually intend to call."
+    }
+  ]
+}
