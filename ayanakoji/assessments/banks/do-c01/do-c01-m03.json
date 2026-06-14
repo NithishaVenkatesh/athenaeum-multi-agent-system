@@ -1,0 +1,104 @@
+{
+  "course_id": "do-c01",
+  "module_id": "do-c01-m03",
+  "module_title": "Managing and scaling repositories",
+  "choices": [
+    {
+      "id": "do-c01-m03-c01",
+      "module_id": "do-c01-m03",
+      "prompt": "According to the module, what does Git LFS actually store in the Git repository when a path is tracked by LFS?",
+      "kind": "mcq",
+      "choices": [
+        "A small text pointer containing a hash and size, while the actual bytes go to a separate LFS store",
+        "A delta-compressed version of the binary so each revision adds only the changed bytes",
+        "The full binary, but compressed into the packfile to reduce its size in history",
+        "Nothing in the repository; the binary is uploaded to the LFS store and the file path is removed from Git"
+      ],
+      "correct_answers": [
+        "A small text pointer containing a hash and size, while the actual bytes go to a separate LFS store"
+      ]
+    },
+    {
+      "id": "do-c01-m03-c02",
+      "module_id": "do-c01-m03",
+      "prompt": "A team adds `*.psd` to LFS tracking today, but cloning the repo is still slow. Based on the module, what is the most likely cause?",
+      "kind": "mcq",
+      "choices": [
+        "The large `.psd` files already committed to history remain there, because LFS only governs files committed after tracking begins",
+        "The `.gitattributes` file was committed, which forces every collaborator to re-download all LFS objects on the next clone",
+        "LFS tracking automatically rewrites history, and that rewrite temporarily doubles the size of every clone",
+        "Shallow clones are incompatible with LFS, so the team must stop using `--depth 1` for LFS to take effect"
+      ],
+      "correct_answers": [
+        "The large `.psd` files already committed to history remain there, because LFS only governs files committed after tracking begins"
+      ]
+    },
+    {
+      "id": "do-c01-m03-c03",
+      "module_id": "do-c01-m03",
+      "prompt": "The module contrasts what permissions control versus what branch policies control. Which statement matches that distinction?",
+      "kind": "mcq",
+      "choices": [
+        "Permissions decide which branches you can touch; branch policies decide how `main` is changed",
+        "Permissions decide how `main` is changed; branch policies decide which branches you can touch",
+        "Permissions and branch policies both control which users may be added to a team",
+        "Permissions enforce reviewed pull requests; branch policies grant read and write roles to groups"
+      ],
+      "correct_answers": [
+        "Permissions decide which branches you can touch; branch policies decide how `main` is changed"
+      ]
+    },
+    {
+      "id": "do-c01-m03-c04",
+      "module_id": "do-c01-m03",
+      "prompt": "Select the scaling techniques the module presents as ways to reduce how much a clone must transfer for large repos and CI agents. (Choose all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "A shallow clone (`--depth`) that fetches only recent commits",
+        "A partial clone (`--filter=blob:none`) that defers file contents until needed",
+        "Sparse checkout that limits the working tree to chosen directories",
+        "An annotated tag that marks a release commit so it can be rebuilt later"
+      ],
+      "correct_answers": [
+        "A shallow clone (`--depth`) that fetches only recent commits",
+        "A partial clone (`--filter=blob:none`) that defers file contents until needed",
+        "Sparse checkout that limits the working tree to chosen directories"
+      ]
+    },
+    {
+      "id": "do-c01-m03-c05",
+      "module_id": "do-c01-m03",
+      "prompt": "Per the module's guidance on tags, why should you use annotated tags rather than lightweight tags for releases?",
+      "kind": "mcq",
+      "choices": [
+        "Annotated tags carry a message, author, and date and are objects in their own right, preserving release provenance for later audits",
+        "Annotated tags move with the branch so they always point at the latest release commit",
+        "Lightweight tags cannot be checked out, so you could never rebuild exactly what shipped",
+        "Lightweight tags consume more storage in the packfile, slowing down every clone of the repo"
+      ],
+      "correct_answers": [
+        "Annotated tags carry a message, author, and date and are objects in their own right, preserving release provenance for later audits"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "do-c01-m03-l01",
+      "module_id": "do-c01-m03",
+      "prompt": "Explain why committing large binaries directly into Git degrades a repository over time, and walk through how Git LFS addresses the problem for future commits.",
+      "reference_answer": "Git is content-addressed and keeps full history, so every version of every file is stored forever; this is ideal for text because revisions are recoverable and diffs are small, but binaries don't delta-compress meaningfully, so each version is stored whole. A 40 MB image changed ten times adds roughly 400 MB to history, and that weight is permanent and global because it sits in the packfile every collaborator clones forever, even after the file is 'deleted' from the working tree. Git LFS fixes this by not putting the binary in history at all: when a path is tracked, Git stores a tiny text pointer (a hash and size) while the actual bytes go to a separate LFS store, and a clone downloads only the pointers plus the LFS objects the checked-out commit needs. You declare tracked paths in a committed `.gitattributes` file so the rule applies to everyone automatically. The critical caveat is that LFS only helps files committed after tracking starts; binaries already in history stay until you rewrite history."
+    },
+    {
+      "id": "do-c01-m03-l02",
+      "module_id": "do-c01-m03",
+      "prompt": "Compare granting repository permissions to individual users versus to teams or groups, and explain how the module says this choice interacts with branch protection.",
+      "reference_answer": "The module applies least privilege: each person should get the least access they need, expressed through roles like read (clone and view), write/contribute (push to non-protected branches, open PRs), and administrative permissions (manage settings, branch protection, and access itself). It recommends assigning roles to groups or teams rather than individuals, because then joining a team grants the right access and leaving revokes it, whereas per-person grants drift into stale access that offboarding fails to clean up. This layers on top of branch protection from the previous module: a contributor can push to feature branches but cannot reach `main` except through a reviewed pull request. The key separation is that permissions decide which branches you can touch, while branch policies decide how `main` is actually changed."
+    },
+    {
+      "id": "do-c01-m03-l03",
+      "module_id": "do-c01-m03",
+      "prompt": "Walk through how Meridian uses shallow clones for CI build agents, and explain the tradeoff if a regular developer copies that same habit.",
+      "reference_answer": "Meridian's platform team configures CI to clone shallowly with `git clone --depth 1 --branch main`, so build agents stop pulling years of history; a shallow clone fetches only recent commits, which suits CI agents that build once and discard the workspace, turning an eleven-minute clone into seconds. This is ideal precisely because the workspace is throwaway and never needs the full graph. The tradeoff appears if a developer copies the habit, because `--depth 1` lacks full history and breaks operations that need the whole graph, such as running blame across all history or bisecting an old regression. The module's rule is to match the clone depth to the task: shallow clones trade history for speed and suit disposable workspaces only, so a developer who needs full history should not shallow-clone."
+    }
+  ]
+}
