@@ -132,9 +132,30 @@ def _cert_key(doc: GroundingDoc) -> str:
     return doc.cert.lower().replace("-", "").replace(" ", "") if doc.cert else ""
 
 
+@lru_cache(maxsize=1024)
+def _term_re(term: str) -> re.Pattern[str]:
+    """A word-boundary matcher allowing only a short suffix (plurals/inflections).
+
+    ``\\bterm[a-z]{0,2}\\b`` matches 'cat'→'cat'/'cats' and 'function'→'functions',
+    but NOT 'cat'→'catalog' or 'cat'→'application'; so a short off-topic token can't
+    spuriously ground on an unrelated longer word (A1). Longer relations are handled
+    deliberately by the synonym map, not by accidental prefixing.
+    """
+    return re.compile(r"\b" + re.escape(term) + r"[a-z]{0,2}\b")
+
+
+def _term_hits(term: str, text: str) -> int:
+    """Occurrences of the term at a word boundary (so 'cat' hits 'cats', not 'application')."""
+    return len(_term_re(term).findall(text))
+
+
 def _term_in(term: str, doc: GroundingDoc) -> bool:
-    """True if the query term (or a domain synonym) appears in the doc index text."""
-    return any(variant in doc.text for variant in (term, *_SYNONYMS.get(term, ())))
+    """True if the query term (or a domain synonym) appears at a word boundary in the doc.
+
+    Word-boundary, not substring: 'cat' matches 'cats'/'catalog' but never 'application'
+    or 'authentication', so a short off-topic token can't spuriously ground (A1).
+    """
+    return any(_term_re(variant).search(doc.text) for variant in (term, *_SYNONYMS.get(term, ())))
 
 
 def _idf_weights(q_terms: tuple[str, ...], corpus: tuple[GroundingDoc, ...]) -> dict[str, float]:
@@ -177,7 +198,7 @@ def _score(query_terms: tuple[str, ...], doc: GroundingDoc, cert_blob: str) -> i
     title_terms = set(_tokenize(doc.course_title))
     cert_key = doc.cert.lower().replace("-", "").replace(" ", "") if doc.cert else ""
     for term in query_terms:
-        score += doc.text.count(term)
+        score += _term_hits(term, doc.text)
         if term in title_terms:
             score += 3
     if cert_key and cert_key in cert_blob:
