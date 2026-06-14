@@ -1,0 +1,106 @@
+{
+  "course_id": "ai-c03",
+  "module_id": "ai-c03-m03",
+  "module_title": "Extracting insights from video",
+  "choices": [
+    {
+      "id": "ai-c03-m03-c01",
+      "module_id": "ai-c03-m03",
+      "prompt": "According to the module, what is the unifying property of every insight that Azure AI Video Indexer returns?",
+      "kind": "mcq",
+      "choices": [
+        "Each insight carries a time range, anchoring it to a specific moment in the video",
+        "Each insight identifies the specific person who appears in the frame",
+        "Each insight is delivered synchronously the instant the upload call returns",
+        "Each insight is emitted as a real-time event rather than stored in a document"
+      ],
+      "correct_answers": [
+        "Each insight carries a time range, anchoring it to a specific moment in the video"
+      ]
+    },
+    {
+      "id": "ai-c03-m03-c02",
+      "module_id": "ai-c03-m03",
+      "prompt": "Driftwood's store operations team wants a daily count of how many people entered and which aisle they dwelled in. Which service fits this scenario, and why?",
+      "kind": "mcq",
+      "choices": [
+        "Azure AI Vision spatial analysis, because it detects the presence and movement of people in a camera feed for operational questions",
+        "Azure AI Video Indexer, because its time-coded transcript records when each person enters",
+        "Azure AI Vision spatial analysis, because it identifies who each visitor is by matching faces",
+        "Azure AI Video Indexer, because it emits live occupancy events from edge-deployed cameras"
+      ],
+      "correct_answers": [
+        "Azure AI Vision spatial analysis, because it detects the presence and movement of people in a camera feed for operational questions"
+      ]
+    },
+    {
+      "id": "ai-c03-m03-c03",
+      "module_id": "ai-c03-m03",
+      "prompt": "A teammate's code calls the upload endpoint, then immediately reads the insights and gets nothing useful. Based on the module's walkthrough, what is the correct flow they are missing?",
+      "kind": "mcq",
+      "choices": [
+        "Upload returns an ID immediately, then poll the index state until it reports 'Processed' before reading insights",
+        "Upload returns the full insights synchronously, so they should retry the upload call until it succeeds",
+        "Read insights first to warm the cache, then upload the video a second time to finalize them",
+        "Cache the access token indefinitely so the insights read does not get rejected with a 401"
+      ],
+      "correct_answers": [
+        "Upload returns an ID immediately, then poll the index state until it reports 'Processed' before reading insights"
+      ]
+    },
+    {
+      "id": "ai-c03-m03-c04",
+      "module_id": "ai-c03-m03",
+      "prompt": "Which of the following are insights that the module explicitly states Azure AI Video Indexer extracts from a recorded video? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "A timestamped transcript of speech",
+        "OCR of text that appears on screen",
+        "Detected and grouped faces",
+        "A real-time count of people crossing a line in a live feed"
+      ],
+      "correct_answers": [
+        "A timestamped transcript of speech",
+        "OCR of text that appears on screen",
+        "Detected and grouped faces"
+      ]
+    },
+    {
+      "id": "ai-c03-m03-c05",
+      "module_id": "ai-c03-m03",
+      "prompt": "Which statements about authentication and processing in Azure AI Video Indexer are accurate according to the module? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Authentication uses a short-lived access token that expires, so a fresh token should be fetched rather than cached indefinitely",
+        "Indexing is asynchronous and can take on the order of the video's own duration or more",
+        "Code should poll the processing state and only retrieve insights once the state reports completion",
+        "Insights should be treated as perfect ground truth and used directly for high-stakes legal or accessibility purposes"
+      ],
+      "correct_answers": [
+        "Authentication uses a short-lived access token that expires, so a fresh token should be fetched rather than cached indefinitely",
+        "Indexing is asynchronous and can take on the order of the video's own duration or more",
+        "Code should poll the processing state and only retrieve insights once the state reports completion"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "ai-c03-m03-l01",
+      "module_id": "ai-c03-m03",
+      "prompt": "Explain why Azure AI Video Indexer's time-coding is described as what 'makes the output useful rather than merely interesting,' and give concrete examples of what that property enables.",
+      "reference_answer": "Video Indexer anchors every insight to a time range rather than just reporting that something is present. The transcript maps words to the second they were spoken, and a topic like 'rain fly' is not merely present but present from a specific start to end time (e.g. 12:30 to 14:05). Because each insight is anchored to a moment, you can build deep links that jump a viewer straight to the relevant scene, generate chapter markers automatically, and feed the time-coded transcript into a search index so a text query returns the exact clip. In the walkthrough, each topic's 'instances' carry 'start' and 'end' timestamps, which are exactly what you turn into those deep links. This time anchoring is what turns a wall of footage into something addressable."
+    },
+    {
+      "id": "ai-c03-m03-l02",
+      "module_id": "ai-c03-m03",
+      "prompt": "Describe how a backend should be designed to handle the asynchronous reality of Video Indexer, including the upload/poll/read flow and the access token handling, and name the pitfall of doing it wrong.",
+      "reference_answer": "Because video is large and processing is not instant, Video Indexer is fundamentally asynchronous: you upload a video (or point it at a URL) and immediately get back a video ID while indexing proceeds in the background, often taking on the order of the video's own duration or more. The code should kick off the job, store the ID, and return rather than blocking a user request; it then polls the index state on a sensible interval (the walkthrough sleeps 30 seconds between polls) and only reads insights once the state reports 'Processed'. Results are surfaced later via a callback URL the service can notify or a polling worker. Authentication uses a short-lived access token scoped to your account that expires, so you fetch a fresh token rather than caching one indefinitely; a cached, expired token produces confusing 401s. The two main pitfalls are blocking a user request inline on indexing and caching the access token forever."
+    },
+    {
+      "id": "ai-c03-m03-l03",
+      "module_id": "ai-c03-m03",
+      "prompt": "Contrast Azure AI Video Indexer with Azure AI Vision spatial analysis: what different problem does each solve, and what privacy obligations attach to one of them?",
+      "reference_answer": "The two services solve opposite problems. Video Indexer is about content discovery — what is said, shown, and meant in recorded media — and emits a rich, time-coded, searchable set of insights (transcript, topics, faces, labels, OCR, shots and scenes). Spatial analysis is about operational presence: it processes a camera stream to detect the presence and movement of people, such as counting how many cross a line, how many are in a zone, or how long they dwell, without identifying who they are. Spatial analysis is built for live or near-live operational scenarios (footfall, queue length, occupancy) on edge-deployed feeds and emits events rather than a searchable transcript. So 'let users find the moment a product is discussed' is a Video Indexer job, while 'count how many people entered the store and where they lingered' is a spatial analysis job. People-counting and face-related features carry real privacy and Responsible AI obligations — signage, consent, and a Limited Access registration process for some capabilities — which should be treated as a design input and verified in the current docs before deploying."
+    }
+  ]
+}
