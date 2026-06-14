@@ -22,6 +22,25 @@ def test_is_acceptance_false(text: str) -> None:
     assert not is_acceptance(text)
 
 
+# Red-team: a refusal that merely contains an affirmation token must NOT be an accept.
+@pytest.mark.parametrize(
+    "text",
+    [
+        "absolutely not",
+        "please don't start",
+        "definitely not",
+        "yeah no",
+        "ok but no",
+        "no, don't enroll me",
+        "start over please",
+        "let's start over",
+    ],
+)
+def test_refusal_or_restart_is_not_acceptance(text: str) -> None:
+    assert not is_acceptance(text), f"refusal/restart wrongly accepted: {text!r}"
+    assert not is_suggestion_response(text), f"refusal/restart wrongly a response: {text!r}"
+
+
 def test_accept_after_suggestion_routes_to_setup() -> None:
     assert classify("yes, start that one", pending="suggestion").route is Route.STUDY_PLAN
 
@@ -52,7 +71,9 @@ def test_resolve_choice_handles_ordinal_and_name() -> None:
         {
             "role": "assistant",
             "content": "Pick one:",
-            "meta": {"suggestion": {"options": [{"catalog_id": "cb-c02"}, {"catalog_id": "as-c01"}]}},
+            "meta": {
+                "suggestion": {"options": [{"catalog_id": "cb-c02"}, {"catalog_id": "as-c01"}]}
+            },
         },
     ]
     assert _resolve_suggestion_choice(course, "the second one") == "as-c01"

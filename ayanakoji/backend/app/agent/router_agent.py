@@ -45,8 +45,23 @@ _ACCEPT_RE = re.compile(
 )
 
 
+# A negation anywhere flips an apparent acceptance into a refusal: "absolutely not",
+# "please don't start", "yeah no", "ok but no" must NOT enroll (red-team: the worst bug
+# was silently enrolling a learner who explicitly declined). "start over"/"start again"
+# is a restart, not an accept, so it is excluded too.
+_NEGATION_RE = re.compile(
+    r"\b(not|never|nope|nah|cancel|decline|refuse|don'?t|do\s+not|won'?t|"
+    r"no\s+thanks?|no\b|nvm|nevermind|never\s*mind|stop)\b|n'?t\b",
+    re.IGNORECASE,
+)
+_RESTART_RE = re.compile(r"\bstart\s+(over|again|from\s+scratch|fresh)\b", re.IGNORECASE)
+
+
 def is_acceptance(text: str) -> bool:
-    """True if the message reads as accepting a just-offered course suggestion."""
+    """True iff the message accepts a just-offered course suggestion — affirmation with
+    no negation and not a 'start over' restart (so a refusal never enrolls)."""
+    if _NEGATION_RE.search(text) or _RESTART_RE.search(text):
+        return False
     return bool(_ACCEPT_RE.search(text))
 
 
@@ -59,9 +74,19 @@ _ORDINAL_RE = re.compile(
 )
 
 
+def is_refusal(text: str) -> bool:
+    """True if the message declines (so a suggestion is rejected, never enrolled)."""
+    return bool(_NEGATION_RE.search(text))
+
+
 def is_suggestion_response(text: str) -> bool:
-    """True if the message responds to an offered suggestion — accept or pick one."""
-    return is_acceptance(text) or bool(_ORDINAL_RE.search(text))
+    """True if the message responds to an offered suggestion — accept or pick one.
+
+    A negated message ("not the second one", "no") is never a selection.
+    """
+    if is_acceptance(text):
+        return True
+    return not is_refusal(text) and bool(_ORDINAL_RE.search(text))
 
 # "Help me choose / explore courses" signals → Recommend (profile- or topic-scoped).
 _RECOMMEND_RE = re.compile(
