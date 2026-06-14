@@ -134,19 +134,34 @@ def _nudge_for(off_topic: float) -> str:
     return _NUDGE_LIGHT
 
 
-def _general_offline(off_topic: float) -> str:
-    base = (
-        "(offline mode) I'm Athenaeum, your enterprise learning assistant. I can help most "
-        "with Azure certifications and the courses in this platform."
-    )
+# Function words stripped when echoing the learner's topic, so the offline reply
+# references *what they asked* instead of repeating one template (C1: input-sensitive).
+_TOPIC_STOP = frozenset(
+    ["a", "an", "the", "of", "to", "in", "on", "for", "with", "and", "or", "but", "is", "are", "be", "do", "does", "how", "what", "when", "where", "which", "who", "why", "this", "that", "these", "those", "i", "you", "we", "they", "it", "my", "your", "me", "us", "them", "can", "could", "should", "would", "will", "tell", "me", "about", "into", "over", "under", "as", "at", "by", "from", "get", "got", "explain", "show", "learn", "study", "know", "please"]
+)
+
+
+def _topic_phrase(text: str) -> str:
+    """A short, sanitized echo of the learner's topic (alnum words only, capped)."""
+    words = [w for w in re.findall(r"[A-Za-z0-9']+", text) if w.lower() not in _TOPIC_STOP]
+    return " ".join(words[:6])[:60].strip()
+
+
+def _general_offline(off_topic: float, text: str = "") -> str:
+    base = "(offline mode) I'm Athenaeum, your enterprise learning assistant."
+    topic = _topic_phrase(text)
+    ref = f" You asked about {topic}." if topic else ""
     if off_topic >= 0.7:
-        return base + (
-            " That topic is outside what I focus on, but I'm happy to point you toward an "
-            "Azure learning path whenever you're ready."
+        return base + ref + (
+            " That sits outside Azure and enterprise learning, which is where I can actually go "
+            "deep. Tell me a certification or cloud topic and we'll dig in."
         )
     if off_topic >= 0.3:
-        return base + " Tell me a certification or topic you're aiming for and we'll start there."
-    return base + " Ask me about any Azure topic or course to begin exploring."
+        return base + ref + (
+            " I focus on Azure certifications and the courses here. Name a topic or cert you're "
+            "aiming for and we'll start there."
+        )
+    return base + ref + " Ask me about any Azure topic or course to begin exploring."
 
 
 def answer_general(
@@ -175,7 +190,7 @@ def answer_general(
     ]
 
     if settings.llm_offline:
-        reply = _general_offline(decision.off_topic)
+        reply = _general_offline(decision.off_topic, text)
         steps.append(
             TraceStep(label="LLM generation", passed=True, detail="offline mode", model="offline")
         )
@@ -365,9 +380,13 @@ def answer_foundry(
         )
     else:
         system = (
-            "You are Athenaeum's course tutor. Answer ONLY from the approved sources below; cite "
-            "the module id in square brackets like [cb-c01-m02] for each claim. If the sources do "
-            f"not cover the question, say so plainly, never invent content. {_no_dash}"
+            "You are Athenaeum's course tutor. Ground every technical claim in the approved "
+            "sources below and cite the module id in square brackets like [cb-c01-m02]. You MAY "
+            "add a brief real-world analogy, example, or simpler restatement to aid understanding, "
+            "as long as the underlying facts come from and are cited to the sources, treat a "
+            "request to explain with an analogy or example as a teaching style, not as missing "
+            "content. Only say the topic isn't covered when the sources genuinely lack the "
+            f"substance. Never invent module ids or facts. {_no_dash}"
             "\n\nSOURCES:\n" + (_sources_block(sources) or "(none)")
         )
     handle = router.stream(
