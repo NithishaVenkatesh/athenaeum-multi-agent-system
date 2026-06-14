@@ -17,12 +17,20 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
-from sqlalchemy import Engine, event
+from sqlalchemy import Engine, event, text
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.config import get_settings
 
 _engine: Engine | None = None
+
+# Columns added to ``course`` after the initial release. SQLite's create_all never
+# ALTERs an existing table, so a running dev DB needs them added in place.
+_COURSE_ADDED_COLUMNS: dict[str, str] = {
+    "skill_source": "TEXT",
+    "skill_scores": "JSON",
+    "pending_modules": "JSON",
+}
 
 # SQLite busy timeout (ms): how long a writer waits on a locked DB before erroring.
 # Concurrent turns to *different* courses, plus the assessments DB, can briefly
@@ -97,7 +105,25 @@ def init_db() -> None:
 
     names = (*COURSE_TABLE_NAMES, *NOTIFICATION_TABLE_NAMES)
     tables = [SQLModel.metadata.tables[name] for name in names]
-    SQLModel.metadata.create_all(get_engine(), tables=tables)
+    engine = get_engine()
+    SQLModel.metadata.create_all(engine, tables=tables)
+    ensure_course_columns(engine)
+
+
+def ensure_course_columns(engine: Engine) -> None:
+    """Add any missing additive columns to the ``course`` table (idempotent).
+
+    SQLite-only and additive: ``create_all`` never ALTERs an existing table, so a
+    dev DB that predates these columns gets them here instead of needing a full
+    migration tool. Brand-new DBs already have the columns and this is a no-op.
+    """
+    if not engine.url.drivername.startswith("sqlite"):
+        return
+    with engine.begin() as conn:
+        existing = {row[1] for row in conn.execute(text("PRAGMA table_info(course)"))}
+        for name, sql_type in _COURSE_ADDED_COLUMNS.items():
+            if name not in existing:
+                conn.execute(text(f"ALTER TABLE course ADD COLUMN {name} {sql_type}"))
 
 
 def get_session() -> Iterator[Session]:
