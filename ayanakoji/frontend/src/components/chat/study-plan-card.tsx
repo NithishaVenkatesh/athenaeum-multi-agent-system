@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import { Button } from "@/components/ui/button";
 import type { Pace, StudyPlan } from "@/lib/api";
 
 const PACE_LABEL: Record<Pace, string> = {
@@ -61,7 +62,19 @@ function Stat({
   );
 }
 
-export function StudyPlanCard({ plan, courseId }: { plan: StudyPlan; courseId?: string }) {
+export function StudyPlanCard({
+  plan,
+  courseId,
+  approveState,
+  busy,
+  onApprove,
+}: {
+  plan: StudyPlan;
+  courseId?: string;
+  approveState?: "idle" | "approving" | "approved";
+  busy?: boolean;
+  onApprove?: () => void;
+}) {
   const reduce = useReducedMotion();
 
   return (
@@ -102,6 +115,12 @@ export function StudyPlanCard({ plan, courseId }: { plan: StudyPlan; courseId?: 
         {plan.capacity_reason}
       </p>
 
+      {plan.balloon_warning && (
+        <p className="border-l-2 border-amber-500 bg-amber-500/10 pl-2.5 text-[11px] font-medium text-amber-700">
+          {plan.balloon_warning}
+        </p>
+      )}
+
       {/* Module-level completion plan: sequential, each with a deadline */}
       <ol className="space-y-1.5">
         {plan.modules.map((m) => (
@@ -121,6 +140,19 @@ export function StudyPlanCard({ plan, courseId }: { plan: StudyPlan; courseId?: 
                   <CalendarClock className="size-3" />
                   by {fmtDate(m.complete_before)}
                 </span>
+                {m.skill_delta !== 0 && (
+                  <>
+                    <span aria-hidden>·</span>
+                    <span className={m.skill_delta < 0 ? "text-emerald-600" : "text-amber-600"}>
+                      {m.skill_delta < 0
+                        ? `${fmtMinutes(-m.skill_delta)} off (you've got this)`
+                        : `${fmtMinutes(m.skill_delta)} added (skill gap)`}
+                    </span>
+                    <span className="text-muted-foreground/70">
+                      base {fmtMinutes(m.base_minutes)} → pace {fmtMinutes(m.pace_minutes)}
+                    </span>
+                  </>
+                )}
               </div>
               {/* Day-level time blocks — the exact sessions that cover this module. */}
               {m.scheduled.length > 0 && (
@@ -144,13 +176,31 @@ export function StudyPlanCard({ plan, courseId }: { plan: StudyPlan; courseId?: 
         ))}
       </ol>
 
-      {courseId && (
-        <Link
-          href={`/chat/${courseId}/modules`}
-          className="bg-brand text-brand-foreground hover:bg-brand/90 inline-flex h-8 items-center rounded-lg px-3 text-xs font-medium transition-colors"
-        >
-          Open the Modules tab ›
-        </Link>
+      {plan.awaiting_approval && approveState !== "approved" ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            disabled={busy || approveState === "approving"}
+            onClick={onApprove}
+            className="text-xs"
+          >
+            {approveState === "approving"
+              ? "Putting it on your schedule…"
+              : "Approve & schedule"}
+          </Button>
+          <span className="text-muted-foreground text-[10px]">
+            Or tell me what to change and I&apos;ll re-plan.
+          </span>
+        </div>
+      ) : (
+        courseId && (
+          <Link
+            href={`/chat/${courseId}/modules`}
+            className="bg-brand text-brand-foreground hover:bg-brand/90 inline-flex h-8 items-center rounded-lg px-3 text-xs font-medium transition-colors"
+          >
+            Open the Modules tab ›
+          </Link>
+        )
       )}
     </motion.div>
   );
