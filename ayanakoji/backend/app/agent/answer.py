@@ -136,11 +136,12 @@ def _nudge_for(off_topic: float) -> str:
 
 # Function words stripped when echoing the learner's topic, so the offline reply
 # references *what they asked* instead of repeating one template (C1: input-sensitive).
-_TOPIC_STOP = frozenset(
+_TOPIC_STOP_TEXT = (
     "a an the of to in on for with and or but is are be do does how what when where which who why "
     "this that these those i you we they it my your me us them can could should would will tell "
-    "about into over under as at by from get got explain show learn study know please".split()
+    "about into over under as at by from get got explain show learn study know please"
 )
+_TOPIC_STOP = frozenset(_TOPIC_STOP_TEXT.split())
 
 
 def _topic_phrase(text: str) -> str:
