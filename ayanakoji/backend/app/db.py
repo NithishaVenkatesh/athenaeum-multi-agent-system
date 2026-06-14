@@ -31,6 +31,7 @@ _COURSE_ADDED_COLUMNS: dict[str, str] = {
     "skill_scores": "JSON",
     "pending_modules": "JSON",
     "skill_check_active": "JSON",
+    "practice_active": "JSON",
 }
 
 # Columns added to ``assessment`` so progress (module/course completion) can be

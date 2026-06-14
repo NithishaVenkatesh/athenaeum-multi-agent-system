@@ -80,3 +80,16 @@ def test_action_event_serializes_actions() -> None:
     dumped = ev.model_dump(mode="json")
     assert dumped["type"] == "action"
     assert dumped["actions"][0]["kind"] == "take_evaluation"
+
+
+def test_course_persists_practice_active(session) -> None:
+    from app.courses.repository import CourseRepository
+
+    repo = CourseRepository(session)
+    course = repo.create(persona_id="EMP-001", chat_name="Functions")
+    course.practice_active = {"module_id": "cb-c01-m01", "title": "X", "questions": []}
+    repo.save(course)
+
+    reloaded = repo.get(course.id)
+    assert reloaded is not None
+    assert reloaded.practice_active["module_id"] == "cb-c01-m01"

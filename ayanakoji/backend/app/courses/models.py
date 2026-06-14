@@ -74,6 +74,12 @@ class Course(SQLModel, table=True):
     # instead of living only in component state; empty until a check is started,
     # cleared once it is graded or the learner marks themselves a fresher.
     skill_check_active: dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
+    # The active practice round the assessor generated for the learner's current
+    # module (questions + answer key), persisted so grading on submit reads the
+    # server-side key rather than trusting the client. Empty until a round starts;
+    # cleared on submit. Never written to the Assessment table, so it never affects
+    # official completion / progress.
+    practice_active: dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
     # Staged study-plan modules awaiting the learner's approval. Promoted to real
     # CourseModule rows by POST /plan/approve; the chat path never writes modules.
     pending_modules: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON)
