@@ -14,6 +14,7 @@ Honest label: this is the *Foundry-IQ-pattern* grounding layer when run offline.
 from __future__ import annotations
 
 import json
+import math
 import re
 from dataclasses import dataclass
 from functools import lru_cache
@@ -36,6 +37,13 @@ _TOP_K = 4
 _MIN_SCORE = 1
 # A source must score at least this fraction of the top match to count as grounding.
 _RELATIVE_CUTOFF = 0.5
+# Relevance floor (A1): a module only grounds an answer if the query terms it matches
+# carry enough of the query's *specificity*. Specificity is IDF-weighted, so matching a
+# rare topical term (functions, pipelines) is strong, while matching only a generic term
+# ("key") while the query's defining terms (quantum, cryptography, lattice) are absent
+# from the whole catalog is weak — that single spurious hit is rejected, not asserted as
+# coverage. A cert-code match (e.g. "DP-203") is exempt: it is strong grounding.
+_MIN_IDF_COVERAGE = 0.28
 # Two-letter topics carry real signal in this domain; keep them despite the length floor.
 _KEEP_SHORT = frozenset({"ai", "ml", "bi", "db", "iam", "vm", "k8s", "ci", "cd"})
 # Synonyms so a learner's phrasing reaches the indexed wording (serverless ↔ functions).
@@ -119,6 +127,44 @@ def _load_docs(catalog_path: str) -> tuple[GroundingDoc, ...]:
     return tuple(docs)
 
 
+def _cert_key(doc: GroundingDoc) -> str:
+    """The doc's cert as a comparable key, e.g. 'DP-203' → 'dp203'."""
+    return doc.cert.lower().replace("-", "").replace(" ", "") if doc.cert else ""
+
+
+def _term_in(term: str, doc: GroundingDoc) -> bool:
+    """True if the query term (or a domain synonym) appears in the doc index text."""
+    return any(variant in doc.text for variant in (term, *_SYNONYMS.get(term, ())))
+
+
+def _idf_weights(q_terms: tuple[str, ...], corpus: tuple[GroundingDoc, ...]) -> dict[str, float]:
+    """Smoothed IDF per query term over the whole catalog.
+
+    A term in few/no modules (quantum, cryptography) gets a high weight; a generic
+    term in many modules (key, data, policy) gets a low one. df=0 → maximum weight,
+    so a query whose defining terms are absent can't be "covered" by a generic hit.
+    """
+    n = len(corpus)
+    weights: dict[str, float] = {}
+    for term in q_terms:
+        df = sum(1 for d in corpus if _term_in(term, d))
+        weights[term] = math.log((n + 1) / (df + 1)) + 1.0
+    return weights
+
+
+def _relevance_ok(
+    q_terms: tuple[str, ...], doc: GroundingDoc, idf: dict[str, float], cert_blob: str
+) -> bool:
+    """True if the doc clears the IDF-weighted relevance floor (or matches the cert)."""
+    if (cert_key := _cert_key(doc)) and cert_key in cert_blob:
+        return True
+    total = sum(idf.values())
+    if total <= 0:
+        return False
+    matched = sum(weight for term, weight in idf.items() if _term_in(term, doc))
+    return matched / total >= _MIN_IDF_COVERAGE
+
+
 def _score(query_terms: tuple[str, ...], doc: GroundingDoc, cert_blob: str) -> int:
     """Keyword-overlap score; course title and cert matches weigh extra.
 
@@ -152,9 +198,14 @@ class CourseGrounding:
 
     @lru_cache(maxsize=256)  # noqa: B019 — bounded, instance-scoped query cache (the IQ cache)
     def _ranked(self, query: str, catalog_id: str | None) -> tuple[GroundingDoc, ...]:
-        terms = _expand(tuple(dict.fromkeys(_tokenize(query))))  # de-dupe + synonyms
+        q_terms = tuple(dict.fromkeys(_tokenize(query)))  # distinct content terms
+        terms = _expand(q_terms)  # + synonyms for scoring recall
         cert_blob = re.sub(r"[^a-z0-9]", "", query.lower())
-        pool = self._docs()
+        corpus = self._docs()
+        # IDF is computed over the whole catalog so a query's defining terms count even
+        # when scoped to one course (a spurious in-course keyword still can't ground).
+        idf = _idf_weights(q_terms, corpus)
+        pool = corpus
         if catalog_id:
             # Scoped to one course: stay scoped (never silently widen to the whole
             # catalog and cite another course's modules in this one's answer).
@@ -162,13 +213,24 @@ class CourseGrounding:
         scored = sorted(
             ((d, _score(terms, d, cert_blob)) for d in pool), key=lambda ds: ds[1], reverse=True
         )
-        kept = [(d, s) for d, s in scored if s >= _MIN_SCORE]
+        # Score floor + IDF relevance floor: a single spurious keyword hit on a multi-term
+        # query (only "key" in "quantum cryptography lattice key exchange") is rejected
+        # rather than asserted as coverage (A1).
+        kept = [
+            (d, s)
+            for d, s in scored
+            if s >= _MIN_SCORE and _relevance_ok(q_terms, d, idf, cert_blob)
+        ]
         if not kept:
             return ()
         # Keep only matches near the top score so weak, generic hits don't pose as
         # grounding — credibility of the "sources" panel depends on this.
         cutoff = max(_MIN_SCORE, kept[0][1] * _RELATIVE_CUTOFF)
-        return tuple(d for d, s in kept if s >= cutoff)
+        near_top = [d for d, s in kept if s >= cutoff]
+        # Course cap: ground in the single most-relevant course, not a sprawl across
+        # unrelated courses presented as if they jointly answer the question (A5).
+        top_course = near_top[0].course_id
+        return tuple(d for d in near_top if d.course_id == top_course)
 
     def search(
         self, query: str, *, catalog_id: str | None = None, k: int = _TOP_K
