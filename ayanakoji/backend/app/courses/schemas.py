@@ -33,6 +33,12 @@ class MessageIn(BaseModel):
     content: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
 
 
+class PracticeSubmit(BaseModel):
+    """Learner's selections for the active practice round: question id → chosen choices."""
+
+    selections: dict[str, list[str]] = Field(default_factory=dict)
+
+
 class AcceptCourse(BaseModel):
     """Accept the suggested course: link it to this chat and start attempt 1."""
 

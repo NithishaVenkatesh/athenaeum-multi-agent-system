@@ -23,6 +23,7 @@ from app.assessments.seed import seed_on_startup
 from app.catalog.router import router as catalog_router
 from app.config import get_settings
 from app.courses.assessment_router import router as assessment_session_router
+from app.courses.practice_router import router as practice_router
 from app.courses.router import router as courses_router
 from app.courses.skill_router import router as skill_router
 from app.db import init_db
@@ -97,6 +98,7 @@ def create_app() -> FastAPI:
     app.include_router(assessment_session_router)
 
     app.include_router(skill_router)
+    app.include_router(practice_router)
     # Learner notifications + streak score (cron-driven, polled by the frontend).
     app.include_router(notifications_router)
 
