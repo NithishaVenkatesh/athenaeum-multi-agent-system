@@ -254,7 +254,7 @@ def screen_answer(
                 detail=(
                     "No grader-manipulation command detected."
                     if passed
-                    else f"Matched grader-manipulation pattern: /{hit[:60]}/i"
+                    else f"Matched grader-manipulation pattern: /{(hit or '')[:60]}/i"
                 ),
             )
         )
