@@ -1,0 +1,105 @@
+{
+  "course_id": "ai-c02",
+  "module_id": "ai-c02-m02",
+  "module_title": "Custom language models and question answering",
+  "choices": [
+    {
+      "id": "ai-c02-m02-c01",
+      "module_id": "ai-c02-m02",
+      "prompt": "In a Conversational Language Understanding (CLU) project, what does an utterance represent?",
+      "kind": "mcq",
+      "choices": [
+        "An example sentence a real user might say, labeled with its intent and with the entity spans marked inside it",
+        "The action the user wants to perform, such as CheckOrderStatus or StartReturn",
+        "A piece of information to extract from a sentence, such as an OrderNumber or DateRange",
+        "A stored question-and-answer pair retrieved from the knowledge base"
+      ],
+      "correct_answers": [
+        "An example sentence a real user might say, labeled with its intent and with the entity spans marked inside it"
+      ]
+    },
+    {
+      "id": "ai-c02-m02-c02",
+      "module_id": "ai-c02-m02",
+      "prompt": "A customer asks your Larkspur assistant \"how long do I have to return a tent?\" The assistant should answer from Larkspur's actual return policy. Which feature should handle this, and why?",
+      "kind": "mcq",
+      "choices": [
+        "Custom question answering, because it retrieves a stored answer from a curated knowledge base rather than classifying an action",
+        "CLU intent classification, because the assistant must decide what action the user wants to take",
+        "CLU entity extraction, because the assistant needs to pull the product name out as a typed slot",
+        "A prebuilt sentiment model, because the question expresses a customer concern"
+      ],
+      "correct_answers": [
+        "Custom question answering, because it retrieves a stored answer from a curated knowledge base rather than classifying an action"
+      ]
+    },
+    {
+      "id": "ai-c02-m02-c03",
+      "module_id": "ai-c02-m02",
+      "prompt": "Your runtime prediction call returns a \"model not found\" error even though training succeeded and metrics looked good. According to the module, what is the most likely cause?",
+      "kind": "mcq",
+      "choices": [
+        "The trained model was never deployed to a named deployment, or the runtime call did not pass that deployment name",
+        "The training set and testing set were split incorrectly during training",
+        "The confidence threshold for the fallback path was set too high",
+        "Too few and too similar utterances were collected for each intent"
+      ],
+      "correct_answers": [
+        "The trained model was never deployed to a named deployment, or the runtime call did not pass that deployment name"
+      ]
+    },
+    {
+      "id": "ai-c02-m02-c04",
+      "module_id": "ai-c02-m02",
+      "prompt": "Your CLU evaluation shows StartReturn and CheckOrderStatus are frequently confused. Which approaches does the module endorse for fixing this? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Add more varied, clearly distinguished utterances at the boundary between the two intents and retrain",
+        "Inspect the confusion matrix and per-intent precision/recall in the evaluation results to locate the confusion",
+        "Train for more epochs on the existing data so the model memorizes the distinction",
+        "Merge the two intents into a single intent so they can no longer be confused"
+      ],
+      "correct_answers": [
+        "Add more varied, clearly distinguished utterances at the boundary between the two intents and retrain",
+        "Inspect the confusion matrix and per-intent precision/recall in the evaluation results to locate the confusion"
+      ]
+    },
+    {
+      "id": "ai-c02-m02-c05",
+      "module_id": "ai-c02-m02",
+      "prompt": "Which statements correctly describe how a custom question answering knowledge base is built and used in this module? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "You import sources such as a published FAQ URL, a policy document, or a structured file, which the service parses into question-and-answer pairs",
+        "You can add question-and-answer pairs manually for things no document covers",
+        "Each candidate answer comes with a confidence score, and you set a threshold below which the assistant falls back rather than returning a weak match",
+        "You define intents and entities and label utterances so the model can extract typed slots from the question"
+      ],
+      "correct_answers": [
+        "You import sources such as a published FAQ URL, a policy document, or a structured file, which the service parses into question-and-answer pairs",
+        "You can add question-and-answer pairs manually for things no document covers",
+        "Each candidate answer comes with a confidence score, and you set a threshold below which the assistant falls back rather than returning a weak match"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "ai-c02-m02-l01",
+      "module_id": "ai-c02-m02",
+      "prompt": "Explain why CLU and custom question answering are described as solving two different problems, and how a single assistant typically uses both together. Use the Larkspur examples to illustrate.",
+      "reference_answer": "CLU decides what the user wants to do and extracts slots, while custom question answering retrieves a stored answer from a curated knowledge base, so they solve fundamentally different problems. \"Track package 88231\" is an intent for CLU to classify as CheckOrderStatus and from which it extracts the OrderNumber entity, so the app can call the order API with that number. \"What is the return policy?\" is a question for question answering to answer from Larkspur's imported sources, with no slot extraction needed. Many assistants use both, with CLU acting as the router that classifies intent and question answering being one of the things it can route to. Mismatching them is a pitfall: classifying \"what is the return policy?\" as an intent forces you to hand-write the answer in code, and storing \"track my order\" as a QnA pair gives you no slot extraction."
+    },
+    {
+      "id": "ai-c02-m02-l02",
+      "module_id": "ai-c02-m02",
+      "prompt": "Walk through how you would safely roll out a retrained CLU model to live users with zero risk and full reversibility, and explain why this is possible.",
+      "reference_answer": "First train the new model and read its evaluation metrics; you ship because evaluation says it generalizes, not merely because training succeeded. Because training and deployment are separate steps, a trained model lives inside the project and serves no traffic until you deploy it to a named deployment such as production. Deploy and evaluate the new model in a separate or staged deployment slot, then only point the production deployment name at it once its metrics beat the current v1. Since the runtime prediction call targets a project and a deployment name, you can repoint the production deployment back to the previous version to revert. This decoupling of named deployments from training is what makes the release clean and reversible."
+    },
+    {
+      "id": "ai-c02-m02-l03",
+      "module_id": "ai-c02-m02",
+      "prompt": "Compare the role of confidence scoring and a low-confidence fallback in this module, and explain why the module treats it as a discipline shared across features.",
+      "reference_answer": "Both CLU and custom question answering return a confidence score with their predictions or candidate answers, so neither should be trusted blindly. For question answering you set a threshold below which the assistant says something like \"I'm not sure, let me connect you to an agent\" instead of returning a weak match, which keeps a knowledge-base bot from confidently answering questions it has no real source for. The module calls out \"no low-confidence fallback\" as a pitfall: without a threshold and a graceful \"I'm not sure\" path, the assistant will act on or answer with weak predictions. It frames this as the same discipline of thresholding on confidence learned earlier for sentiment and PII, so labeling well, evaluating honestly, deploying to a named slot, and thresholding on confidence with a graceful fallback form one shared lifecycle across both custom features."
+    }
+  ]
+}
