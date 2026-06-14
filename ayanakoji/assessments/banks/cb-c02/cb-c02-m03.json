@@ -1,0 +1,106 @@
+{
+  "course_id": "cb-c02",
+  "module_id": "cb-c02-m03",
+  "module_title": "Azure Blob Storage with the SDK",
+  "choices": [
+    {
+      "id": "cb-c02-m03-c01",
+      "module_id": "cb-c02-m03",
+      "kind": "mcq",
+      "prompt": "Meridian's couriers snap a proof-of-delivery JPEG at each drop-off. According to the module, what is the recommended way to store these photos relative to the existing Cosmos DB delivery records?",
+      "choices": [
+        "Store the photo as a block blob in Blob Storage and keep only the blob URL inside the Cosmos delivery item.",
+        "Embed the two-megapixel JPEG directly inside the Cosmos item so the record and photo stay together.",
+        "Store the photo as base64 text inside the Cosmos item to avoid an extra service dependency.",
+        "Store the photo as an append blob and copy its full bytes into the Cosmos item as a backup."
+      ],
+      "correct_answers": [
+        "Store the photo as a block blob in Blob Storage and keep only the blob URL inside the Cosmos delivery item."
+      ]
+    },
+    {
+      "id": "cb-c02-m03-c02",
+      "module_id": "cb-c02-m03",
+      "kind": "mcq",
+      "prompt": "A developer reports that uploaded images download as files instead of rendering in the browser. Based on the module, what is the likely cause and fix?",
+      "choices": [
+        "The blob's Content-Type defaulted to application/octet-stream; set it to image/jpeg via ContentSettings on upload.",
+        "The blob is missing a customerId metadata entry; add it via the metadata argument on upload.",
+        "The blob landed in the archive tier; rehydrate it before the browser can render it.",
+        "The container was created as a real folder tree; recreate it as a flat bucket so images serve correctly."
+      ],
+      "correct_answers": [
+        "The blob's Content-Type defaulted to application/octet-stream; set it to image/jpeg via ContentSettings on upload."
+      ]
+    },
+    {
+      "id": "cb-c02-m03-c03",
+      "module_id": "cb-c02-m03",
+      "kind": "mcq",
+      "prompt": "The team needs the cheapest possible storage for seven-year legal-retention copies they expect to almost never open. Per the module, which access tier fits, and what is the catch when a copy is finally requested?",
+      "choices": [
+        "Archive tier; the blob is offline and must be rehydrated, which can take hours, before it can be read.",
+        "Cool tier; it has the lowest storage cost but charges a one-time indexing fee on first read.",
+        "Hot tier; it is cheapest to store but the data must be re-uploaded each time it is accessed.",
+        "Cold tier; the blob is permanently deleted after the minimum-retention window unless renewed."
+      ],
+      "correct_answers": [
+        "Archive tier; the blob is offline and must be rehydrated, which can take hours, before it can be read."
+      ]
+    },
+    {
+      "id": "cb-c02-m03-c04",
+      "module_id": "cb-c02-m03",
+      "kind": "msq",
+      "prompt": "According to the module, which of the following are true about custom metadata on a blob versus system properties? (Select all that apply.)",
+      "choices": [
+        "Custom metadata is your own set of name/value string pairs, such as customerId=cust-4521.",
+        "Custom metadata is not indexed for server-side query by default; to filter many blobs you use blob index tags or an external index.",
+        "System properties like Content-Type are defined by the service and affect how the blob is served.",
+        "Custom metadata such as Content-Type controls the HTTP behavior of how the blob is delivered to a browser."
+      ],
+      "correct_answers": [
+        "Custom metadata is your own set of name/value string pairs, such as customerId=cust-4521.",
+        "Custom metadata is not indexed for server-side query by default; to filter many blobs you use blob index tags or an external index.",
+        "System properties like Content-Type are defined by the service and affect how the blob is served."
+      ]
+    },
+    {
+      "id": "cb-c02-m03-c05",
+      "module_id": "cb-c02-m03",
+      "kind": "msq",
+      "prompt": "In the module's walkthrough, the single upload_blob call does several jobs at once and follows the module's recommended practices. Which of the following are accurate per the module? (Select all that apply.)",
+      "choices": [
+        "It authenticates with DefaultAzureCredential rather than embedding an account key in code.",
+        "Passing overwrite=True means it will silently replace existing data, so the choice should be made intentionally.",
+        "A single get_blob_properties() call returns both service-defined fields (content type, size, tier) and your custom metadata.",
+        "Custom metadata attached at upload is automatically indexed so you can immediately run server-side queries across the container."
+      ],
+      "correct_answers": [
+        "It authenticates with DefaultAzureCredential rather than embedding an account key in code.",
+        "Passing overwrite=True means it will silently replace existing data, so the choice should be made intentionally.",
+        "A single get_blob_properties() call returns both service-defined fields (content type, size, tier) and your custom metadata."
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "cb-c02-m03-l01",
+      "module_id": "cb-c02-m03",
+      "prompt": "A teammate stored delivery photos as base64 strings inside Cosmos DB items, and read costs have spiked. Explain why this is the wrong design and walk through the better approach the module recommends.",
+      "reference_answer": "Photos are unstructured data — large opaque payloads — and embedding a two-megapixel JPEG in a Cosmos item bloats item size, inflates RU costs on every read, and risks hitting document size limits. The fix is to store the photo as a block blob in Azure Blob Storage, which is built to stream bytes and costs a fraction per gigabyte, and to keep only the blob URL (of the form https://<account>.blob.core.windows.net/<container>/<blobname>) inside the matching Cosmos delivery item. Block blobs are the right type here because they are optimized for upload-and-serve workloads like images and documents. This keeps the database lean while the bytes live in storage designed for them, so reads no longer carry the photo payload."
+    },
+    {
+      "id": "cb-c02-m03-l02",
+      "module_id": "cb-c02-m03",
+      "prompt": "Compare system properties and custom metadata on a blob. Explain how each is used in the proof-of-delivery walkthrough and why confusing them causes real bugs.",
+      "reference_answer": "System properties are defined by the service — Content-Type, Content-Encoding, ETag, last-modified time, content length — and they affect how the blob is served; for example, setting Content-Type to image/jpeg makes a browser render the photo, while the default application/octet-stream makes it download. Custom metadata is your own set of name/value string pairs, such as customerId=cust-4521 and capturedBy=courier-77, that carry context the object would otherwise lose. In the walkthrough the upload sets the content type via ContentSettings so the image serves correctly and attaches metadata to link the blob to the delivery's customer. Confusing them causes bugs because metadata is not indexed for server-side query by default — to filter many blobs you must use blob index tags or an external index rather than list-and-scan — and because forgetting Content-Type leaves blobs downloading instead of displaying."
+    },
+    {
+      "id": "cb-c02-m03-l03",
+      "module_id": "cb-c02-m03",
+      "prompt": "Walk through how you would choose among the hot, cool, cold, and archive access tiers for Meridian's delivery photos over their lifetime, naming the tradeoffs the module highlights.",
+      "reference_answer": "Tiers let you pay for the read pattern you actually have. The hot tier has the lowest access cost but the highest storage cost, so it suits frequently read data — Meridian keeps this month's delivery photos in hot. Cool and cold lower storage cost in exchange for higher per-access cost and minimum-retention expectations, fitting data accessed infrequently but still occasionally, so photos age to cool once they stop being viewed. Archive is the cheapest storage but is offline: a blob there must be rehydrated, which can take hours, before it can be read, so it fits compliance copies you almost never open — the legal retention window. Because exact prices and minimum-stay rules change, you verify current numbers in the docs; the durable idea is to match the tier to the access frequency, and this aging is automated in module 4."
+    }
+  ]
+}
