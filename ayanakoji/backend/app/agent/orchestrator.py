@@ -64,6 +64,7 @@ def _no_em_dashes(tokens: Iterator[str]) -> Iterator[str]:
     for token in tokens:
         yield token.translate(_EM_DASHES)
 
+
 _BLOCKED_MESSAGE = (
     "That message looks like an attempt to override how I work, so I can't act on it. "
     "I'm here to help with Azure certifications and your enterprise learning, ask me about a "
