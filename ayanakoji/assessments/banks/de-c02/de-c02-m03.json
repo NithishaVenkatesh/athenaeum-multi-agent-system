@@ -1,0 +1,104 @@
+{
+  "course_id": "de-c02",
+  "module_id": "de-c02-m03",
+  "module_title": "Orchestrating pipelines with Data Factory",
+  "choices": [
+    {
+      "id": "de-c02-m03-c01",
+      "module_id": "de-c02-m03",
+      "prompt": "In Azure Data Factory, what is a pipeline as the module defines it?",
+      "kind": "mcq",
+      "choices": [
+        "A directed graph of activities connected by dependency conditions",
+        "A single unit of work such as running one notebook or stored procedure",
+        "The integration runtime that decides where copy and transform compute runs",
+        "A JSON linked service that stores connection credentials"
+      ],
+      "correct_answers": [
+        "A directed graph of activities connected by dependency conditions"
+      ]
+    },
+    {
+      "id": "de-c02-m03-c02",
+      "module_id": "de-c02-m03",
+      "prompt": "The nightly Greenfork pipeline requires the supplier-shred stored procedure to run only if the sales-cleaning notebook finished cleanly, so that a bad Spark run never feeds half-clean data into the warehouse. Which dependency condition should the stored-procedure activity use on the notebook activity?",
+      "kind": "mcq",
+      "choices": [
+        "Succeeded",
+        "Completion",
+        "Failed",
+        "Skipped"
+      ],
+      "correct_answers": [
+        "Succeeded"
+      ]
+    },
+    {
+      "id": "de-c02-m03-c03",
+      "module_id": "de-c02-m03",
+      "prompt": "A vendor drops a file into blob storage at an unpredictable time each night, and the pipeline must start the moment the file lands rather than guessing at a clock time. Which trigger type fits this arrival-driven requirement?",
+      "kind": "mcq",
+      "choices": [
+        "An event-based (storage) trigger that fires on blob creation",
+        "A schedule trigger set to a wall-clock recurrence",
+        "A tumbling window trigger for fixed contiguous time slices",
+        "A self-hosted integration runtime configured to poll the lake"
+      ],
+      "correct_answers": [
+        "An event-based (storage) trigger that fires on blob creation"
+      ]
+    },
+    {
+      "id": "de-c02-m03-c04",
+      "module_id": "de-c02-m03",
+      "prompt": "According to the module, which statements correctly distinguish commit from publish in a Git-integrated Data Factory setup? (Select all that apply.)",
+      "kind": "msq",
+      "choices": [
+        "Commit captures intent and history in Git on a working branch",
+        "Publish deploys the collaboration branch to the running live service",
+        "Publishing without Git gives you no history, no review, and no rollback",
+        "Publish is just a save button that automatically records change history"
+      ],
+      "correct_answers": [
+        "Commit captures intent and history in Git on a working branch",
+        "Publish deploys the collaboration branch to the running live service",
+        "Publishing without Git gives you no history, no review, and no rollback"
+      ]
+    },
+    {
+      "id": "de-c02-m03-c05",
+      "module_id": "de-c02-m03",
+      "prompt": "Each nightly run owns a specific, contiguous time slice, and on occasion you must replay missed slices (backfill) with dependency between windows. Compared with a plain schedule trigger, which trigger type does the module recommend for these semantics, and why?",
+      "kind": "mcq",
+      "choices": [
+        "A tumbling window trigger, because it tracks state and supports backfill and dependency between windows",
+        "A schedule trigger, because wall-clock recurrence already guarantees every slice is replayable",
+        "An event-based (storage) trigger, because slice ownership is decided by file arrival",
+        "An Execute Pipeline control activity, because it loops over each slice automatically"
+      ],
+      "correct_answers": [
+        "A tumbling window trigger, because it tracks state and supports backfill and dependency between windows"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "de-c02-m03-l01",
+      "module_id": "de-c02-m03",
+      "prompt": "Explain why using a dependency condition of 'Completion' instead of 'Succeeded' between the sales-cleaning notebook activity and the supplier-shred stored procedure is dangerous, and describe the correct way to encode the 'do B only if A worked' contract in the nightly Greenfork pipeline.",
+      "reference_answer": "A dependency condition of 'Completion' runs the downstream activity whether the upstream one succeeded or failed, so if the Spark notebook fails the stored procedure still runs and silently loads bad or half-clean data into the warehouse. To encode 'do B only if A worked', the stored-procedure activity's dependsOn block should set the dependencyConditions to 'Succeeded' on the Clean_Sales_Spark activity, so the load runs only after a successful upstream completion. This is the load-bearing line of the pipeline: dependency conditions encode the success/failure contract between activities declaratively, without writing control-flow code. 'Completion' should be reserved for cleanup activities that must run on success or failure, and 'Failed' for alerts."
+    },
+    {
+      "id": "de-c02-m03-l02",
+      "module_id": "de-c02-m03",
+      "prompt": "Compare the three trigger types the module describes (schedule, tumbling window, and event-based) and walk through how you would choose among them for a nightly batch, naming the semantics each one implies.",
+      "reference_answer": "A schedule trigger fires on a wall-clock recurrence, for example every night at 02:00, giving clock-driven semantics that suit a fixed nightly window. A tumbling window trigger fires for fixed, contiguous, non-overlapping time slices and, importantly, tracks state and supports backfill and dependency between windows, so it is the right choice when each run owns a specific time slice and you may need to replay missed slices. An event-based (storage) trigger fires when a blob is created or deleted, giving arrival-driven semantics so the pipeline starts the moment the vendor's file lands instead of guessing at a time. To choose, you pick the semantics of your batch: clock-driven for a plain nightly recurrence, slice-driven when slices and backfill matter, and arrival-driven when the start should be tied to a file landing. Using a plain schedule trigger when each run owns a backfillable slice is a common pitfall because it costs you replay capability."
+    },
+    {
+      "id": "de-c02-m03-l03",
+      "module_id": "de-c02-m03",
+      "prompt": "A teammate published a pipeline change directly to the live service, it broke production, and there was no way to roll back. Walk through how connecting the factory to a Git repository changes this workflow and why it provides history, review, and rollback that publish-only cannot.",
+      "reference_answer": "By default, changes saved by publishing go straight to the Data Factory service with no history, no review, and no rollback. Connecting the factory to a Git repository (Azure Repos or GitHub) means your edits are committed to a working branch as JSON artifacts (pipelines, datasets, linked services, triggers), so you open a pull request, a teammate reviews the diff, you merge to the collaboration branch, and only then publish to the live service from that branch. Because the artifacts are just JSON, they diff and review like any code, giving a review gate before deployment. If a change breaks production you can revert the offending commit and republish, restoring a known-good state. The key distinction is that commit captures intent and history in Git while publish deploys the collaboration branch to the running service, so publish should be treated as a deployment step, not a save button."
+    }
+  ]
+}
