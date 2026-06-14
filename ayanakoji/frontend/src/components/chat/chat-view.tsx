@@ -206,8 +206,15 @@ export function ChatView({
         // Once the skill step is resolved (a skill_result message exists) the gate
         // is not re-offered on reload — it lives on an earlier turn than the result.
         const skillResolved = loaded.messages.some((m) => m.meta?.skill_result);
+        // An in-progress skill check is course-level; restore it onto the latest
+        // turn that offered the gate so the open quiz card survives a chat switch.
+        const activeCheck = skillResolved ? null : (loaded.skill_check_active ?? null);
+        let lastGateIndex = -1;
+        loaded.messages.forEach((m, i) => {
+          if (m.role === "assistant" && m.meta?.skill_gate) lastGateIndex = i;
+        });
         setTurns(
-          loaded.messages.map((m): Turn =>
+          loaded.messages.map((m, index): Turn =>
             m.role === "user"
               ? { kind: "user", text: m.content }
               : {
@@ -222,7 +229,7 @@ export function ChatView({
                   paceRequest: m.meta?.pace_request ?? null,
                   paceChosen: null,
                   skillGate: skillResolved ? null : (m.meta?.skill_gate ?? null),
-                  skillCheck: null,
+                  skillCheck: index === lastGateIndex ? activeCheck : null,
                   skillBusy: false,
                   skillResult: m.meta?.skill_result ?? null,
                   deadlineDone: false,

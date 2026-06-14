@@ -65,10 +65,18 @@ def _modules_for(catalog_id: str) -> tuple:  # type: ignore[type-arg]
 def start_skill_check(
     course_id: str, session: SessionDep, asmtsession: AssessmentSessionDep
 ) -> SkillCheckRead:
-    """Sample up to 4 choice questions per module from the authored banks."""
+    """Sample up to 4 choice questions per module from the authored banks.
+
+    The sample is persisted on the course (``skill_check_active``) so the open quiz
+    card survives a reload / chat switch. While the skill step is unresolved a
+    repeat call returns the stored sample, keeping the questions stable instead of
+    reshuffling them under the learner.
+    """
     repo = CourseRepository(session)
     course = _require_linked(repo, course_id)
     assert course.catalog_id is not None
+    if course.skill_source is None and course.skill_check_active:
+        return SkillCheckRead.model_validate(course.skill_check_active)
     a_repo = AssessmentRepository(asmtsession)
     catalog = get_catalog_course(course.catalog_id)
     out: list[SkillCheckModule] = []
@@ -92,11 +100,14 @@ def start_skill_check(
                 ],
             )
         )
-    return SkillCheckRead(
+    result = SkillCheckRead(
         catalog_id=course.catalog_id,
         title=catalog.title if catalog else course.catalog_id,
         modules=out,
     )
+    course.skill_check_active = result.model_dump(mode="json")
+    repo.save(course)
+    return result
 
 
 @router.post(
@@ -139,6 +150,7 @@ def grade_skill_check(
 
     course.skill_source = "assessment"
     course.skill_scores = scores
+    course.skill_check_active = {}  # quiz resolved — drop the open-card payload
     repo.save(course)
 
     overall = round(sum(scores.values()) / len(scores), 4) if scores else 0.0
@@ -172,6 +184,7 @@ def skill_fresher(course_id: str, session: SessionDep) -> SkillResultRead:
     scores = {m.module_id: 0.0 for m in _modules_for(course.catalog_id)}
     course.skill_source = "fresher"
     course.skill_scores = scores
+    course.skill_check_active = {}  # skill step resolved — drop any open-card payload
     repo.save(course)
     result = SkillResultRead(
         catalog_id=course.catalog_id, overall_fraction=0.0, modules=[], fresher=True

@@ -71,6 +71,7 @@ def _to_read(course: Course, repo: CourseRepository) -> CourseRead:
         status=course.status,
         messages=course.messages,
         assessment_ids=repo.assessment_ids(course.id),
+        skill_check_active=course.skill_check_active or None,
         created_at=course.created_at,
         updated_at=course.updated_at,
     )

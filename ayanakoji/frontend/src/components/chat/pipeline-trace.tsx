@@ -133,6 +133,7 @@ function PhaseRow({ phase }: { phase: PhaseTelemetry }) {
         {phase.off_topic != null && (
           <MetaChip>off-topic {(phase.off_topic * 100).toFixed(0)}%</MetaChip>
         )}
+        {phase.state && <MetaChip>state · {phase.state}</MetaChip>}
       </div>
       {phase.steps.length > 0 && (
         <ul className="border-border/40 mt-2 space-y-0.5 border-l pl-3">

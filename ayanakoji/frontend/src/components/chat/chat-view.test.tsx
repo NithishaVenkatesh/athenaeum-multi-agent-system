@@ -61,6 +61,7 @@ describe("ChatView", () => {
         tier: null,
         latency_ms: null,
         route: null,
+        state: null,
         sources: [],
         steps: [],
         confidence: null,
@@ -275,5 +276,50 @@ describe("ChatView", () => {
     expect(screen.getByText("hi")).toBeInTheDocument();
     // No in-page title button — the shell owns the title now.
     expect(screen.queryByRole("button", { name: "Functions" })).toBeNull();
+  });
+
+  it("restores an in-progress skill check from skill_check_active on reload", async () => {
+    // A learner who opened the quiz, then switched chats, must get the same card
+    // back (not the gate) — the open quiz is persisted at the DB level.
+    mockGet.mockResolvedValue(
+      course({
+        catalog_id: "cb-c01",
+        catalog_title: "Cloud Basics",
+        messages: [
+          { role: "user", content: "build a study plan" },
+          {
+            role: "assistant",
+            content: "Are you new, or want a quick skill check?",
+            meta: {
+              skill_gate: {
+                catalog_id: "cb-c01",
+                title: "Cloud Basics",
+                prompt: "New here, or a quick check?",
+                options: ["fresher", "assessment"],
+              },
+            },
+          },
+        ],
+        skill_check_active: {
+          catalog_id: "cb-c01",
+          title: "Cloud Basics",
+          modules: [
+            {
+              module_id: "cb-c01-m01",
+              title: "Module One",
+              questions: [
+                { id: "cb-c01-m01-c01", prompt: "What is a branch?", kind: "mcq", choices: ["A", "B"] },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+
+    render(<ChatView courseId="c1" />);
+
+    // The quiz card (with its question) is back; the gate is not shown in its place.
+    await waitFor(() => expect(screen.getByText("What is a branch?")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /submit skill check/i })).toBeInTheDocument();
   });
 });

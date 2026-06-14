@@ -127,3 +127,70 @@ def test_start_requires_linked_course(client: TestClient) -> None:
         "id"
     ]
     assert client.post(f"/api/courses/{course_id}/skill/start").status_code == 409
+
+
+def _ids(check: dict[str, Any]) -> list[str]:
+    """Flat list of sampled question ids across all modules (sample identity)."""
+    return [q["id"] for mod in check["modules"] for q in mod["questions"]]
+
+
+def test_start_persists_active_check_and_get_exposes_it(
+    client: TestClient, assessments_session: Any
+) -> None:
+    """The sampled quiz is stored on the course so the card survives a chat switch."""
+    _seed_choice_banks(assessments_session)
+    course_id = _linked_course(client)
+    started = client.post(f"/api/courses/{course_id}/skill/start").json()
+
+    with session_scope() as s:
+        course = CourseRepository(s).get(course_id)
+        assert course is not None
+        assert course.skill_check_active  # non-empty payload persisted
+        assert _ids(course.skill_check_active) == _ids(started)
+
+    # GET /courses/{id} exposes it so the frontend can restore the open quiz.
+    reloaded = client.get(f"/api/courses/{course_id}").json()
+    assert reloaded["skill_check_active"] is not None
+    assert _ids(reloaded["skill_check_active"]) == _ids(started)
+
+
+def test_start_returns_same_questions_until_resolved(
+    client: TestClient, assessments_session: Any
+) -> None:
+    """Re-starting an unresolved check returns the same sample (stable across reload)."""
+    _seed_choice_banks(assessments_session)
+    course_id = _linked_course(client)
+    first = client.post(f"/api/courses/{course_id}/skill/start").json()
+    second = client.post(f"/api/courses/{course_id}/skill/start").json()
+    assert _ids(first) == _ids(second)
+
+
+def test_grade_clears_active_check(client: TestClient, assessments_session: Any) -> None:
+    """Grading resolves the skill step, so the open-quiz payload is cleared."""
+    _seed_choice_banks(assessments_session)
+    course_id = _linked_course(client)
+    start = client.post(f"/api/courses/{course_id}/skill/start").json()
+    answers = [
+        {"module_id": mod["module_id"], "question_id": q["id"], "selections": []}
+        for mod in start["modules"]
+        for q in mod["questions"]
+    ]
+    client.post(f"/api/courses/{course_id}/skill/grade", json={"answers": answers})
+    with session_scope() as s:
+        course = CourseRepository(s).get(course_id)
+        assert course is not None
+        assert not course.skill_check_active
+    assert client.get(f"/api/courses/{course_id}").json()["skill_check_active"] is None
+
+
+def test_fresher_clears_active_check(client: TestClient, assessments_session: Any) -> None:
+    """Choosing fresher resolves the skill step and clears any open-quiz payload."""
+    _seed_choice_banks(assessments_session)
+    course_id = _linked_course(client)
+    client.post(f"/api/courses/{course_id}/skill/start")
+    client.post(f"/api/courses/{course_id}/skill/fresher")
+    with session_scope() as s:
+        course = CourseRepository(s).get(course_id)
+        assert course is not None
+        assert not course.skill_check_active
+    assert client.get(f"/api/courses/{course_id}").json()["skill_check_active"] is None

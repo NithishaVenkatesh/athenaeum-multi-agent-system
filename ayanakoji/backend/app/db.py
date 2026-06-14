@@ -30,6 +30,7 @@ _COURSE_ADDED_COLUMNS: dict[str, str] = {
     "skill_source": "TEXT",
     "skill_scores": "JSON",
     "pending_modules": "JSON",
+    "skill_check_active": "JSON",
 }
 
 # SQLite busy timeout (ms): how long a writer waits on a locked DB before erroring.

@@ -88,6 +88,9 @@ class CourseRead(BaseModel):
     status: int
     messages: list[dict[str, Any]]
     assessment_ids: list[str]
+    # The open skill-check quiz, if one is in progress (a SkillCheckRead payload);
+    # null once there is none, so the frontend can restore the card after a reload.
+    skill_check_active: dict[str, Any] | None = None
     created_at: datetime
     updated_at: datetime
 

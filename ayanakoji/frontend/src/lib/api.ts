@@ -105,6 +105,8 @@ export interface Course {
   status: number;
   messages: ChatMessage[];
   assessment_ids: string[];
+  /** The open skill-check quiz, if one is in progress — used to restore the card. */
+  skill_check_active?: SkillCheck | null;
   created_at: string;
   updated_at: string;
 }
@@ -236,6 +238,8 @@ export interface PhaseTelemetry {
   tier: number | null;
   latency_ms: number | null;
   route: Route | null;
+  /** Course state at this turn (the state-graph node the router conditioned on). */
+  state: string | null;
   sources: GroundingSource[];
   steps: TraceStep[];
   confidence: number | null;

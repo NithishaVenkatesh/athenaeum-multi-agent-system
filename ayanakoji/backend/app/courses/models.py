@@ -76,6 +76,11 @@ class Course(SQLModel, table=True):
     # correct (module_id → 0..1). Drives the pace-gated time correction.
     skill_source: str | None = Field(default=None)
     skill_scores: dict[str, float] = Field(default_factory=dict, sa_type=JSON)
+    # The sampled skill-check quiz awaiting the learner's answers (a SkillCheckRead
+    # payload). Persisted so the open quiz card survives a reload / chat switch
+    # instead of living only in component state; empty until a check is started,
+    # cleared once it is graded or the learner marks themselves a fresher.
+    skill_check_active: dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
     # Staged study-plan modules awaiting the learner's approval. Promoted to real
     # CourseModule rows by POST /plan/approve; the chat path never writes modules.
     pending_modules: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON)
