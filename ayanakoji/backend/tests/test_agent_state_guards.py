@@ -31,7 +31,21 @@ def test_state_progression() -> None:
     )
     assert (
         derive_course_state(
-            catalog_id="cb-c01", pace=Pace.NORMAL, module_count=0, completed_count=0
+            catalog_id="cb-c01",
+            pace=None,
+            skill_source="fresher",
+            module_count=0,
+            completed_count=0,
+        )
+        is CourseState.ASSESSED
+    )
+    assert (
+        derive_course_state(
+            catalog_id="cb-c01",
+            pace=Pace.NORMAL,
+            skill_source="assessment",
+            module_count=0,
+            completed_count=0,
         )
         is CourseState.PACED
     )
@@ -57,8 +71,10 @@ def test_state_progression() -> None:
 
 def test_transition_note_explains_the_gate() -> None:
     note = transition_note(CourseState.CHOSEN, Route.STUDY_PLAN)
-    assert "ask pace" in note
+    assert "skill check" in note
     assert "chosen" in note
+    paced = transition_note(CourseState.ASSESSED, Route.STUDY_PLAN)
+    assert "ask pace" in paced
 
 
 # ── Grounding guards ───────────────────────────────────────────────────────────

@@ -23,7 +23,8 @@ class CourseState(StrEnum):
     """Where a course chat is in its lifecycle (derived, never stored)."""
 
     NEW = "new"  # no course chosen yet
-    CHOSEN = "chosen"  # course linked, pace not set
+    CHOSEN = "chosen"  # course linked, skill check not done
+    ASSESSED = "assessed"  # skill check done (or fresher), pace not set
     PACED = "paced"  # pace set, plan not built
     PLANNED = "planned"  # plan modules exist, none completed
     IN_PROGRESS = "in_progress"  # some modules completed
@@ -36,12 +37,23 @@ def derive_course_state(
     pace: Pace | None,
     module_count: int,
     completed_count: int,
+    skill_source: str | None = None,
 ) -> CourseState:
-    """Compute the course state from the persisted facts (pure)."""
+    """Compute the course state from the persisted facts (pure).
+
+    The skill-gap check sits between choosing a course and pacing it: a linked
+    course with no ``skill_source`` is CHOSEN (ask fresher / skill check); once the
+    check is done it is ASSESSED (ask pace); with a pace it is PACED (build the
+    preview). Modules only exist after the learner approves the preview.
+    """
     if not catalog_id:
         return CourseState.NEW
     if module_count == 0:
-        return CourseState.PACED if pace is not None else CourseState.CHOSEN
+        if skill_source is None:
+            return CourseState.CHOSEN
+        if pace is None:
+            return CourseState.ASSESSED
+        return CourseState.PACED
     if completed_count == 0:
         return CourseState.PLANNED
     if completed_count >= module_count:
@@ -55,9 +67,10 @@ def transition_note(state: CourseState, route: Route) -> str:
         return f"state={state.value}"
     gate = {
         CourseState.NEW: "no course → choose one first",
-        CourseState.CHOSEN: "course set, no pace → ask pace",
-        CourseState.PACED: "pace set → build the plan",
-        CourseState.PLANNED: "plan exists → rebuild / open Modules",
+        CourseState.CHOSEN: "course set, no skill check → ask fresher / skill check",
+        CourseState.ASSESSED: "skill check done → ask pace",
+        CourseState.PACED: "pace set → build the plan preview",
+        CourseState.PLANNED: "plan exists → rebuild preview / open Modules",
         CourseState.IN_PROGRESS: "in progress → rebuild keeps completed modules",
         CourseState.COMPLETED: "course completed → recommend what's next",
     }[state]
