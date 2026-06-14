@@ -99,6 +99,9 @@ class Settings(BaseSettings):
     guard_block_threshold: float = 0.8
     # Per-call model timeout (seconds) so a hung provider can't stall a whole turn.
     llm_timeout_seconds: float = 30.0
+    # Safety ceiling for LLM-grader exchanges per question. The grader calls
+    # grade_answer when confident; this is only reached if it never does.
+    assessment_grader_ceiling: int = 8
 
     @property
     def cors_origin_list(self) -> list[str]:

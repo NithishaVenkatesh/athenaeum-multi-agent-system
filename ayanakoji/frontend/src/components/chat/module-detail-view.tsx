@@ -1,31 +1,25 @@
 "use client";
 
-/**
- * A single module's page: its full content (markdown from approved material) and
- * a "mark complete" action when it's the active module. Completed modules stay
- * accessible (you can revisit the content); locked modules send you back.
- */
-
 import {
   ArrowLeft,
   ArrowRight,
   CalendarClock,
   CheckCircle2,
+  ClipboardCheck,
   Loader2,
   Lock,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
-  completeModule,
   getModuleContent,
+  listModuleAssessments,
   listModules,
   type CourseModuleProgress,
+  type ModuleAssessmentSummary,
   type ModuleContent,
 } from "@/lib/api";
 
@@ -43,16 +37,18 @@ export function ModuleDetailView({
   courseId: string;
   moduleId: string;
 }) {
-  const router = useRouter();
   const [modules, setModules] = useState<CourseModuleProgress[] | null>(null);
   const [content, setContent] = useState<ModuleContent | null>(null);
-  const [completing, setCompleting] = useState(false);
+  const [attempts, setAttempts] = useState<ModuleAssessmentSummary[]>([]);
 
   const reload = useCallback(() => {
     listModules(courseId)
       .then(setModules)
       .catch(() => setModules([]));
-  }, [courseId]);
+    listModuleAssessments(courseId, moduleId)
+      .then(setAttempts)
+      .catch(() => setAttempts([]));
+  }, [courseId, moduleId]);
 
   useEffect(() => reload(), [reload]);
   useEffect(() => {
@@ -69,19 +65,11 @@ export function ModuleDetailView({
   const current = modules?.find((m) => m.module_id === moduleId) ?? null;
   const index = modules?.findIndex((m) => m.module_id === moduleId) ?? -1;
   const next = modules && index >= 0 ? (modules[index + 1] ?? null) : null;
+  const assessmentHref = `/chat/${courseId}/modules/${moduleId}/assessment/choices`;
 
-  async function handleComplete() {
-    setCompleting(true);
-    try {
-      await completeModule(courseId, moduleId);
-      toast.success("Module complete", { description: "The next module is unlocked." });
-      if (next) router.push(`/chat/${courseId}/modules/${next.module_id}`);
-      else router.push(modulesHref);
-    } catch {
-      toast.error("Could not complete", { description: "Finish the earlier modules first." });
-      setCompleting(false);
-    }
-  }
+  const choicesPassed = attempts.some((a) => a.type === "choices" && a.passed === true);
+  const llmPassed = attempts.some((a) => a.type === "llm" && a.passed === true);
+  const totalAttempts = attempts.length;
 
   if (modules === null) {
     return (
@@ -151,22 +139,38 @@ export function ModuleDetailView({
         )}
       </article>
 
-      <div className="border-border mt-8 flex items-center justify-between border-t pt-4">
-        {current.completed ? (
-          <span className="text-muted-foreground text-sm">You have completed this module.</span>
-        ) : (
-          <Button onClick={handleComplete} disabled={completing} size="sm">
-            {completing ? "Marking…" : "Mark module complete"}
-          </Button>
-        )}
-        {next && (
-          <Link
-            href={`/chat/${courseId}/modules/${next.module_id}`}
-            className="text-brand inline-flex items-center gap-1 text-sm font-medium"
-          >
-            Next module <ArrowRight className="size-4" />
-          </Link>
-        )}
+      <div className="border-border mt-8 border-t pt-4">
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-1">
+            {current.completed ? (
+              <span className="text-brand inline-flex items-center gap-1.5 text-sm font-medium">
+                <CheckCircle2 className="size-4" /> Module complete
+              </span>
+            ) : (
+              <Link href={assessmentHref}>
+                <Button size="sm" className="gap-1.5">
+                  <ClipboardCheck className="size-4" />
+                  Take Assessment
+                </Button>
+              </Link>
+            )}
+            {totalAttempts > 0 && !current.completed && (
+              <span className="text-muted-foreground text-[11px]">
+                {totalAttempts} attempt{totalAttempts !== 1 ? "s" : ""} ·{" "}
+                {choicesPassed ? "Quiz ✓" : "Quiz pending"} ·{" "}
+                {llmPassed ? "Oral ✓" : "Oral pending"}
+              </span>
+            )}
+          </div>
+          {next && (
+            <Link
+              href={`/chat/${courseId}/modules/${next.module_id}`}
+              className="text-brand inline-flex items-center gap-1 text-sm font-medium"
+            >
+              Next module <ArrowRight className="size-4" />
+            </Link>
+          )}
+        </div>
       </div>
     </div>
   );

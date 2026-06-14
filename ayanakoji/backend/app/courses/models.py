@@ -68,6 +68,10 @@ class Course(SQLModel, table=True):
     plan_skip_weeks: list[int] = Field(default_factory=list, sa_type=JSON)
     # ISO date of a target exam ("my exam is July 10"); used to warn if the plan overruns it.
     plan_exam_date: str | None = Field(default=None)
+    # Richer scheduling constraints the LLM scheduler agent infers, persisted so they
+    # stick across re-plans: {"time_window": [lo,hi]|None, "max_session_minutes":
+    # int|None, "excluded_dates": [iso,...]}. The discrete fields above hold the rest.
+    plan_constraints: dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
     messages: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON)
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
@@ -93,20 +97,35 @@ class CourseModule(SQLModel, table=True):
 
 
 class Assessment(SQLModel, table=True):
-    """A grouping of question records for a course; practice or evaluation."""
+    """A grouping of question records for one module assessment session."""
 
     id: str = Field(default_factory=_uuid, primary_key=True)
     course_id: str = Field(foreign_key="course.id", index=True)
+    # Catalog module id (e.g. "de-c01-m01") — used to look up bank questions.
+    module_id: str | None = Field(default=None, index=True)
+    # FK to the CourseModule row for this learner's plan (progress tracking).
+    course_module_id: str | None = Field(default=None, index=True)
     type: str  # one of ASSESSMENT_TYPES; validated at the API boundary
-    is_practice: bool = Field(default=True)  # True = practice, False = evaluation
+    is_practice: bool = Field(default=False)
+    # Attempt number for this (course_module_id, type) pair; 1-based.
+    attempt_number: int = Field(default=1)
+    # Score 0.0–10.0 (normalised regardless of question count).
+    score: float | None = Field(default=None)
+    # True ≥ 5.0, False < 5.0, None = not yet submitted.
+    passed: bool | None = Field(default=None)
+    completed_at: datetime | None = Field(default=None)
     created_at: datetime = Field(default_factory=_now)
 
 
 class ChoiceQuestion(SQLModel, table=True):
-    """A multiple-choice question record."""
+    """A multiple-choice question record for one assessment session."""
 
     id: str = Field(default_factory=_uuid, primary_key=True)
     assessment_id: str = Field(foreign_key="assessment.id", index=True)
+    # Authored bank question id (e.g. "de-c01-m01-c01") — for traceability.
+    bank_question_id: str | None = Field(default=None)
+    # Display order within the assessment (1-based).
+    sequence: int = Field(default=0)
     prompt: str
     choices: list[str] = Field(default_factory=list, sa_type=JSON)
     correct_answers: list[str] = Field(default_factory=list, sa_type=JSON)
@@ -116,13 +135,24 @@ class ChoiceQuestion(SQLModel, table=True):
 
 
 class LlmQuestion(SQLModel, table=True):
-    """An open-ended question graded via an LLM exchange; transcript stored inline."""
+    """An open-ended question graded by the LLM grader; transcript stored inline."""
 
     id: str = Field(default_factory=_uuid, primary_key=True)
     assessment_id: str = Field(foreign_key="assessment.id", index=True)
+    # Authored bank question id (e.g. "de-c01-m01-l01").
+    bank_question_id: str | None = Field(default=None)
     prompt: str
     messages: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON)
     submitted: bool = Field(default=False)
+    # Score 0–10 assigned by the grader; None until graded.
+    score: int | None = Field(default=None)
+    # Grader's brief rationale (shown to learner in results).
+    reasoning: str | None = Field(default=None)
+    # Number of learner reply turns so far.
+    turn_count: int = Field(default=0)
+    # True once the grader has called grade_answer and produced a definitive score.
+    grading_complete: bool = Field(default=False)
+    # Kept for compatibility with the old boolean; repurposed as score >= threshold.
     is_correct: bool | None = Field(default=None)
 
 

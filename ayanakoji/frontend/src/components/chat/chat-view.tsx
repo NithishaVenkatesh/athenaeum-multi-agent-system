@@ -118,7 +118,13 @@ function NewChatNotice({ newChat }: { newChat: NewChat }) {
   );
 }
 
-export function ChatView({ courseId }: { courseId?: string }) {
+export function ChatView({
+  courseId,
+  initialMessage,
+}: {
+  courseId?: string;
+  initialMessage?: string;
+}) {
   const { personaId, reloadCourses } = useWorkspace();
   const [activeCourseId, setActiveCourseId] = useState<string | undefined>(courseId);
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -126,6 +132,7 @@ export function ChatView({ courseId }: { courseId?: string }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [atBottom, setAtBottom] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const autoSentRef = useRef(false);
 
   // Show a "scroll to bottom" button whenever the latest turn is out of view.
   useEffect(() => {
@@ -183,6 +190,15 @@ export function ChatView({ courseId }: { courseId?: string }) {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [turns]);
+
+  // Auto-send an initial message once the course finishes loading (feedback redirect).
+  useEffect(() => {
+    if (!initialMessage || autoSentRef.current || busy) return;
+    if (courseId && turns.length === 0) return; // still loading existing turns
+    autoSentRef.current = true;
+    void handleSend(initialMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialMessage, turns.length, busy]);
 
   // Patch the trailing assistant turn immutably.
   function patchLastAssistant(patch: (turn: AssistantTurn) => AssistantTurn) {
@@ -306,7 +322,8 @@ export function ChatView({ courseId }: { courseId?: string }) {
   // typing is disabled so the learner uses the pace buttons (the backend also
   // rejects free text with 409 in this state). Course suggestions do not lock.
   const lastTurn = turns[turns.length - 1];
-  const paceLocked = Boolean(lastTurn?.paceRequest) && lastTurn?.paceChosen == null;
+  const lastAssistant = lastTurn?.kind === "assistant" ? lastTurn : null;
+  const paceLocked = Boolean(lastAssistant?.paceRequest) && lastAssistant?.paceChosen == null;
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4">

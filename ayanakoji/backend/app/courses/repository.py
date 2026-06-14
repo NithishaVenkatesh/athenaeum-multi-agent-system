@@ -13,7 +13,7 @@ from typing import Any
 
 from sqlmodel import Session, col, delete, select
 
-from app.courses.models import Assessment, Course, CourseModule, make_message
+from app.courses.models import Assessment, ChoiceQuestion, Course, CourseModule, LlmQuestion, make_message
 
 
 class CourseRepository:
@@ -145,3 +145,115 @@ class CourseRepository:
         self._session.commit()
         self._session.refresh(module)
         return module
+
+    # ── Assessment session (learner attempts) ────────────────────────────────
+
+    def create_assessment(
+        self,
+        *,
+        course_id: str,
+        module_id: str,
+        course_module_id: str,
+        type: str,
+        attempt_number: int,
+    ) -> Assessment:
+        a = Assessment(
+            course_id=course_id,
+            module_id=module_id,
+            course_module_id=course_module_id,
+            type=type,
+            attempt_number=attempt_number,
+        )
+        self._session.add(a)
+        self._session.commit()
+        self._session.refresh(a)
+        return a
+
+    def count_attempts(self, course_module_id: str, type: str) -> int:
+        statement = select(Assessment).where(
+            Assessment.course_module_id == course_module_id,
+            Assessment.type == type,
+        )
+        return len(list(self._session.exec(statement).all()))
+
+    def latest_assessment(self, course_module_id: str, type: str) -> Assessment | None:
+        statement = (
+            select(Assessment)
+            .where(
+                Assessment.course_module_id == course_module_id,
+                Assessment.type == type,
+            )
+            .order_by(col(Assessment.attempt_number).desc())
+        )
+        return self._session.exec(statement).first()
+
+    def latest_passed(self, course_module_id: str, type: str) -> bool:
+        a = self.latest_assessment(course_module_id, type)
+        return a is not None and a.passed is True
+
+    def get_assessment(self, assessment_id: str) -> Assessment | None:
+        return self._session.get(Assessment, assessment_id)
+
+    def list_module_assessments(self, course_module_id: str) -> list[Assessment]:
+        statement = (
+            select(Assessment)
+            .where(Assessment.course_module_id == course_module_id)
+            .order_by(col(Assessment.type), col(Assessment.attempt_number))
+        )
+        return list(self._session.exec(statement).all())
+
+    def save_assessment(self, a: Assessment) -> Assessment:
+        self._session.add(a)
+        self._session.commit()
+        self._session.refresh(a)
+        return a
+
+    # ── Choice questions ─────────────────────────────────────────────────────
+
+    def add_choice_question(self, q: ChoiceQuestion) -> ChoiceQuestion:
+        self._session.add(q)
+        self._session.commit()
+        self._session.refresh(q)
+        return q
+
+    def list_choice_questions(self, assessment_id: str) -> list[ChoiceQuestion]:
+        statement = (
+            select(ChoiceQuestion)
+            .where(ChoiceQuestion.assessment_id == assessment_id)
+            .order_by(col(ChoiceQuestion.sequence))
+        )
+        return list(self._session.exec(statement).all())
+
+    def get_choice_question(self, question_id: str) -> ChoiceQuestion | None:
+        return self._session.get(ChoiceQuestion, question_id)
+
+    def save_choice_question(self, q: ChoiceQuestion) -> ChoiceQuestion:
+        self._session.add(q)
+        self._session.commit()
+        self._session.refresh(q)
+        return q
+
+    # ── LLM questions ────────────────────────────────────────────────────────
+
+    def add_llm_question(self, q: LlmQuestion) -> LlmQuestion:
+        self._session.add(q)
+        self._session.commit()
+        self._session.refresh(q)
+        return q
+
+    def list_llm_questions(self, assessment_id: str) -> list[LlmQuestion]:
+        statement = (
+            select(LlmQuestion)
+            .where(LlmQuestion.assessment_id == assessment_id)
+            .order_by(col(LlmQuestion.id))
+        )
+        return list(self._session.exec(statement).all())
+
+    def get_llm_question(self, question_id: str) -> LlmQuestion | None:
+        return self._session.get(LlmQuestion, question_id)
+
+    def save_llm_question(self, q: LlmQuestion) -> LlmQuestion:
+        self._session.add(q)
+        self._session.commit()
+        self._session.refresh(q)
+        return q

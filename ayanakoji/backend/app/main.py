@@ -19,6 +19,7 @@ from app.assessments.engine import init_db as assessments_init_db
 from app.assessments.router import router as assessments_router
 from app.catalog.router import router as catalog_router
 from app.config import get_settings
+from app.courses.assessment_router import router as assessment_session_router
 from app.courses.router import router as courses_router
 from app.db import init_db
 from app.workiq.router import router as workiq_router
@@ -75,6 +76,8 @@ def create_app() -> FastAPI:
     app.include_router(courses_router)
     # Authored per-module assessment question banks (GET-only, separate DB).
     app.include_router(assessments_router)
+    # Learner assessment sessions (start, answer, grade, results).
+    app.include_router(assessment_session_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     def health() -> HealthResponse:

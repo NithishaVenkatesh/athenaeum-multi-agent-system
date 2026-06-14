@@ -487,3 +487,260 @@ export function completeModule(
     { method: "POST" },
   );
 }
+
+// ── Assessment session types ───────────────────────────────────────────────────
+
+export type AssessmentType = "choices" | "llm";
+
+export interface SessionChoiceQuestion {
+  id: string;
+  bank_question_id: string | null;
+  sequence: number;
+  prompt: string;
+  kind: "mcq" | "msq";
+  choices: string[];
+  learner_choice: string[] | null;
+  submitted: boolean;
+  is_correct: boolean | null;
+}
+
+export interface SessionLlmQuestion {
+  id: string;
+  bank_question_id: string | null;
+  prompt: string;
+  messages: Array<{ role: string; content: string }>;
+  submitted: boolean;
+  score: number | null;
+  reasoning: string | null;
+  turn_count: number;
+  grading_complete: boolean;
+}
+
+export interface AssessmentSession {
+  id: string;
+  course_id: string;
+  module_id: string | null;
+  type: AssessmentType;
+  attempt_number: number;
+  score: number | null;
+  passed: boolean | null;
+  completed_at: string | null;
+  created_at: string;
+  choice_questions: SessionChoiceQuestion[];
+  llm_questions: SessionLlmQuestion[];
+}
+
+export interface ModuleAssessmentSummary {
+  id: string;
+  type: AssessmentType;
+  attempt_number: number;
+  score: number | null;
+  passed: boolean | null;
+  completed_at: string | null;
+  created_at: string;
+}
+
+export interface ChoiceQuestionResult {
+  id: string;
+  sequence: number;
+  prompt: string;
+  kind: "mcq" | "msq";
+  choices: string[];
+  correct_answers: string[];
+  learner_choice: string[] | null;
+  is_correct: boolean | null;
+}
+
+export interface ChoiceSubmitResult {
+  assessment_id: string;
+  score: number;
+  passed: boolean;
+  questions: ChoiceQuestionResult[];
+}
+
+export interface LlmQuestionResult {
+  id: string;
+  prompt: string;
+  score: number | null;
+  reasoning: string | null;
+  turn_count: number;
+  grading_complete: boolean;
+  messages: Array<{ role: string; content: string }>;
+}
+
+export interface LlmSubmitResult {
+  assessment_id: string;
+  score: number;
+  passed: boolean;
+  questions: LlmQuestionResult[];
+}
+
+export type LlmGraderEvent =
+  | { type: "token"; token: string }
+  | { type: "grade"; score: number; reasoning: string }
+  | { type: "error"; message: string }
+  | { type: "done" };
+
+export interface LlmGraderHandlers {
+  onToken?: (token: string) => void;
+  onGrade?: (score: number, reasoning: string) => void;
+  onError?: (message: string) => void;
+  onDone?: () => void;
+}
+
+// ── Assessment session API calls ──────────────────────────────────────────────
+
+/** Start a new choices or LLM assessment session for a module. */
+export function startAssessment(
+  courseId: string,
+  moduleId: string,
+  type: AssessmentType,
+): Promise<AssessmentSession> {
+  return requestJson<AssessmentSession>(
+    `/api/courses/${courseId}/modules/${moduleId}/assessments/start?type=${type}`,
+    { method: "POST" },
+  );
+}
+
+/** All assessment attempts for a module (for the summary list). */
+export function listModuleAssessments(
+  courseId: string,
+  moduleId: string,
+  signal?: AbortSignal,
+): Promise<ModuleAssessmentSummary[]> {
+  return requestJson<ModuleAssessmentSummary[]>(
+    `/api/courses/${courseId}/modules/${moduleId}/assessments`,
+    { signal },
+  );
+}
+
+/** Full state of one assessment session. */
+export function getAssessmentSession(
+  courseId: string,
+  assessmentId: string,
+  signal?: AbortSignal,
+): Promise<AssessmentSession> {
+  return requestJson<AssessmentSession>(
+    `/api/courses/${courseId}/assessments/${assessmentId}`,
+    { signal },
+  );
+}
+
+/** Save the learner's in-progress selection for one choice question. */
+export function selectChoiceAnswer(
+  courseId: string,
+  assessmentId: string,
+  questionId: string,
+  selections: string[],
+): Promise<SessionChoiceQuestion> {
+  return requestJson<SessionChoiceQuestion>(
+    `/api/courses/${courseId}/assessments/${assessmentId}/choices/${questionId}/select`,
+    { method: "POST", body: JSON.stringify({ selections }) },
+  );
+}
+
+/** Submit the choices assessment and get graded results. */
+export function submitChoices(
+  courseId: string,
+  assessmentId: string,
+): Promise<ChoiceSubmitResult> {
+  return requestJson<ChoiceSubmitResult>(
+    `/api/courses/${courseId}/assessments/${assessmentId}/choices/submit`,
+    { method: "POST" },
+  );
+}
+
+/** Get the revealed results for a submitted assessment. */
+export function getAssessmentResults(
+  courseId: string,
+  assessmentId: string,
+  signal?: AbortSignal,
+): Promise<ChoiceSubmitResult | LlmSubmitResult> {
+  return requestJson<ChoiceSubmitResult | LlmSubmitResult>(
+    `/api/courses/${courseId}/assessments/${assessmentId}/results`,
+    { signal },
+  );
+}
+
+/** Get the grader's opening message for the current LLM question. */
+export function startLlmQuestion(
+  courseId: string,
+  assessmentId: string,
+): Promise<SessionLlmQuestion> {
+  return requestJson<SessionLlmQuestion>(
+    `/api/courses/${courseId}/assessments/${assessmentId}/llm/start`,
+    { method: "POST" },
+  );
+}
+
+/**
+ * Send one learner turn to the LLM grader over SSE.
+ * Dispatches token/grade/error/done events to handlers.
+ */
+export async function sendLlmTurn(
+  courseId: string,
+  assessmentId: string,
+  questionId: string,
+  content: string,
+  handlers: LlmGraderHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/courses/${courseId}/assessments/${assessmentId}/llm/${questionId}/turn`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify({ content }),
+      signal,
+    },
+  );
+  if (!response.ok || !response.body) {
+    throw new Error(`LLM turn stream failed: ${response.status}`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const events = buffer.split("\n\n");
+    buffer = events.pop() ?? "";
+    for (const raw of events) {
+      const line = raw.trim();
+      if (!line.startsWith("data:")) continue;
+      const event = JSON.parse(line.slice(5).trim()) as LlmGraderEvent;
+      dispatchGraderEvent(event, handlers);
+    }
+  }
+}
+
+function dispatchGraderEvent(event: LlmGraderEvent, handlers: LlmGraderHandlers): void {
+  switch (event.type) {
+    case "token":
+      handlers.onToken?.(event.token);
+      break;
+    case "grade":
+      handlers.onGrade?.(event.score, event.reasoning);
+      break;
+    case "error":
+      handlers.onError?.(event.message);
+      break;
+    case "done":
+      handlers.onDone?.();
+      break;
+  }
+}
+
+/** Submit the LLM assessment (all questions must be graded). */
+export function submitLlm(
+  courseId: string,
+  assessmentId: string,
+): Promise<LlmSubmitResult> {
+  return requestJson<LlmSubmitResult>(
+    `/api/courses/${courseId}/assessments/${assessmentId}/llm/submit`,
+    { method: "POST" },
+  );
+}

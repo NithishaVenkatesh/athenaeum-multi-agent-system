@@ -46,6 +46,10 @@ class AssessmentRepository:
         )
         return list(self._session.exec(statement).all())
 
+    def get_llm_question_by_id(self, question_id: str) -> BankLlmQuestion | None:
+        """Fetch a bank LLM question by its authored id (e.g. 'de-c01-m01-l01')."""
+        return self._session.get(BankLlmQuestion, question_id)
+
     def assessment_ids_for_course(self, course_id: str) -> list[str]:
         """All bank ids for a course, ordered by module then kind."""
         statement = (

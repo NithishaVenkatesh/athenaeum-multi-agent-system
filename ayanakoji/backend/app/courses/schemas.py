@@ -99,3 +99,117 @@ class AssessmentRead(BaseModel):
     type: str
     is_practice: bool
     created_at: datetime
+
+
+# ── Learner assessment session schemas (new evaluation pipeline) ──────────────
+
+
+class SessionChoiceQuestionRead(BaseModel):
+    """A choice question presented to the learner — correct_answers withheld."""
+
+    id: str
+    bank_question_id: str | None
+    sequence: int
+    prompt: str
+    kind: str  # "mcq" | "msq"
+    choices: list[str]
+    learner_choice: list[str] | None
+    submitted: bool
+    is_correct: bool | None
+
+
+class SessionLlmQuestionRead(BaseModel):
+    """An LLM question state — reference_answer never exposed."""
+
+    id: str
+    bank_question_id: str | None
+    prompt: str
+    messages: list[dict[str, Any]]
+    submitted: bool
+    score: int | None
+    reasoning: str | None
+    turn_count: int
+    grading_complete: bool
+
+
+class AssessmentSessionRead(BaseModel):
+    """Full state of one assessment session (choices or llm)."""
+
+    id: str
+    course_id: str
+    module_id: str | None
+    type: str
+    attempt_number: int
+    score: float | None
+    passed: bool | None
+    completed_at: datetime | None
+    created_at: datetime
+    choice_questions: list[SessionChoiceQuestionRead] = []
+    llm_questions: list[SessionLlmQuestionRead] = []
+
+
+class ModuleAssessmentSummary(BaseModel):
+    """One attempt row returned by GET /modules/{mid}/assessments."""
+
+    id: str
+    type: str
+    attempt_number: int
+    score: float | None
+    passed: bool | None
+    completed_at: datetime | None
+    created_at: datetime
+
+
+class ChoiceSelectBody(BaseModel):
+    """Save in-progress selection for a single choice question."""
+
+    selections: list[str]
+
+
+class ChoiceQuestionResult(BaseModel):
+    """Per-question result after choices are submitted."""
+
+    id: str
+    sequence: int
+    prompt: str
+    kind: str
+    choices: list[str]
+    correct_answers: list[str]  # revealed after submission
+    learner_choice: list[str] | None
+    is_correct: bool | None
+
+
+class ChoiceSubmitResult(BaseModel):
+    """Returned by POST /choices/submit."""
+
+    assessment_id: str
+    score: float
+    passed: bool
+    questions: list[ChoiceQuestionResult]
+
+
+class LlmTurnBody(BaseModel):
+    """One learner reply in the LLM-grader exchange."""
+
+    content: str = Field(min_length=1, max_length=4000)
+
+
+class LlmQuestionResult(BaseModel):
+    """Per-question result for LLM assessment results view."""
+
+    id: str
+    prompt: str
+    score: int | None
+    reasoning: str | None
+    turn_count: int
+    grading_complete: bool
+    messages: list[dict[str, Any]]
+
+
+class LlmSubmitResult(BaseModel):
+    """Returned by POST /llm/submit."""
+
+    assessment_id: str
+    score: float
+    passed: bool
+    questions: list[LlmQuestionResult]
