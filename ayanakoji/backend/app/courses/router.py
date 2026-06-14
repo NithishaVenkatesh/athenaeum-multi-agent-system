@@ -18,11 +18,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
+from app.agent.clock import today_in_timezone
 from app.agent.contracts import Pace, PlanEvent, ScheduledBlock, TakenCourse, TokenEvent
 from app.agent.orchestrator import run_pipeline
 from app.agent.schedule_edit import parse_adjustment, parse_pace
 from app.agent.state import derive_course_state
 from app.agent.study_plan import occupied_intervals
+from app.workiq.repository import get_repository
 from app.catalog.content import get_module_content
 from app.catalog.loader import get_course as get_catalog_course
 from app.catalog.loader import is_valid_course_id
@@ -172,12 +174,16 @@ def accept_course(course_id: str, body: AcceptCourse, session: SessionDep) -> Co
     return _to_read(course, repo)
 
 
-def _apply_schedule_edit(repo: CourseRepository, course: Course, text: str) -> Course:
+def _apply_schedule_edit(
+    repo: CourseRepository, course: Course, text: str, *, today: date
+) -> Course:
     """Persist a natural-language schedule edit on the course (merges with prior).
 
+    ``today`` is the learner's local date (persona timezone), so "next week" and
+    "after June 30" resolve in the learner's calendar, not the server's (M4).
     The edit sticks: future plan builds reuse the start date, skipped days, and exam date.
     """
-    adj = parse_adjustment(text, today=date.today())
+    adj = parse_adjustment(text, today=today)
     if adj is None:
         return course
     course.plan_start = adj.start_date.isoformat() if adj.start_date else course.plan_start
@@ -269,7 +275,7 @@ def _registered_courses(
 
 
 def _reserved_intervals(
-    repo: CourseRepository, persona_id: str, *, exclude_id: str
+    repo: CourseRepository, persona_id: str, *, exclude_id: str, today: date
 ) -> frozenset[tuple[str, int, int]]:
     """Absolute (date, start, end) calendar time the persona's *other* course plans use.
 
@@ -283,7 +289,7 @@ def _reserved_intervals(
         if course.id == exclude_id or not course.catalog_id:
             continue
         course_start = (
-            date.fromisoformat(course.plan_start) if course.plan_start else date.today()
+            date.fromisoformat(course.plan_start) if course.plan_start else today
         )
         blocks = [
             ScheduledBlock(
@@ -341,9 +347,17 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
         # same serialized read-modify-write as the assistant reply below.
         current = stream_repo.append_message(current, role="user", content=content)
 
+        # Anchor every date to the learner's local "today" (persona timezone), not
+        # the server's, so relative edits and plan start dates land on the learner's
+        # calendar day (critique M4).
+        persona = get_repository().get_persona(current.persona_id)
+        today = today_in_timezone(persona.timezone if persona else None)
+
         taken = _taken_courses(stream_repo, current.persona_id, exclude_id=current.id)
         registered = _registered_courses(stream_repo, current.persona_id, exclude_id=current.id)
-        reserved = _reserved_intervals(stream_repo, current.persona_id, exclude_id=current.id)
+        reserved = _reserved_intervals(
+            stream_repo, current.persona_id, exclude_id=current.id, today=today
+        )
         # A pace change in the message ("revert to a slower pace") updates the
         # course pace before planning, so the re-plan honors it.
         requested_pace = parse_pace(content)
@@ -353,9 +367,9 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
         pace = Pace(current.pace) if current.pace else None
         # Apply any natural-language schedule edit ("start after June 30",
         # "skip Mondays", "remove week 2") and persist it across re-plans.
-        current = _apply_schedule_edit(stream_repo, current, content)
+        current = _apply_schedule_edit(stream_repo, current, content, today=today)
         start_date = (
-            date.fromisoformat(current.plan_start) if current.plan_start else date.today()
+            date.fromisoformat(current.plan_start) if current.plan_start else today
         )
         exclude_days = frozenset(current.plan_excludes)
         skip_weeks = frozenset(current.plan_skip_weeks)
