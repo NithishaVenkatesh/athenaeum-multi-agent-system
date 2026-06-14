@@ -6,9 +6,10 @@
  */
 
 import { ChevronsUpDown, MessageSquarePlus, MessagesSquare, Pencil } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 
+import { useNavigate } from "@/components/workspace/navigation-progress";
 import { RenameCourseDialog } from "@/components/workspace/rename-course-dialog";
 import { useWorkspace } from "@/components/workspace/workspace-context";
 import { Button } from "@/components/ui/button";
@@ -26,7 +27,7 @@ import { parseChatRoute } from "@/lib/chat-route";
 import type { CourseSummary } from "@/lib/api";
 
 export function CourseSwitcher() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const pathname = usePathname();
   const { courses, reloadCourses } = useWorkspace();
   const [open, setOpen] = useState(false);
@@ -38,7 +39,7 @@ export function CourseSwitcher() {
 
   function go(href: string) {
     setOpen(false);
-    router.push(href);
+    navigate(href);
   }
 
   function openRename(course: CourseSummary) {

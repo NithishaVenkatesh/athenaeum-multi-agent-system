@@ -14,9 +14,10 @@
  */
 
 import { motion, MotionConfig } from "framer-motion";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { useNavigate } from "@/components/workspace/navigation-progress";
 import { parseChatRoute, type ChatPage } from "@/lib/chat-route";
 import { cn } from "@/lib/utils";
 
@@ -41,7 +42,7 @@ const useIsomorphicLayoutEffect =
 
 export function PageSwitcher() {
   const pathname = usePathname();
-  const router = useRouter();
+  const navigate = useNavigate();
   const { courseId, page } = parseChatRoute(pathname);
 
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -92,7 +93,7 @@ export function PageSwitcher() {
               }}
               role="tab"
               aria-selected={selected}
-              onClick={() => router.push(href)}
+              onClick={() => navigate(href)}
               className={cn(
                 "relative z-10 rounded-lg px-3.5 py-1 text-sm font-medium transition-colors",
                 selected
