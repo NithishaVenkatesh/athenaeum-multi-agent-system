@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ChatView } from "@/components/chat/chat-view";
@@ -110,6 +110,31 @@ describe("ChatView", () => {
     await waitFor(() =>
       expect(mockStream).toHaveBeenCalledWith("c1", "Explain RAG", expect.any(Object)),
     );
+  });
+
+  it("shows a thinking indicator until the first token, then swaps in the reply", async () => {
+    mockCreate.mockResolvedValue(course({ id: "c1" }));
+    let onToken: (t: string) => void = () => {};
+    // Hold the stream open so the turn stays in its pre-reply state.
+    mockStream.mockImplementation((_id, _text, handlers) => {
+      onToken = handlers.onToken ?? (() => {});
+      return new Promise<void>(() => {});
+    });
+
+    render(<ChatView />);
+    const box = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(box, { target: { value: "Explain RAG" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+
+    // While streaming with no reply yet, the thinking indicator is shown.
+    await waitFor(() =>
+      expect(screen.getByRole("status", { name: /thinking/i })).toBeInTheDocument(),
+    );
+
+    // The first token swaps the indicator out for the streamed reply.
+    act(() => onToken("Hello"));
+    await waitFor(() => expect(screen.getByText("Hello")).toBeInTheDocument());
+    expect(screen.queryByRole("status", { name: /thinking/i })).toBeNull();
   });
 
   it("shows a course suggestion and enrolls on accept", async () => {

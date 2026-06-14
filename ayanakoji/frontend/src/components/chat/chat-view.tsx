@@ -24,6 +24,7 @@ import { SkillAssessmentCard } from "@/components/chat/skill-assessment-card";
 import { SkillGateCard } from "@/components/chat/skill-gate-card";
 import { SkillResultCard } from "@/components/chat/skill-result-card";
 import { StudyPlanCard } from "@/components/chat/study-plan-card";
+import { TypingIndicator } from "@/components/chat/typing-indicator";
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/components/workspace/workspace-context";
 import {
@@ -101,6 +102,24 @@ function emptyAssistantTurn(): AssistantTurn {
     error: null,
     streaming: true,
   };
+}
+
+/**
+ * A streaming turn that has not yet surfaced any visible reply — no answer text
+ * and none of the interactive cards. While true, show the thinking indicator.
+ */
+function isAwaitingReply(turn: AssistantTurn): boolean {
+  return (
+    turn.streaming &&
+    !turn.text &&
+    !turn.suggestion &&
+    !turn.plan &&
+    !turn.paceRequest &&
+    !turn.skillGate &&
+    !turn.skillCheck &&
+    !turn.skillResult &&
+    !turn.newChat
+  );
 }
 
 function updateAssistant(
@@ -476,6 +495,7 @@ export function ChatView({
                 {turn.text && (
                   <MessageBubble role="assistant" content={turn.text} streaming={turn.streaming} />
                 )}
+                {isAwaitingReply(turn) && <TypingIndicator />}
                 {turn.suggestion && (
                   <CourseSuggestionCard
                     suggestion={turn.suggestion}
