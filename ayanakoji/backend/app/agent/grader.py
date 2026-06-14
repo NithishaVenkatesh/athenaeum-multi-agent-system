@@ -127,6 +127,15 @@ _OFFLINE_REPLY = "Thank you for your response. Can you elaborate on the key mech
 _OFFLINE_GRADE = GradeResult(
     score=7, reasoning="Offline mode — deterministic stub.", confidence="high"
 )
+# A LIVE grading call that errors on the final exchange must never silently award a
+# pass: fail closed to a non-passing, low-confidence "unavailable" grade so the
+# learner is asked to retry rather than auto-passed (distinct from the offline stub).
+_GRADE_UNAVAILABLE = GradeResult(
+    score=0,
+    reasoning="Grading was temporarily unavailable for this answer; it was not scored as a "
+    "pass. Please retry.",
+    confidence="low",
+)
 
 
 # ── Public interface ──────────────────────────────────────────────────────────
@@ -210,9 +219,10 @@ def run_turn(
         reply_text, grade = _call_with_tools(router, messages, is_final=is_final)
         return GraderTurnResult(reply=reply_text, grade=grade)
     except Exception as exc:
-        logger.warning("Grader turn failed: %s — falling back to offline stub", exc)
+        logger.warning("Grader turn failed: %s", exc)
         if is_final:
-            return GraderTurnResult(reply="", grade=_OFFLINE_GRADE)
+            # Fail closed: a grading error must not auto-award a pass (security).
+            return GraderTurnResult(reply="", grade=_GRADE_UNAVAILABLE)
         return GraderTurnResult(reply=_OFFLINE_REPLY, grade=None)
 
 
