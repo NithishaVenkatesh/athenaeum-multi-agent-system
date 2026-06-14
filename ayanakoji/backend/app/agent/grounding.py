@@ -68,6 +68,7 @@ _SYNONYMS: dict[str, tuple[str, ...]] = {
     "login": ("authentication", "identity"),
     "ml": ("machine", "learning"),
     "ai": ("cognitive", "openai", "intelligence"),
+    "training": ("train",),  # inflection: "model training" reaches modules about training/trained
     "pipeline": ("pipelines",),
     "db": ("database", "cosmos", "sql"),
     "warehouse": ("synapse", "fabric"),
