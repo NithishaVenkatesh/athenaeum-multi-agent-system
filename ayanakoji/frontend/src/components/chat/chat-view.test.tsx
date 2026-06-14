@@ -135,6 +135,8 @@ describe("ChatView", () => {
         pace: "normal",
         weekly_study_hours: 3,
         total_hours: 12.5,
+        total_base_hours: 12.5,
+        total_pace_hours: 12.5,
         weeks: 5,
         start_date: "2026-06-15",
         modules: [
@@ -143,6 +145,9 @@ describe("ChatView", () => {
             title: "Hosting web APIs",
             sequence: 1,
             estimated_minutes: 195,
+            base_minutes: 195,
+            pace_minutes: 195,
+            skill_delta: 0,
             complete_before: "2026-06-29",
             scheduled: [{ week: 1, day: "tue", start: "11:00", end: "12:00", minutes: 60 }],
             objectives: [],
@@ -159,6 +164,8 @@ describe("ChatView", () => {
           },
         ],
         capacity_reason: "I found 3 h of study time already in your week — Tue 11:00–12:00.",
+        balloon_warning: null,
+        awaiting_approval: false,
       });
       handlers.onDone?.({ route: "study_plan", suggested: false });
     });

@@ -75,6 +75,8 @@ export interface MessageMeta {
   suggestion?: Suggestion | null;
   plan?: StudyPlan | null;
   pace_request?: PaceRequest | null;
+  skill_gate?: SkillGateRequest | null;
+  skill_result?: SkillResult | null;
   new_chat?: NewChat | null;
 }
 
@@ -282,6 +284,9 @@ export interface ModulePlan {
   title: string;
   sequence: number;
   estimated_minutes: number;
+  base_minutes: number;
+  pace_minutes: number;
+  skill_delta: number;
   scheduled: ScheduledBlock[];
   complete_before: string;
   objectives: string[];
@@ -294,11 +299,15 @@ export interface StudyPlan {
   pace: Pace;
   weekly_study_hours: number;
   total_hours: number;
+  total_base_hours: number;
+  total_pace_hours: number;
   weeks: number;
   start_date: string;
   modules: ModulePlan[];
   sessions: StudySession[];
   capacity_reason: string;
+  balloon_warning: string | null;
+  awaiting_approval: boolean;
 }
 
 export interface PaceRequest {
@@ -306,6 +315,53 @@ export interface PaceRequest {
   title: string;
   prompt: string;
   options: Pace[];
+}
+
+export interface SkillGateRequest {
+  catalog_id: string;
+  title: string;
+  prompt: string;
+  options: string[]; // ["fresher", "assessment"]
+}
+
+export interface SkillCheckQuestion {
+  id: string;
+  prompt: string;
+  kind: "mcq" | "msq";
+  choices: string[];
+}
+
+export interface SkillCheckModule {
+  module_id: string;
+  title: string;
+  questions: SkillCheckQuestion[];
+}
+
+export interface SkillCheck {
+  catalog_id: string;
+  title: string;
+  modules: SkillCheckModule[];
+}
+
+export interface SkillModuleScore {
+  module_id: string;
+  title: string;
+  correct: number;
+  total: number;
+  fraction: number;
+}
+
+export interface SkillResult {
+  catalog_id: string;
+  overall_fraction: number;
+  modules: SkillModuleScore[];
+  fresher: boolean;
+}
+
+export interface SkillAnswer {
+  module_id: string;
+  question_id: string;
+  selections: string[];
 }
 
 export type PipelineEvent =
@@ -319,6 +375,13 @@ export type PipelineEvent =
       title: string;
       prompt: string;
       options: Pace[];
+    }
+  | {
+      type: "skill_gate_request";
+      catalog_id: string;
+      title: string;
+      prompt: string;
+      options: string[];
     }
   | {
       type: "new_chat";
@@ -337,6 +400,7 @@ export interface StreamHandlers {
   onSuggestion?: (suggestion: Suggestion) => void;
   onPlan?: (plan: StudyPlan) => void;
   onPaceRequest?: (request: PaceRequest) => void;
+  onSkillGate?: (request: SkillGateRequest) => void;
   onNewChat?: (newChat: NewChat) => void;
   onBlocked?: (reason: string) => void;
   onError?: (message: string) => void;
@@ -415,6 +479,14 @@ function dispatchEvent(event: PipelineEvent, handlers: StreamHandlers): void {
         options: event.options,
       });
       break;
+    case "skill_gate_request":
+      handlers.onSkillGate?.({
+        catalog_id: event.catalog_id,
+        title: event.title,
+        prompt: event.prompt,
+        options: event.options,
+      });
+      break;
     case "new_chat":
       handlers.onNewChat?.({
         prompt: event.prompt,
@@ -452,6 +524,51 @@ export function setPace(courseId: string, pace: Pace): Promise<Course> {
     method: "POST",
     body: JSON.stringify({ pace }),
   });
+}
+
+/** Sample the multi-tab skill check (up to 4 questions per module). */
+export function startSkillCheck(courseId: string): Promise<SkillCheck> {
+  return requestJson<SkillCheck>(`/api/courses/${courseId}/skill/start`, {
+    method: "POST",
+  });
+}
+
+/** Grade the skill check; stores per-module scores and posts a transcript message. */
+export function gradeSkillCheck(
+  courseId: string,
+  answers: SkillAnswer[],
+): Promise<SkillResult> {
+  return requestJson<SkillResult>(`/api/courses/${courseId}/skill/grade`, {
+    method: "POST",
+    body: JSON.stringify({ answers }),
+  });
+}
+
+/** Skip the check as a fresher (score 0 on every module). */
+export function skillFresher(courseId: string): Promise<SkillResult> {
+  return requestJson<SkillResult>(`/api/courses/${courseId}/skill/fresher`, {
+    method: "POST",
+  });
+}
+
+/** Set or clear the optional target deadline. */
+export async function setDeadline(
+  courseId: string,
+  deadline: string | null,
+): Promise<void> {
+  await fetch(`${API_BASE_URL}/api/courses/${courseId}/deadline`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ deadline }),
+  });
+}
+
+/** Approve the staged plan: write its modules + deadlines. */
+export function approvePlan(courseId: string): Promise<CourseModuleProgress[]> {
+  return requestJson<CourseModuleProgress[]>(
+    `/api/courses/${courseId}/plan/approve`,
+    { method: "POST" },
+  );
 }
 
 // ── Modules (the study plan's progress) ───────────────────────────────────────
