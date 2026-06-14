@@ -136,6 +136,77 @@ def test_stream_empty_stream_degrades() -> None:
     assert "".join(handle.tokens) == "ok"
 
 
+class _Transient(Exception):
+    """A retryable error (carries an HTTP-ish status code)."""
+
+    def __init__(self, status_code: int) -> None:
+        super().__init__(f"transient {status_code}")
+        self.status_code = status_code
+
+
+def test_retry_recovers_a_transient_blip_on_the_same_rung() -> None:
+    # Azure rung 1 hits a 429 then succeeds on retry — it never falls to Groq.
+    azure = FakeProvider(
+        Provider.AZURE, [_Transient(429), RawCompletion(text="recovered")]
+    )
+    groq = FakeProvider(Provider.GROQ, [])
+    router = ModelRouter(_settings(), azure=azure, groq=groq, sleep=lambda _s: None)
+    result = router.complete(Capability.FAST, [{"role": "user", "content": "hi"}])
+    assert result.text == "recovered"
+    assert result.provider is Provider.AZURE
+    assert result.tier == 1  # same rung, recovered via retry
+    assert len(azure.calls) == 2  # one failed attempt + one success
+    assert groq.calls == []
+
+
+def test_non_transient_error_is_not_retried() -> None:
+    # A plain error is not retryable: one attempt per rung, then fall through.
+    azure = FakeProvider(Provider.AZURE, [RuntimeError("bad model"), RuntimeError("bad model")])
+    groq = FakeProvider(Provider.GROQ, [RawCompletion(text="g")])
+    router = ModelRouter(_settings(), azure=azure, groq=groq, sleep=lambda _s: None)
+    result = router.complete(Capability.FAST, [{"role": "user", "content": "hi"}])
+    assert result.provider is Provider.GROQ
+    assert len(azure.calls) == 2  # NOT retried — one call per rung
+
+
+def test_open_circuit_skips_a_dead_provider() -> None:
+    from app.agent.llm import CircuitBreaker
+
+    clock = {"t": 0.0}
+    breaker = CircuitBreaker(threshold=2, cooldown=60.0, monotonic=lambda: clock["t"])
+    # Two failed Azure rungs (one turn) cross the threshold and open Azure's circuit.
+    azure = FakeProvider(Provider.AZURE, [RuntimeError("x"), RuntimeError("x")])
+    groq = FakeProvider(Provider.GROQ, [RawCompletion(text="g1")])
+    router = ModelRouter(
+        _settings(), azure=azure, groq=groq, breaker=breaker, sleep=lambda _s: None
+    )
+    assert router.complete(Capability.FAST, [{"role": "user", "content": "1"}]).provider is (
+        Provider.GROQ
+    )
+    assert len(azure.calls) == 2  # both Azure rungs tried this turn
+
+    # Next turn: Azure's circuit is open → its rungs are skipped entirely.
+    azure2 = FakeProvider(Provider.AZURE, [RawCompletion(text="should-not-run")])
+    groq2 = FakeProvider(Provider.GROQ, [RawCompletion(text="g2")])
+    router2 = ModelRouter(
+        _settings(), azure=azure2, groq=groq2, breaker=breaker, sleep=lambda _s: None
+    )
+    result = router2.complete(Capability.FAST, [{"role": "user", "content": "2"}])
+    assert result.provider is Provider.GROQ
+    assert azure2.calls == []  # Azure skipped — no timeout paid
+
+    # After the cooldown elapses the circuit half-opens and Azure is tried again.
+    clock["t"] = 120.0
+    azure3 = FakeProvider(Provider.AZURE, [RawCompletion(text="azure-back")])
+    router3 = ModelRouter(
+        _settings(), azure=azure3, groq=FakeProvider(Provider.GROQ, []), breaker=breaker,
+        sleep=lambda _s: None,
+    )
+    assert router3.complete(Capability.FAST, [{"role": "user", "content": "3"}]).text == (
+        "azure-back"
+    )
+
+
 def test_groq_only_when_azure_unconfigured() -> None:
     settings = Settings(_env_file=None, groq_api_key="gsk_real", offline_llm=False)  # type: ignore[call-arg]
     groq = FakeProvider(Provider.GROQ, [RawCompletion(text="g")])

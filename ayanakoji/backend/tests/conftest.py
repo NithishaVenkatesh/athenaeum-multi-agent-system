@@ -20,6 +20,15 @@ def _offline_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _reset_llm_breaker() -> None:
+    """Clear the process-wide provider circuit breaker so failures from one test
+    never leak into the next (critique M6 isolation)."""
+    from app.agent.llm import reset_default_breaker
+
+    reset_default_breaker()
+
+
+@pytest.fixture(autouse=True)
 def _isolate_assessments_db(tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]:
     """Point the (separate) assessments engine at a temp file for every test.
 

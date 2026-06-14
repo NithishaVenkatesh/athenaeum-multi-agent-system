@@ -20,8 +20,9 @@ in the offline CI lane where ``openai`` is not installed.
 from __future__ import annotations
 
 import logging
+import threading
 import time
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Protocol
@@ -32,6 +33,93 @@ logger = logging.getLogger(__name__)
 
 # A chat message in the OpenAI ``{role, content}`` shape.
 Message = dict[str, str]
+
+# --- Resilience: retry transient blips, and a circuit breaker so a dead provider
+# is skipped instead of paying its full timeout on every turn (critique M6) ---
+RETRY_MAX_ATTEMPTS = 3  # total attempts on one rung before falling to the next
+RETRY_BACKOFF_BASE_SECONDS = 0.25  # exponential: 0.25, 0.5, 1.0 ...
+CIRCUIT_FAILURE_THRESHOLD = 4  # consecutive failures before a provider's circuit opens
+CIRCUIT_COOLDOWN_SECONDS = 60.0  # how long an open circuit stays open before a retry
+# HTTP statuses worth retrying (rate limit, timeout, transient server errors).
+_RETRYABLE_STATUS = frozenset({408, 409, 425, 429, 500, 502, 503, 504})
+_RETRYABLE_EXC_NAMES = frozenset(
+    {
+        "RateLimitError",
+        "APITimeoutError",
+        "APIConnectionError",
+        "InternalServerError",
+        "ServiceUnavailableError",
+    }
+)
+
+
+def _is_transient(exc: BaseException) -> bool:
+    """True for errors worth retrying the *same* rung (rate limit, timeout, 5xx).
+
+    A non-transient error (bad model name, auth, malformed request) falls straight
+    through to the next rung — retrying it would only waste time.
+    """
+    if isinstance(exc, (TimeoutError, ConnectionError)):
+        return True
+    status = getattr(exc, "status_code", None)
+    if not isinstance(status, int):
+        status = getattr(exc, "status", None)
+    if isinstance(status, int) and status in _RETRYABLE_STATUS:
+        return True
+    return type(exc).__name__ in _RETRYABLE_EXC_NAMES
+
+
+class CircuitBreaker:
+    """Per-provider circuit breaker (process-wide, thread-safe).
+
+    After ``threshold`` consecutive failures a provider's circuit *opens* for
+    ``cooldown`` seconds; while open the router skips that provider's rungs and
+    goes straight to the next one, so a sustained outage doesn't make every turn
+    eat the provider's timeout. A single success resets it.
+    """
+
+    def __init__(
+        self,
+        *,
+        threshold: int = CIRCUIT_FAILURE_THRESHOLD,
+        cooldown: float = CIRCUIT_COOLDOWN_SECONDS,
+        monotonic: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._threshold = threshold
+        self._cooldown = cooldown
+        self._now = monotonic
+        self._lock = threading.Lock()
+        self._failures: dict[Provider, int] = {}
+        self._open_until: dict[Provider, float] = {}
+
+    def is_open(self, provider: Provider) -> bool:
+        with self._lock:
+            return self._now() < self._open_until.get(provider, 0.0)
+
+    def record_success(self, provider: Provider) -> None:
+        with self._lock:
+            self._failures[provider] = 0
+            self._open_until.pop(provider, None)
+
+    def record_failure(self, provider: Provider) -> None:
+        with self._lock:
+            count = self._failures.get(provider, 0) + 1
+            self._failures[provider] = count
+            if count >= self._threshold:
+                self._open_until[provider] = self._now() + self._cooldown
+
+    def reset(self) -> None:
+        with self._lock:
+            self._failures.clear()
+            self._open_until.clear()
+
+
+_default_breaker = CircuitBreaker()
+
+
+def reset_default_breaker() -> None:
+    """Clear the process-wide breaker (used between tests for isolation)."""
+    _default_breaker.reset()
 
 
 class Capability(StrEnum):
@@ -218,6 +306,9 @@ class ModelRouter:
         *,
         azure: CompletionProvider | None = None,
         groq: CompletionProvider | None = None,
+        breaker: CircuitBreaker | None = None,
+        sleep: Callable[[float], None] = time.sleep,
+        max_attempts: int = RETRY_MAX_ATTEMPTS,
     ) -> None:
         self._settings = settings or get_settings()
         # Providers are lazily built on first use unless injected (tests inject fakes).
@@ -225,6 +316,26 @@ class ModelRouter:
         self._groq = groq
         self._azure_built = azure is not None
         self._groq_built = groq is not None
+        # Process-wide breaker by default so an outage learned on one turn is
+        # honored on the next; injectable + a small sleep hook for fast tests.
+        self._breaker = breaker or _default_breaker
+        self._sleep = sleep
+        self._max_attempts = max(1, max_attempts)
+
+    def _retry(self, call: Callable[[], Any]) -> Any:
+        """Run ``call``, retrying only *transient* errors with exponential backoff.
+
+        A non-transient error raises on the first attempt so the caller falls
+        straight to the next rung (M6).
+        """
+        for i in range(self._max_attempts):
+            try:
+                return call()
+            except Exception as exc:  # noqa: BLE001 — classified, then retried or re-raised
+                if _is_transient(exc) and i + 1 < self._max_attempts:
+                    self._sleep(RETRY_BACKOFF_BASE_SECONDS * (2**i))
+                    continue
+                raise
 
     # -- provider resolution ----------------------------------------------------
 
@@ -303,18 +414,26 @@ class ModelRouter:
         if not rungs:
             raise AllProvidersDown("no LLM provider configured")
         last: Exception | None = None
+        attempted = False
         for provider, attempt in rungs:
+            if self._breaker.is_open(attempt.provider):
+                continue  # provider circuit open → skip straight to the next rung
+            attempted = True
             started = time.monotonic()
             try:
-                raw = provider.complete(
-                    attempt.model, messages, json_mode=json_mode, max_tokens=max_tokens
+                raw = self._retry(
+                    lambda p=provider, a=attempt: p.complete(
+                        a.model, messages, json_mode=json_mode, max_tokens=max_tokens
+                    )
                 )
             except Exception as exc:  # noqa: BLE001 — record and try the next rung
                 logger.warning(
                     "tier %d %s/%s failed: %s", attempt.tier, attempt.provider, attempt.model, exc
                 )
                 last = exc
+                self._breaker.record_failure(attempt.provider)
                 continue
+            self._breaker.record_success(attempt.provider)
             return LLMResult(
                 text=raw.text,
                 provider=attempt.provider,
@@ -324,6 +443,8 @@ class ModelRouter:
                 completion_tokens=raw.completion_tokens,
                 latency_ms=int((time.monotonic() - started) * 1000),
             )
+        if not attempted:
+            raise AllProvidersDown("all provider circuits are open")
         raise AllProvidersDown(f"all {len(rungs)} provider tiers failed") from last
 
     def stream(
@@ -342,13 +463,19 @@ class ModelRouter:
         if not rungs:
             raise AllProvidersDown("no LLM provider configured")
         last: Exception | None = None
+        attempted = False
         for provider, attempt in rungs:
+            if self._breaker.is_open(attempt.provider):
+                continue  # provider circuit open → skip straight to the next rung
+            attempted = True
             try:
-                iterator = provider.stream(attempt.model, messages, max_tokens=max_tokens)
-                first = next(iterator)
+                first, iterator = self._retry(
+                    lambda p=provider, a=attempt: _open_stream(p, a.model, messages, max_tokens)
+                )
             except StopIteration:
                 # Empty stream — treat as a failure and try the next rung.
                 last = LLMError(f"tier {attempt.tier} produced no tokens")
+                self._breaker.record_failure(attempt.provider)
                 continue
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
@@ -359,14 +486,31 @@ class ModelRouter:
                     exc,
                 )
                 last = exc
+                self._breaker.record_failure(attempt.provider)
                 continue
+            self._breaker.record_success(attempt.provider)
             return StreamHandle(
                 tokens=_prepend(first, iterator),
                 provider=attempt.provider,
                 model=attempt.model,
                 tier=attempt.tier,
             )
+        if not attempted:
+            raise AllProvidersDown("all provider circuits are open")
         raise AllProvidersDown(f"all {len(rungs)} provider tiers failed") from last
+
+
+def _open_stream(
+    provider: CompletionProvider, model: str, messages: Sequence[Message], max_tokens: int
+) -> tuple[str, Iterator[str]]:
+    """Open a stream and peek its first token (raises StopIteration if empty).
+
+    Split out so the open + first-token can be retried as one unit on a transient
+    error; a rung only "wins" once it has produced a token (M6).
+    """
+    iterator = provider.stream(model, messages, max_tokens=max_tokens)
+    first = next(iterator)
+    return first, iterator
 
 
 def _prepend(first: str, rest: Iterator[str]) -> Iterator[str]:
