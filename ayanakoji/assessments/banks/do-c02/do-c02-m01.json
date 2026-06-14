@@ -1,0 +1,105 @@
+{
+  "course_id": "do-c02",
+  "module_id": "do-c02-m01",
+  "module_title": "Building pipelines with YAML",
+  "choices": [
+    {
+      "id": "do-c02-m01-c01",
+      "module_id": "do-c02-m01",
+      "prompt": "In the YAML pipeline hierarchy described in the module, what is the correct nesting from largest to smallest unit?",
+      "kind": "mcq",
+      "choices": [
+        "Stages contain jobs, and jobs contain steps.",
+        "Jobs contain stages, and stages contain steps.",
+        "Steps contain jobs, and jobs contain stages.",
+        "Stages contain steps, and steps contain jobs."
+      ],
+      "correct_answers": [
+        "Stages contain jobs, and jobs contain steps."
+      ]
+    },
+    {
+      "id": "do-c02-m01-c02",
+      "module_id": "do-c02-m01",
+      "prompt": "A deploy job fails with a 'file not found' error looking for the compiled binary produced by an earlier build job. According to the module, what is the most likely cause and the correct fix?",
+      "kind": "mcq",
+      "choices": [
+        "Each job runs on a fresh agent with a separate filesystem; publish the binary as a pipeline artifact in the build job and download it explicitly in the deploy job.",
+        "The deploy job started before the build job finished; add a longer timeout so the file has time to be written to the shared disk.",
+        "The build output was written to a variable group; read the binary path from the variable group in the deploy job.",
+        "The two jobs are in the same stage so they overwrote each other's filesystem; move them into separate stages to keep the path intact."
+      ],
+      "correct_answers": [
+        "Each job runs on a fresh agent with a separate filesystem; publish the binary as a pipeline artifact in the build job and download it explicitly in the deploy job."
+      ]
+    },
+    {
+      "id": "do-c02-m01-c03",
+      "module_id": "do-c02-m01",
+      "prompt": "In the Verify stage of Larkspur's order-service pipeline, the 'tests' job and the 'lint' job both sit under the same stage and neither lists the other in dependsOn. How do they execute and why is that desirable?",
+      "kind": "mcq",
+      "choices": [
+        "They run in parallel, so both a test failure and a formatting failure surface in a single run instead of one masking the other.",
+        "They run in sequence in the order written, so the slower job never blocks the faster one.",
+        "They run in parallel, but only the first job's result is reported until it is fixed.",
+        "They run in sequence because every job in a stage implicitly depends on the job above it."
+      ],
+      "correct_answers": [
+        "They run in parallel, so both a test failure and a formatting failure surface in a single run instead of one masking the other."
+      ]
+    },
+    {
+      "id": "do-c02-m01-c04",
+      "module_id": "do-c02-m01",
+      "prompt": "The module says DeployStaging should run only for the main branch after the prior stage passes. Which TWO mechanisms combine to express exactly that behavior?",
+      "kind": "msq",
+      "choices": [
+        "A dependsOn that waits for the prior (Verify) stage to complete before DeployStaging can start.",
+        "A condition that checks both succeeded() and that the source branch equals refs/heads/main.",
+        "A trigger.branches filter that prevents the deploy job from ever starting on a feature branch.",
+        "A variable group named order-service-shared that stores the branch name to compare against."
+      ],
+      "correct_answers": [
+        "A dependsOn that waits for the prior (Verify) stage to complete before DeployStaging can start.",
+        "A condition that checks both succeeded() and that the source branch equals refs/heads/main."
+      ]
+    },
+    {
+      "id": "do-c02-m01-c05",
+      "module_id": "do-c02-m01",
+      "prompt": "Which of the following are pitfalls the module explicitly warns against when authoring YAML pipelines?",
+      "kind": "msq",
+      "choices": [
+        "Hard-coding an environment URL or connection string directly into a step instead of using a variable group.",
+        "Copy-pasting whole pipelines instead of factoring shared logic into a template, causing the copies to drift.",
+        "Adding dependsOn to jobs that are actually independent, forfeiting parallelism and slowing every run.",
+        "Defining inline variables for values that are specific to a single pipeline rather than shared across pipelines."
+      ],
+      "correct_answers": [
+        "Hard-coding an environment URL or connection string directly into a step instead of using a variable group.",
+        "Copy-pasting whole pipelines instead of factoring shared logic into a template, causing the copies to drift.",
+        "Adding dependsOn to jobs that are actually independent, forfeiting parallelism and slowing every run."
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "do-c02-m01-l01",
+      "module_id": "do-c02-m01",
+      "prompt": "Explain why the module insists that 'a job is a sandbox,' and walk through what a new engineer must do so that a deploy job can use the compiled output of an earlier build job.",
+      "reference_answer": "The module stresses that each job runs on its own agent — a fresh machine or container — and that two jobs do not share a filesystem. So a build job and a deploy job are really two isolated machines, which is why new engineers are baffled when the deploy job cannot find the compiled binary and hits a 'file not found' error. The mental model 'a job is a sandbox' prevents this: anything produced in one job and needed in another must be handed across deliberately. The fix is to publish the build output as a pipeline artifact in the build job and explicitly download that artifact in the deploy job, rather than expecting a path from the earlier job to still exist."
+    },
+    {
+      "id": "do-c02-m01-l02",
+      "module_id": "do-c02-m01",
+      "prompt": "Compare dependsOn and condition as control mechanisms, and walk through how Larkspur's DeployStaging stage uses both to deploy only on main after tests pass.",
+      "reference_answer": "dependsOn controls execution order: a stage or job with dependsOn waits for its named predecessors to succeed before starting, which is how you express a graph (for example fanning out parallel jobs then running a publish step that depends on all of them). condition, by contrast, decides whether the work runs at all — for instance only on the main branch, or always() for a cleanup job even after failure. In DeployStaging, dependsOn: Verify orders the work so deployment cannot start until the Verify stage completes, while condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main')) gates it so it runs only when the prior stage succeeded and the branch is main. Together this lets a feature branch be built and tested without ever touching staging."
+    },
+    {
+      "id": "do-c02-m01-l03",
+      "module_id": "do-c02-m01",
+      "prompt": "Walk through how templates and variable groups together address repetition and configuration, and explain why the module treats both duplicated YAML and hard-coded environment values as liabilities.",
+      "reference_answer": "Templates are reusable YAML fragments — a set of steps, a whole job, or a whole stage — referenced with parameters; when ten microservices build the same way, you write the build steps once and have each pipeline call the template with its own name and path, so fixing a bug in the template makes all ten inherit the fix. Variable groups are named central collections, often backed by a secret store, that many pipelines reference for shared and sensitive values, while inline variables hold values specific to one pipeline. The module treats duplicated YAML as a liability because every copy drifts — the second copy gets a fix the first never receives, producing a 'flaky' difference that is really two divergent files. Likewise, hard-coding an environment URL or connection string into a step becomes unmanageable the moment you add a second environment, because you copy the whole file and create two things that must be kept in sync by hand; putting such values in a variable group from day one avoids that."
+    }
+  ]
+}
