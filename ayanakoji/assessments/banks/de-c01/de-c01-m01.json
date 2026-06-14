@@ -1,0 +1,105 @@
+{
+  "course_id": "de-c01",
+  "module_id": "de-c01-m01",
+  "module_title": "Partition strategies for analytical data",
+  "choices": [
+    {
+      "id": "de-c01-m01-c01",
+      "module_id": "de-c01-m01",
+      "prompt": "According to the module, what does partition pruning allow a query engine to do, and at what point does it happen?",
+      "kind": "mcq",
+      "choices": [
+        "It reads the directory names and discards paths whose values cannot match the WHERE clause, opening only the surviving files — happening before any file is opened, as a cheap metadata operation on paths.",
+        "It opens every file, reads each file's internal column statistics, and then skips the rows that do not match the predicate during the scan.",
+        "It compresses the Parquet files more aggressively for the partitions referenced in the query so they transfer over the network faster.",
+        "It rewrites the partition directory tree on each query so that matching files are physically co-located before the read begins."
+      ],
+      "correct_answers": [
+        "It reads the directory names and discards paths whose values cannot match the WHERE clause, opening only the surviving files — happening before any file is opened, as a cheap metadata operation on paths."
+      ]
+    },
+    {
+      "id": "de-c01-m01-c02",
+      "module_id": "de-c01-m01",
+      "prompt": "The module states a rule that governs every other partitioning decision. Which statement captures it?",
+      "kind": "mcq",
+      "choices": [
+        "Partition on the columns your queries filter on, not on the columns that seem natural.",
+        "Partition on as many columns as possible so the engine can always skip the maximum amount of data.",
+        "Partition on the highest-cardinality column available so each partition is as small and specific as possible.",
+        "Partition on the columns that are cheapest to write, regardless of which columns appear in query predicates."
+      ],
+      "correct_answers": [
+        "Partition on the columns your queries filter on, not on the columns that seem natural."
+      ]
+    },
+    {
+      "id": "de-c01-m01-c03",
+      "module_id": "de-c01-m01",
+      "prompt": "A team partitions 50 GB by region, device_id, and hour, shattering it into hundreds of thousands of ~10 KB files, and queries get slower. Based on the module, which statements correctly describe this situation?",
+      "kind": "msq",
+      "choices": [
+        "This is the small-file problem caused by over-partitioning; each file carries overhead such as metadata to parse, a network round trip to open, and a task to schedule.",
+        "Listing that many paths becomes its own bottleneck, so queries spend their time on file-open overhead and scheduling rather than reading data.",
+        "The roughly cited sweet spot for a single Parquet file is 128 MB to 1 GB, and these 10 KB files fall far below it.",
+        "The slowdown happens because Parquet cannot encode partition values into the directory path when there are more than two partition columns."
+      ],
+      "correct_answers": [
+        "This is the small-file problem caused by over-partitioning; each file carries overhead such as metadata to parse, a network round trip to open, and a task to schedule.",
+        "Listing that many paths becomes its own bottleneck, so queries spend their time on file-open overhead and scheduling rather than reading data.",
+        "The roughly cited sweet spot for a single Parquet file is 128 MB to 1 GB, and these 10 KB files fall far below it."
+      ]
+    },
+    {
+      "id": "de-c01-m01-c04",
+      "module_id": "de-c01-m01",
+      "prompt": "80% of Northwind's sensors are in Riverbend, so partitioning by region creates one enormous partition and two tiny ones. Per the module, what is this problem and how does it manifest in a distributed job?",
+      "kind": "mcq",
+      "choices": [
+        "It is data skew; it shows up as a job where most workers finish quickly and one runs for ages because of the slow, oversized task.",
+        "It is the small-file problem; it shows up as millions of tiny files that overwhelm the directory listing step.",
+        "It is a partition pruning failure; it shows up as the engine scanning the whole table despite a region filter.",
+        "It is a cardinality mismatch; it shows up as the engine refusing to encode region values into the directory path."
+      ],
+      "correct_answers": [
+        "It is data skew; it shows up as a job where most workers finish quickly and one runs for ages because of the slow, oversized task."
+      ]
+    },
+    {
+      "id": "de-c01-m01-c05",
+      "module_id": "de-c01-m01",
+      "prompt": "Which practices does the module recommend for streaming sinks and append-heavy tables to balance skipping against overhead?",
+      "kind": "msq",
+      "choices": [
+        "Use time-based partitioning (by ingest date or hour) so each micro-batch appends to the current partition without rewriting old data.",
+        "Pair partitioning with periodic compaction, because a too-fine time grain reproduces the small-file problem in real time.",
+        "Partition streaming sinks by a high-cardinality key like device_id so each micro-batch writes a maximally specific partition.",
+        "Avoid partitioning streaming data entirely, since pruning provides no benefit for append-only workloads."
+      ],
+      "correct_answers": [
+        "Use time-based partitioning (by ingest date or hour) so each micro-batch appends to the current partition without rewriting old data.",
+        "Pair partitioning with periodic compaction, because a too-fine time grain reproduces the small-file problem in real time."
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "de-c01-m01-l01",
+      "module_id": "de-c01-m01",
+      "prompt": "An analyst's queries almost always filter by customer_id (50,000 distinct values) and order_date. A teammate proposes partitioning by customer_id. Explain why this is likely a mistake and what you would suggest instead.",
+      "reference_answer": "Partitioning by customer_id would create 50,000 partitions, most of them tiny, which is the small-file problem: each file carries metadata, network round-trip, and scheduling overhead, so query time becomes dominated by file-open and listing overhead rather than data reads. It also fails on its own terms, because a single-customer query still cannot skip much within its own partition. Instead, partition by order_date, which most queries also filter on and which has a bounded count that keeps files large (hundreds of MB). For customer_id skipping, rely on file-level statistics or clustering (for example sorting within partitions) rather than making it a partition column, since high-cardinality keys belong in clustering, not partitioning."
+    },
+    {
+      "id": "de-c01-m01-l02",
+      "module_id": "de-c01-m01",
+      "prompt": "You partitioned Northwind's lake by event_date, but a query filtering WHERE year(event_ts) = 2026 still scans the whole table. Walk through how you would diagnose and fix this, and explain why it happens.",
+      "reference_answer": "First inspect the query's physical plan by calling .explain() and looking for PartitionFilters in the scan node; if it shows something like PartitionFilters: [event_date >= ...] pruning is working, and if it is absent the predicate is not being matched to the partition path. The likely cause here is that wrapping the partition column in a function — WHERE year(event_ts) = 2026 — defeats pruning, because the engine may not match that expression to the event_date directory paths (and event_ts is not even the partition column). The fix is to filter directly on the partition column instead, for example WHERE event_date >= '2026-01-01', so the engine can map the filter to partition paths and prune to only the matching day-partitions. A type mismatch between the literal and the partition column can also prevent pruning, so confirm the column and types align."
+    },
+    {
+      "id": "de-c01-m01-l03",
+      "module_id": "de-c01-m01",
+      "prompt": "Compare how you would choose a partition strategy for files-and-batch analytics versus a streaming sink, and explain the unifying tradeoff that drives both decisions.",
+      "reference_answer": "For files and batch analytics, partition by the common filter columns (for Northwind, event_date and possibly region) at a granularity that keeps files large — coarse enough that the average partition stays comfortably above roughly 100 MB and ideally in the 128 MB to 1 GB Parquet sweet spot — so you maximize pruning without triggering the small-file problem. For a streaming sink, use time-based partitioning by ingest date or hour so each micro-batch can append to the current partition without rewriting old data; but because a too-fine time grain reproduces the small-file problem in real time, you must pair the streaming partitioning with periodic compaction. The unifying idea behind both is that partitioning trades how much data a read can skip against how much overhead each write and read pays, so every choice of column and granularity is about balancing skip-benefit against per-file write-and-read overhead."
+    }
+  ]
+}
