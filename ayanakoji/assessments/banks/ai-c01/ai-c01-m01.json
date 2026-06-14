@@ -1,0 +1,106 @@
+{
+  "course_id": "ai-c01",
+  "module_id": "ai-c01-m01",
+  "module_title": "Provisioning and deploying models in Microsoft Foundry",
+  "choices": [
+    {
+      "id": "ai-c01-m01-c01",
+      "module_id": "ai-c01-m01",
+      "kind": "mcq",
+      "prompt": "In the Python SDK call `client.chat.completions.create(model=\"...\")`, what string does the module say belongs in the `model` parameter?",
+      "choices": [
+        "The deployment name you chose (e.g. `support-chat`)",
+        "The underlying model identifier (e.g. `gpt-4o-mini`)",
+        "The base endpoint URL of the resource",
+        "The model version string (e.g. `2024-07-18`)"
+      ],
+      "correct_answers": [
+        "The deployment name you chose (e.g. `support-chat`)"
+      ]
+    },
+    {
+      "id": "ai-c01-m01-c02",
+      "module_id": "ai-c01-m01",
+      "kind": "mcq",
+      "prompt": "According to the module, what does creating an Azure OpenAI resource actually give you before you do anything else?",
+      "choices": [
+        "An empty container plus a base endpoint URL of the form `https://<your-resource-name>.openai.azure.com/`",
+        "A ready-to-call model already bound to a default deployment name",
+        "A managed identity automatically assigned the Cognitive Services OpenAI user role",
+        "A provisioned-throughput deployment with reserved dedicated units"
+      ],
+      "correct_answers": [
+        "An empty container plus a base endpoint URL of the form `https://<your-resource-name>.openai.azure.com/`"
+      ]
+    },
+    {
+      "id": "ai-c01-m01-c03",
+      "module_id": "ai-c01-m01",
+      "kind": "mcq",
+      "prompt": "You have a low-traffic internal tool with unpredictable, bursty usage. Which deployment type does the module recommend for it, and why?",
+      "choices": [
+        "Standard (consumption) deployment, because you pay per token and can tolerate shared capacity",
+        "Provisioned-throughput deployment, because reserved units guarantee predictable latency",
+        "Provisioned-throughput deployment, because bursty traffic needs dedicated capacity to absorb spikes",
+        "Standard (consumption) deployment, because it is the only type that supports embedding models"
+      ],
+      "correct_answers": [
+        "Standard (consumption) deployment, because you pay per token and can tolerate shared capacity"
+      ]
+    },
+    {
+      "id": "ai-c01-m01-c04",
+      "module_id": "ai-c01-m01",
+      "kind": "msq",
+      "prompt": "The module presents `DefaultAzureCredential` as the production-grade alternative to API keys. Which statements about it are correct per the text?",
+      "choices": [
+        "It tries a chain of credential sources, using your signed-in developer CLI session locally and a managed identity when deployed to Azure",
+        "It lets the same code authenticate correctly both locally and in Azure with no key in sight",
+        "It requires you to assign a role (such as a Cognitive Services OpenAI user role) on the resource so the SDK can fetch a token at runtime",
+        "It eliminates the need for a base endpoint URL when constructing the AzureOpenAI client"
+      ],
+      "correct_answers": [
+        "It tries a chain of credential sources, using your signed-in developer CLI session locally and a managed identity when deployed to Azure",
+        "It lets the same code authenticate correctly both locally and in Azure with no key in sight",
+        "It requires you to assign a role (such as a Cognitive Services OpenAI user role) on the resource so the SDK can fetch a token at runtime"
+      ]
+    },
+    {
+      "id": "ai-c01-m01-c05",
+      "module_id": "ai-c01-m01",
+      "kind": "msq",
+      "prompt": "Which of the following are pitfalls the module explicitly warns against?",
+      "choices": [
+        "Passing the raw model identifier where the SDK's `model` parameter wants the deployment name",
+        "Hard-coding API keys 'just for now' because temporary keys become permanent leaks",
+        "Defaulting to the biggest model for a bounded task, which burns cost and latency",
+        "Deploying chat and embedding models under a single shared deployment to save quota"
+      ],
+      "correct_answers": [
+        "Passing the raw model identifier where the SDK's `model` parameter wants the deployment name",
+        "Hard-coding API keys 'just for now' because temporary keys become permanent leaks",
+        "Defaulting to the biggest model for a bounded task, which burns cost and latency"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "ai-c01-m01-l01",
+      "module_id": "ai-c01-m01",
+      "prompt": "Explain why the module insists your application code should target a deployment name rather than the underlying model name, and how this indirection makes model upgrades safer.",
+      "reference_answer": "In Azure OpenAI a deployment is a named instance of a specific model version that you create inside the resource, and you choose that name yourself (for example `support-chat`). Your code references the deployment name, not the underlying model identifier, so the name acts as a stable alias while the model behind it is swappable plumbing. Because of this indirection, operations can repoint `support-chat` at a newer model version or move it to a different capacity tier without touching a single line of application code. For instance, you could later create a `support-chat-v2` deployment on a newer model and change just one string rather than reworking your auth or call logic. This is also why passing the raw model identifier in the SDK's `model` parameter produces a 'deployment not found' error that is really a naming problem, not a model problem."
+    },
+    {
+      "id": "ai-c01-m01-l02",
+      "module_id": "ai-c01-m01",
+      "prompt": "A teammate wants to ship the app with the resource's API key in an environment variable to keep things simple. Compare this with the production-grade approach the module recommends, naming the specific class and the concrete advantage it provides across environments.",
+      "reference_answer": "API keys are the fastest way to make a call, which is exactly why they leak: a key in source control, a notebook, or an environment variable is a credential anyone can replay. The production-grade approach is Microsoft Entra ID authentication, where you assign your application or developer a role such as a Cognitive Services OpenAI user role on the resource and the SDK fetches a token at runtime. The module uses the `DefaultAzureCredential` class from the Azure Identity library, paired with `get_bearer_token_provider`, to do this. Its concrete advantage is that it tries a chain of credential sources, your signed-in `az login` developer session locally and a managed identity when deployed to Azure, so the same code authenticates correctly in both places with no key to leak, rotate manually, or accidentally commit. The module advises wiring this from the first commit because retrofitting identity after keys are scattered across environments is painful."
+    },
+    {
+      "id": "ai-c01-m01-l03",
+      "module_id": "ai-c01-m01",
+      "prompt": "Walk through how you would choose a model and a deployment type for Northwind's bounded support assistant versus a steady high-volume production assistant, describing the tradeoffs the module raises.",
+      "reference_answer": "Model selection is a capability-versus-cost trade: larger chat models reason better over messy instructions and longer context but cost more per token and respond more slowly, while smaller models are cheaper, faster, and often sufficient for narrow, well-prompted tasks. For a support assistant answering bounded questions, the module says a mid-tier model with good prompting usually wins on cost and latency, and it warns against defaulting to the largest available model for everything; you should start smaller and size up only when prompting and evaluation show you need to. Beyond which model, you choose how it is served: a standard, consumption-style deployment where you pay per token and share capacity, versus a provisioned-throughput deployment that reserves dedicated units. The durable rule is standard for spiky or early-stage workloads, such as a bursty internal tool, and provisioned for steady high-volume production where you need guaranteed throughput and predictable latency that shared capacity cannot promise. The module also notes that specific quota numbers and tier names change over time, so you should verify them in the docs for your region rather than memorize them, and that embeddings and chat are different model families deployed separately."
+    }
+  ]
+}
