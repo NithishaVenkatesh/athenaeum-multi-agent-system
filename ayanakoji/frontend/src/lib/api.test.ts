@@ -71,9 +71,13 @@ describe("notifications client", () => {
     vi.restoreAllMocks();
   });
 
+  // mock.calls infers a 0-length tuple; cast the captured fetch args for assertions.
+  const firstCall = (mock: ReturnType<typeof vi.fn>): [string, RequestInit?] =>
+    mock.mock.calls[0] as unknown as [string, RequestInit?];
+
   it("fetchNotifications encodes the persona and parses the feed", async () => {
     const fetchMock = vi.fn(
-      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      async () =>
         new Response(JSON.stringify(FEED), {
           status: 200,
           headers: { "Content-Type": "application/json" },
@@ -84,14 +88,14 @@ describe("notifications client", () => {
     const result = await fetchNotifications("EMP 1");
 
     expect(result).toEqual(FEED);
-    expect(fetchMock.mock.calls[0][0]).toContain(
+    expect(firstCall(fetchMock)[0]).toContain(
       "/api/notifications?persona_id=EMP%201",
     );
   });
 
   it("markNotificationRead POSTs to the read endpoint", async () => {
     const fetchMock = vi.fn(
-      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      async () =>
         new Response(JSON.stringify({ ...FEED.notifications[0], read: true }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
@@ -102,13 +106,14 @@ describe("notifications client", () => {
     const result = await markNotificationRead("n1");
 
     expect(result.read).toBe(true);
-    expect(fetchMock.mock.calls[0][0]).toContain("/api/notifications/n1/read");
-    expect(fetchMock.mock.calls[0][1]?.method).toBe("POST");
+    const [url, init] = firstCall(fetchMock);
+    expect(url).toContain("/api/notifications/n1/read");
+    expect(init?.method).toBe("POST");
   });
 
   it("markNotificationsToasted sends the ids as a JSON body", async () => {
     const fetchMock = vi.fn(
-      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      async () =>
         new Response(JSON.stringify({ changed: 2 }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
@@ -119,7 +124,7 @@ describe("notifications client", () => {
     const result = await markNotificationsToasted(["n1", "n2"]);
 
     expect(result.changed).toBe(2);
-    expect(fetchMock.mock.calls[0][1]?.body).toBe(
+    expect(firstCall(fetchMock)[1]?.body).toBe(
       JSON.stringify({ ids: ["n1", "n2"] }),
     );
   });
