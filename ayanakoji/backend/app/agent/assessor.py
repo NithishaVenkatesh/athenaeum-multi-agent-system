@@ -108,6 +108,10 @@ def _parse_questions(raw: str) -> list[PracticeQuestion] | None:
             return None
         out: list[PracticeQuestion] = []
         for i, item in enumerate(items[:PRACTICE_QUESTION_COUNT], start=1):
+            # Azure JSON mode is advisory: a string ("a,b,c,d") would iterate into
+            # single-char "choices" and pass the count check, so guard the shape first.
+            if not isinstance(item, dict) or not isinstance(item.get("choices"), list):
+                return None
             prompt = str(item["prompt"]).strip()
             choices = [str(c).strip() for c in item["choices"]]
             idx = int(item["answer_index"])
@@ -129,7 +133,7 @@ def _parse_questions(raw: str) -> list[PracticeQuestion] | None:
 
 def _generate_questions_online(
     module_title: str, body: str, router: ModelRouter
-) -> list[PracticeQuestion] | None:
+) -> tuple[list[PracticeQuestion] | None, str | None]:
     system = (
         "You are Athenaeum's practice question writer. Using ONLY the module material below, "
         f"write exactly {PRACTICE_QUESTION_COUNT} multiple-choice questions that check "
@@ -150,7 +154,7 @@ def _generate_questions_online(
         json_mode=True,
         max_tokens=1400,
     )
-    return _parse_questions(result.text)
+    return _parse_questions(result.text), result.model
 
 
 def generate_practice(
@@ -168,12 +172,11 @@ def generate_practice(
 
     if settings.llm_offline:
         questions: list[PracticeQuestion] | None = _offline_questions(module_title)
-        model = "offline"
+        model: str | None = "offline"
     else:
-        questions = _generate_questions_online(
+        questions, model = _generate_questions_online(
             module_title, content.body, router or ModelRouter(settings)
         )
-        model = None
         if questions is None:
             return _practice_unavailable(module_id, module_title, reason="generation produced no valid questions")
 

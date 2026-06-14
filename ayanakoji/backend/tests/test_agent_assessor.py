@@ -194,3 +194,33 @@ def test_generate_practice_online_bad_json_returns_cta(monkeypatch) -> None:
     )
     assert reply.practice is None
     assert reply.actions is not None and reply.actions.actions[0].kind == "go_to_module"
+
+
+def test_generate_practice_online_malformed_choices_returns_cta(monkeypatch) -> None:
+    """Structurally valid JSON but `choices` is a string (not a list) → fail closed.
+
+    Azure JSON mode is advisory; a string would otherwise iterate into single-char
+    "choices" and pass the count check. Guard rejects it, so no card is rendered.
+    """
+    import json
+
+    from app.agent import assessor
+    from app.catalog.content import ModuleContent
+    from app.config import Settings
+
+    monkeypatch.setattr(
+        assessor,
+        "get_module_content",
+        lambda mid: ModuleContent(module_id=mid, title="Functions", body="Body."),
+    )
+    questions = [
+        {"prompt": f"Q{i}", "choices": "abcd", "answer_index": 1, "explanation": "e"}
+        for i in range(5)
+    ]
+    fake = FakeRouter(complete_text=json.dumps({"questions": questions}))
+    online = Settings(_env_file=None, offline_llm=False, groq_api_key="gsk_x")  # type: ignore[call-arg]
+    reply = assessor.generate_practice(
+        module_id="cb-c01-m01", module_title="Functions", router=fake, settings=online
+    )
+    assert reply.practice is None
+    assert reply.actions is not None and reply.actions.actions[0].kind == "go_to_module"
