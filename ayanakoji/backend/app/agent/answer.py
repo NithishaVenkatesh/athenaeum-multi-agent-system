@@ -639,6 +639,39 @@ def _work_offline(persona: Persona) -> str:
     )
 
 
+_CROSS_USER_DECLINE = (
+    "I can't share another person's schedule, workload, or progress. I only have access to your "
+    "own learning and calendar. Ask about your own courses, progress, or schedule and I'll help."
+)
+
+
+def _cross_user_decline_reply(route: Route, *, settings: Settings) -> AgentReply:
+    """Hard decline for a question framed about another person (both modes).
+
+    The agent only ever holds the current learner's own data, so this is the explicit
+    refusal: it never answers a 'someone else' question, not even with the learner's
+    own figures.
+    """
+    return AgentReply(
+        telemetry=_answer_telemetry(
+            summary="Declined a request about another person",
+            reasoning="Message references another person; only the learner's own data is in scope.",
+            route=route,
+            sources=[],
+            model="offline" if settings.llm_offline else None,
+            tier=None,
+            steps=[
+                TraceStep(
+                    label="Cross-user guard",
+                    passed=True,
+                    detail="Other-person reference detected; declined (own-data only)",
+                )
+            ],
+        ),
+        tokens=_offline_stream(_CROSS_USER_DECLINE),
+    )
+
+
 def _next_free_slot_reply(persona: Persona, *, settings: Settings) -> AgentReply:
     """Deterministic 'your next free slot is …' from the learner's own calendar."""
     from app.agent.clock import today_in_timezone
@@ -709,12 +742,16 @@ def answer_work(
             tokens=_offline_stream(reply),
         )
 
+    # Cross-user guard: a question framed about another person is declined outright,
+    # in both offline and online modes (the agent only ever holds this persona).
+    from app.agent.router_agent import mentions_other_person, wants_next_free_slot
+
+    if mentions_other_person(text):
+        return _cross_user_decline_reply(Route.WORK_IQ, settings=settings)
+
     # "When is my next free slot?" → a concrete answer from the learner's own
     # calendar, deterministic in both modes (the LLM only has aggregate work
-    # signals, not the slot, so we never let it guess one). Work IQ stays isolated
-    # to THIS persona, so a colleague named in the text is simply never fetched.
-    from app.agent.router_agent import wants_next_free_slot
-
+    # signals, not the slot, so we never let it guess one).
     if wants_next_free_slot(text):
         return _next_free_slot_reply(persona, settings=settings)
 
@@ -1470,16 +1507,20 @@ def answer_progress(
     modules: list[dict[str, object]],
     *,
     snapshot: ProgressSnapshot | None = None,
+    text: str = "",
     settings: Settings | None = None,
 ) -> AgentReply:
     """Report the learner's OWN learning status: enrolled courses, completion,
     what's next in this course, and what's coming up across their other courses.
 
-    Pure deterministic, no LLM. The snapshot only ever holds the current learner's
-    own data (built from their own persona id), so this is isolated by construction:
-    a colleague named in the message can never surface another person's data.
+    Pure deterministic, no LLM. A question framed about another person is declined
+    outright; otherwise the learner gets a direct, detailed answer.
     """
     settings = settings or get_settings()
+    from app.agent.router_agent import mentions_other_person
+
+    if text and mentions_other_person(text):
+        return _cross_user_decline_reply(Route.PROGRESS, settings=settings)
     snapshot = snapshot or ProgressSnapshot()
     total = len(modules)
     done = sum(1 for m in modules if m.get("completed"))

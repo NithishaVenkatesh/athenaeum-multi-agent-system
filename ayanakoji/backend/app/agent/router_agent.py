@@ -140,6 +140,28 @@ _FREE_SLOT_RE = re.compile(
 def wants_next_free_slot(text: str) -> bool:
     """True if the learner is asking when their next free slot/window is."""
     return bool(_FREE_SLOT_RE.search(text))
+
+
+# A turn that asks about ANOTHER person (by employee id, role, or third-party
+# reference). The personal-data answers (work_iq, progress) decline outright on a
+# match. Conservative: high-signal markers only, so a learner's own "my schedule /
+# my progress / my other courses" never trips it.
+_OTHER_PERSON_RE = re.compile(
+    r"\bEMP-\d"
+    r"|\bcolleagues?\b|\bteammates?\b|\bco-?workers?\b"
+    r"|\b(everyone|everybody)\b"
+    r"|\bsomeone\s+else\b|\banother\s+(employee|person|learner|colleague|user)\b"
+    r"|\bother\s+(employees?|people|persons?|learners?|users?|teammates?|staff)\b"
+    r"|\bthis\s+person'?s?\b|\bthat\s+person'?s?\b"
+    r"|\b(his|her|their)\s+"
+    r"(schedule|calendar|workload|hours|meetings?|progress|courses|data|load|manager|signals?)\b",
+    re.IGNORECASE,
+)
+
+
+def mentions_other_person(text: str) -> bool:
+    """True if the message asks about a person other than the current learner."""
+    return bool(_OTHER_PERSON_RE.search(text))
 # Weaker timing signals → Work IQ only if the turn isn't really about course content.
 _WORK_TIMING_RE = re.compile(
     r"when\s+should\s+i\s+study|how\s+much\s+time|fit\s+(this|it|study)\s+(in|around)"

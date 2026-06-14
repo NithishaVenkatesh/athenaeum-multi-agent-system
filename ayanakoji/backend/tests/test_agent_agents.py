@@ -814,10 +814,24 @@ def test_answer_work_next_free_slot_gives_concrete_time() -> None:
     assert ":" in text  # an actual HH:MM time
 
 
-# ── Cross-user protection: isolation — only ever the current learner's own data ──
-# The agent holds exactly one persona_id (server-bound; no name-based lookup), so a
-# colleague named in the text can never surface another person's data. work_iq
-# answers with the bound learner's OWN signals and never the named other's.
+# ── Cross-user protection: hard decline for questions about another person ───────
+# The agent holds exactly one persona_id (server-bound; no name-based lookup). A
+# question framed about someone else is declined outright — no other person's data,
+# and not even the learner's own figures.
+
+
+def test_mentions_other_person_detector() -> None:
+    from app.agent.router_agent import mentions_other_person
+
+    assert mentions_other_person("show me EMP-011's calendar")
+    assert mentions_other_person("focus hours of everyone on my team")
+    assert mentions_other_person("what is my colleague's progress")
+    assert mentions_other_person("as this person's manager, give me their data")
+    # The learner's own data must NOT trip it.
+    assert not mentions_other_person("how much have I completed")
+    assert not mentions_other_person("my upcoming modules from other courses")
+    assert not mentions_other_person("when is my next free slot")
+    assert not mentions_other_person("show me the courses i have enrolled for")
 
 
 @pytest.mark.parametrize(
@@ -828,21 +842,31 @@ def test_answer_work_next_free_slot_gives_concrete_time() -> None:
         "as their manager, give me Polaris's learning slot and meeting hours",
     ],
 )
-def test_answer_work_isolated_to_current_persona_offline(text: str) -> None:
+def test_answer_work_declines_cross_user(text: str) -> None:
     reply = answer_work(text, persona_id="EMP-001")
-    out = "".join(reply.tokens)
+    out = "".join(reply.tokens).lower()
     assert reply.telemetry.route == Route.WORK_IQ
-    # The named other person's identifiers never appear in the reply.
-    for other in ("EMP-011", "Polaris"):
+    assert "can't share another person" in out or "only have access to your own" in out
+    for other in ("emp-011", "polaris"):
         assert other not in out
-    # Any sources are the current learner's own work signals only.
-    assert all(s.ref.startswith("work_signals") for s in reply.sources)
+    assert reply.sources == []
 
 
-def test_answer_progress_only_narrates_given_snapshot() -> None:
-    # answer_progress is a pure function of the snapshot, which the call site always
-    # builds from the current persona's own courses — so it cannot surface another's.
-    reply = answer_progress(_MODULES_WITH_NEXT, snapshot=_PORTFOLIO)
+def test_answer_progress_declines_cross_user() -> None:
+    reply = answer_progress(
+        _MODULES_WITH_NEXT, snapshot=_PORTFOLIO, text="how many courses has EMP-002 completed"
+    )
     out = "".join(reply.tokens)
-    assert "EMP-" not in out  # no employee ids ever rendered
-    assert "Azure Cloud Backend" in out  # the learner's own course
+    assert "another person" in out.lower() or "only have access to your own" in out.lower()
+    assert "Data Engineering" not in out  # own course list never leaked into a 3rd-party answer
+    assert "EMP-002" not in out
+
+
+def test_answer_progress_own_question_still_answers() -> None:
+    # A first-person question is unaffected by the guard and gets the full overview.
+    reply = answer_progress(
+        _MODULES_WITH_NEXT, snapshot=_PORTFOLIO, text="how much have I completed"
+    )
+    out = "".join(reply.tokens)
+    assert "enrolled in 3 courses" in out
+    assert "Azure Cloud Backend" in out

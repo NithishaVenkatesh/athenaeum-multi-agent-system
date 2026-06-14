@@ -125,7 +125,7 @@ def _dispatch(
     if decision.route is Route.UPCOMING:
         return answer_upcoming(modules, settings=settings)
     if decision.route is Route.PROGRESS:
-        return answer_progress(modules, snapshot=progress, settings=settings)
+        return answer_progress(modules, snapshot=progress, text=text, settings=settings)
     if decision.route is Route.STUDY_PLAN:
         return answer_study_plan(
             text,
