@@ -1,0 +1,106 @@
+{
+  "course_id": "as-c01",
+  "module_id": "as-c01-m02",
+  "module_title": "Designing network solutions",
+  "choices": [
+    {
+      "id": "as-c01-m02-c01",
+      "module_id": "as-c01-m02",
+      "kind": "mcq",
+      "prompt": "Solstice's billing service must reach the on-premises finance system with a contractual guarantee that traffic never traverses the public internet, plus consistent low latency at scale. According to the module, which hybrid connectivity option satisfies this and why?",
+      "choices": [
+        "VPN Gateway, because its IPsec tunnel encrypts the traffic so it is effectively private even over the public internet",
+        "ExpressRoute, because it provisions a private circuit through a connectivity provider that never touches the public internet and offers predictable latency and bandwidth",
+        "VNet peering, because it connects the on-premises network to Azure over Microsoft's backbone without a gateway hop",
+        "A NAT Gateway, because it makes egress to the finance system explicit and auditable"
+      ],
+      "correct_answers": [
+        "ExpressRoute, because it provisions a private circuit through a connectivity provider that never touches the public internet and offers predictable latency and bandwidth"
+      ]
+    },
+    {
+      "id": "as-c01-m02-c02",
+      "module_id": "as-c01-m02",
+      "kind": "mcq",
+      "prompt": "A web app must route requests for `/api/*` to one backend pool and `/static/*` to another, all within a single region. Which service can express that rule, and why is Azure Load Balancer unable to?",
+      "choices": [
+        "Traffic Manager, because it returns different DNS answers per URL path; Load Balancer only resolves DNS at Layer 7",
+        "Application Gateway, because it operates at Layer 7 and understands HTTP; Azure Load Balancer is Layer 4 and distributes by TCP/UDP flow with no visibility into the URL path",
+        "Azure Front Door, because only a global distributor can inspect URL paths; a regional Load Balancer cannot see HTTP at all",
+        "Application Gateway, because it works at Layer 4 where URL paths live; Azure Load Balancer is a Layer 7 DNS service"
+      ],
+      "correct_answers": [
+        "Application Gateway, because it operates at Layer 7 and understands HTTP; Azure Load Balancer is Layer 4 and distributes by TCP/UDP flow with no visibility into the URL path"
+      ]
+    },
+    {
+      "id": "as-c01-m02-c03",
+      "module_id": "as-c01-m02",
+      "kind": "mcq",
+      "prompt": "In the Bicep walkthrough that lays the foundation for the ExpressRoute gateway, why must one subnet be named exactly `GatewaySubnet`?",
+      "choices": [
+        "Because Azure automatically routes all outbound internet traffic through any subnet with that name",
+        "Because a VPN or ExpressRoute gateway will only deploy into a subnet with that exact name; Azure rejects gateway deployment into a differently named subnet",
+        "Because the name signals Azure to apply a Web Application Firewall to that subnet",
+        "Because peering requires both VNets to contain a subnet literally named `GatewaySubnet`"
+      ],
+      "correct_answers": [
+        "Because a VPN or ExpressRoute gateway will only deploy into a subnet with that exact name; Azure rejects gateway deployment into a differently named subnet"
+      ]
+    },
+    {
+      "id": "as-c01-m02-c04",
+      "module_id": "as-c01-m02",
+      "kind": "msq",
+      "prompt": "The module presents the load-balancer choice as a two-by-two of OSI layer and scope. Which of the following statements about the four services are correct?",
+      "choices": [
+        "Azure Load Balancer is Layer 4 and regional, distributing TCP/UDP flows across backend instances",
+        "Traffic Manager is DNS-based and global, directing clients by returning different DNS answers rather than routing packets",
+        "Application Gateway is Layer 7 and global, providing edge acceleration and failover across regions",
+        "Azure Front Door is Layer 7 and global, offering HTTP routing plus edge acceleration and global failover"
+      ],
+      "correct_answers": [
+        "Azure Load Balancer is Layer 4 and regional, distributing TCP/UDP flows across backend instances",
+        "Traffic Manager is DNS-based and global, directing clients by returning different DNS answers rather than routing packets",
+        "Azure Front Door is Layer 7 and global, offering HTTP routing plus edge acceleration and global failover"
+      ]
+    },
+    {
+      "id": "as-c01-m02-c05",
+      "module_id": "as-c01-m02",
+      "kind": "msq",
+      "prompt": "The pricing API in `eastus` calls a ratings service in `westeurope` and customers complain it is slow. According to the module's performance guidance, which approaches genuinely attack this latency problem?",
+      "choices": [
+        "Front the services with Azure Front Door so connections terminate at the edge near the user and traffic routes over Microsoft's optimized backbone",
+        "Co-locate the chatty pair of services in one region so the request travels less distance and fewer hops",
+        "Scale up the VM to a larger compute SKU so it can process the cross-region calls faster",
+        "Use a private endpoint and VNet peering to keep the cross-service traffic on the Microsoft backbone instead of the public internet"
+      ],
+      "correct_answers": [
+        "Front the services with Azure Front Door so connections terminate at the edge near the user and traffic routes over Microsoft's optimized backbone",
+        "Co-locate the chatty pair of services in one region so the request travels less distance and fewer hops",
+        "Use a private endpoint and VNet peering to keep the cross-service traffic on the Microsoft backbone instead of the public internet"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "as-c01-m02-l01",
+      "module_id": "as-c01-m02",
+      "prompt": "Compare VPN Gateway and ExpressRoute for hybrid connectivity. Explain the tradeoffs the module describes and which one fits Solstice's billing-to-finance link, and why.",
+      "reference_answer": "A VPN Gateway builds an encrypted IPsec tunnel over the public internet: it is quick to stand up and lower cost, but it remains subject to internet latency and variability. ExpressRoute provisions a private circuit through a connectivity provider that never touches the public internet, giving predictable latency, higher bandwidth, and a stronger compliance story, at the cost of higher price and longer lead time. The module's rule is to choose VPN for modest, tolerant workloads and ExpressRoute when bandwidth, consistency, or a 'must not transit the internet' requirement dominates. Solstice's billing service must reach the on-premises finance system without traversing the public internet and the connection must be auditable, so ExpressRoute is the correct choice; a VPN tunnel still rides the public internet and cannot guarantee that privacy or predictable latency."
+    },
+    {
+      "id": "as-c01-m02-l02",
+      "module_id": "as-c01-m02",
+      "prompt": "Walk through how you would choose among Azure Load Balancer, Application Gateway, Azure Front Door, and Traffic Manager. Explain the two dimensions the module uses and apply them to Solstice's flash-sale traffic imbalance across regions.",
+      "reference_answer": "The module frames the choice as a two-by-two of OSI layer (Layer 4 TCP/UDP versus Layer 7 HTTP) and scope (regional versus global). Azure Load Balancer is Layer 4 and regional for non-HTTP or raw performance within a region; Application Gateway is Layer 7 and regional, able to route by URL path or host header, terminate TLS, and inspect requests with the WAF SKU; Azure Front Door is Layer 7 and global, adding edge acceleration and failover across regions; Traffic Manager is DNS-based and global, directing clients by returning different DNS answers but unable to inspect requests. The selection rule: HTTP needing path/header routing or a WAF goes to Application Gateway (regional) or Front Door (global), while non-HTTP goes to Load Balancer (regional) or Traffic Manager (global DNS). For Solstice's flash-sale imbalance across regions, a global Layer-7 distributor — Azure Front Door — sends each user to the nearest healthy region and fails over automatically."
+    },
+    {
+      "id": "as-c01-m02-l03",
+      "module_id": "as-c01-m02",
+      "prompt": "Explain the module's two levers for reducing network latency, and why 'solving a latency complaint with bigger compute' is called out as a pitfall.",
+      "reference_answer": "The module says latency is mostly distance and hops, and offers two levers. First, keep private traffic off the public internet: a private endpoint projects an Azure PaaS service into your VNet behind a private IP so traffic stays on the Microsoft network and never exposes a public surface, and VNet peering similarly keeps cross-VNet traffic on the backbone, improving both security and consistency. Second, move the work closer to the user: Azure Front Door is a global entry point that terminates connections at the edge near the user, caches static content, and routes dynamic requests over Microsoft's optimized backbone to the nearest healthy origin. The general principle is that a request that travels less and hops less is faster, so most 'the app is slow' network problems are really 'the path is too long' problems. Scaling up the VM is a pitfall because if the real issue is two chatty services in different regions, bigger compute does nothing; only shortening the path — through co-location, peering, or edge acceleration — actually helps."
+    }
+  ]
+}
