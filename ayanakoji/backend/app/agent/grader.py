@@ -45,7 +45,9 @@ GRADE_ANSWER_TOOL: dict[str, Any] = {
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 10,
-                    "description": "Score 0–10: 0-3 no/wrong, 4-6 partial, 7-9 solid, 10 exceptional",
+                    "description": (
+                        "Score 0–10: 0-3 no/wrong, 4-6 partial, 7-9 solid, 10 exceptional"
+                    ),
                 },
                 "reasoning": {
                     "type": "string",
@@ -124,7 +126,9 @@ _OFFLINE_OPENING = (
     "**Question:** {prompt}\n\nPlease share your understanding of this concept."
 )
 _OFFLINE_REPLY = "Thank you for your response. Can you elaborate on the key mechanism involved?"
-_OFFLINE_GRADE = GradeResult(score=7, reasoning="Offline mode — deterministic stub.", confidence="high")
+_OFFLINE_GRADE = GradeResult(
+    score=7, reasoning="Offline mode — deterministic stub.", confidence="high"
+)
 
 
 # ── Public interface ──────────────────────────────────────────────────────────
@@ -186,7 +190,7 @@ def run_turn(
             return GraderTurnResult(reply="", grade=_OFFLINE_GRADE)
         return GraderTurnResult(reply=_OFFLINE_REPLY, grade=None)
 
-    from app.agent.llm import Capability, ModelRouter
+    from app.agent.llm import ModelRouter
 
     router = ModelRouter()
     ceiling = settings.assessment_grader_ceiling
@@ -312,7 +316,7 @@ def _best_provider_and_model(router: Any, settings: Any) -> tuple[str, str]:
     chain = router.chain(
         __import__("app.agent.llm", fromlist=["Capability"]).Capability.WORKHORSE
     )
-    for provider, attempt in chain:
+    for _provider, attempt in chain:
         if not router._breaker.is_open(attempt.provider):
             return (attempt.provider.value, attempt.model)
     # Fallback: prefer Groq if Azure is down.

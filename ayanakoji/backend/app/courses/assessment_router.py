@@ -27,7 +27,6 @@ from sqlmodel import Session
 
 from app.assessments.engine import get_session as get_assessment_session
 from app.assessments.repository import AssessmentRepository
-from app.config import get_settings
 from app.courses.models import Assessment, ChoiceQuestion, CourseModule, LlmQuestion
 from app.courses.repository import CourseRepository
 from app.courses.schemas import (
@@ -62,7 +61,6 @@ def _require_course(repo: CourseRepository, course_id: str) -> None:
 def _require_module(
     repo: CourseRepository, course_id: str, module_id: str
 ) -> CourseModule:
-    from app.courses.models import CourseModule  # local to avoid circular
 
     m = repo.get_module(course_id, module_id)
     if m is None:
@@ -184,7 +182,11 @@ def start_assessment(
     a_repo = AssessmentRepository(asmtsession)
     bank_ids = a_repo.assessment_ids_for_module(module_id)
     bank = next(
-        (a_repo.get_bank(bid) for bid in bank_ids if a_repo.get_bank(bid) and a_repo.get_bank(bid).kind == type),  # type: ignore[union-attr]
+        (
+            a_repo.get_bank(bid)
+            for bid in bank_ids
+            if a_repo.get_bank(bid) and a_repo.get_bank(bid).kind == type  # type: ignore[union-attr]
+        ),
         None,
     )
     if bank is None:
@@ -490,7 +492,9 @@ def _maybe_celebrate(repo: CourseRepository, course_id: str) -> None:
         "Kudos on seeing this through. Now go ace your real certification exam. "
         "Come back and tell us how it went! 🙌"
     )
-    repo.append_message(course, role="assistant", content=celebration, meta={"__celebration__": True})
+    repo.append_message(
+        course, role="assistant", content=celebration, meta={"__celebration__": True}
+    )
 
 
 @router.post(
@@ -586,7 +590,11 @@ def _stream_llm_turn(
         repo.save_llm_question(q)
         if result.reply:
             yield _sse({"type": "token", "token": result.reply})
-        yield _sse({"type": "grade", "score": result.grade.score, "reasoning": result.grade.reasoning})
+        yield _sse({
+            "type": "grade",
+            "score": result.grade.score,
+            "reasoning": result.grade.reasoning,
+        })
         # Check if all questions are graded → auto-submit.
         _auto_submit_llm_if_complete(repo, a)
     else:
