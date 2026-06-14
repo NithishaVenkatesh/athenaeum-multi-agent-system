@@ -1,0 +1,104 @@
+{
+  "course_id": "cb-c01",
+  "module_id": "cb-c01-m02",
+  "module_title": "Event-driven code with Azure Functions",
+  "choices": [
+    {
+      "id": "cb-c01-m02-c01",
+      "module_id": "cb-c01-m02",
+      "kind": "mcq",
+      "prompt": "According to the module, how many triggers can a single Azure Function have?",
+      "choices": [
+        "Exactly one trigger, which defines the event that starts it and the data delivered to it",
+        "At most two triggers, so it can respond to both a schedule and a queue",
+        "Any number of triggers, as long as they share the same connection setting",
+        "One trigger plus one optional fallback trigger for cold-start scenarios"
+      ],
+      "correct_answers": [
+        "Exactly one trigger, which defines the event that starts it and the data delivered to it"
+      ]
+    },
+    {
+      "id": "cb-c01-m02-c02",
+      "module_id": "cb-c01-m02",
+      "kind": "mcq",
+      "prompt": "Northwind Parcel needs a job that expires stale carts every night at 02:00 UTC. Which trigger does the module use for this, and why is it the right fit?",
+      "choices": [
+        "A timer trigger, because it runs code on a CRON-style schedule with no inbound request needed",
+        "An HTTP trigger, because the nightly sweep must be invoked by a scheduled web request",
+        "A queue trigger, because a scheduler service drops a message that the function consumes",
+        "A blob trigger, because the cart records appear as files in storage each night"
+      ],
+      "correct_answers": [
+        "A timer trigger, because it runs code on a CRON-style schedule with no inbound request needed"
+      ]
+    },
+    {
+      "id": "cb-c01-m02-c03",
+      "module_id": "cb-c01-m02",
+      "kind": "mcq",
+      "prompt": "In the walkthrough's MakeLabelThumbnail function, what does the single line `return thumbnail_bytes` actually accomplish?",
+      "choices": [
+        "The blob output binding routes the returned bytes to a generated .png in the thumbnails container, so the return is the whole persistence step",
+        "It hands the bytes back to the queue trigger, which re-enqueues them for a later write",
+        "It opens a blob client, uploads the bytes, and closes the connection before exiting",
+        "It signals the runtime to retry the function because no output binding is declared"
+      ],
+      "correct_answers": [
+        "The blob output binding routes the returned bytes to a generated .png in the thumbnails container, so the return is the whole persistence step"
+      ]
+    },
+    {
+      "id": "cb-c01-m02-c04",
+      "module_id": "cb-c01-m02",
+      "kind": "mcq",
+      "prompt": "Your HTTP-triggered function on a Consumption plan is occasionally slow on the first call after a quiet night. Per the module, what is happening and what is one way to address it?",
+      "choices": [
+        "A cold start: the plan scaled to zero and must spin up an instance; use a Premium/dedicated (warm) plan or a warming strategy",
+        "A timeout: the plan killed the idle instance mid-flight; raise the function's per-invocation timeout limit",
+        "Throttling: the Consumption plan rate-limits the first daily request; add a second trigger to share the load",
+        "A binding failure: the input binding re-fetches data on the first call; cache the connection string in code"
+      ],
+      "correct_answers": [
+        "A cold start: the plan scaled to zero and must spin up an instance; use a Premium/dedicated (warm) plan or a warming strategy"
+      ]
+    },
+    {
+      "id": "cb-c01-m02-c05",
+      "module_id": "cb-c01-m02",
+      "kind": "msq",
+      "prompt": "Which of the following statements about triggers and bindings are correct according to the module? (Select all that apply.)",
+      "choices": [
+        "An input binding hands the function data fetched from an external source before it runs",
+        "A function has one trigger but can have several input and output bindings",
+        "The `connection` property must name an app setting rather than contain a literal connection string",
+        "Every input and output binding counts as an additional trigger for the function"
+      ],
+      "correct_answers": [
+        "An input binding hands the function data fetched from an external source before it runs",
+        "A function has one trigger but can have several input and output bindings",
+        "The `connection` property must name an app setting rather than contain a literal connection string"
+      ]
+    }
+  ],
+  "llm": [
+    {
+      "id": "cb-c01-m02-l01",
+      "module_id": "cb-c01-m02",
+      "prompt": "Explain why running Northwind Parcel's background jobs (cart expiry, payment webhook, label thumbnailing) inside a continuously-billed App Service web app is wasteful, and how the Azure Functions serverless model changes the picture.",
+      "reference_answer": "These jobs do nothing most of the time, yet a web app keeps a process alive and bills for a server that is always on, so you pay for idle capacity. Azure Functions follows the serverless model: code wakes up only when an event occurs, runs, and then gets out of the way, and you are billed for what it does rather than for being available. The key shift is that with App Service you keep a process alive to wait for requests, whereas with Functions the platform watches the event source and invokes your code on your behalf. On the Consumption plan this is reinforced by scaling to zero and billing per execution, which fits spiky, infrequent background work like these jobs."
+    },
+    {
+      "id": "cb-c01-m02-l02",
+      "module_id": "cb-c01-m02",
+      "prompt": "A teammate needs the same logic to run both at midnight and whenever a message arrives on a queue, and writes one function trying to attach both triggers. Walk through why this fails and the clean design the module recommends.",
+      "reference_answer": "It fails because a function is defined by exactly one trigger; you cannot stack a timer trigger and a queue trigger on a single function. The clean design is to factor the shared work into a helper function, then write two thin trigger functions that both call it: one timer-triggered to run at midnight on a CRON schedule, and one queue-triggered to run when a message lands on the queue. This keeps the one-trigger-per-function rule intact while reusing the business logic, since reuse comes from factoring logic rather than from stacking triggers. Each trigger still defines the event that starts the function and the data delivered to it."
+    },
+    {
+      "id": "cb-c01-m02-l03",
+      "module_id": "cb-c01-m02",
+      "prompt": "Compare doing connection plumbing by hand versus using an output binding for the label-thumbnail function, and explain the role STORAGE_CONNECTION plays in keeping the secret safe.",
+      "reference_answer": "Doing it by hand means manually opening a blob client, uploading the result, and closing the connection; it works but you lose declarative clarity and the runtime's connection management. With a blob output binding declared in a decorator, the function body reduces to computing the result and returning it, and the runtime writes that return value to a generated .png in the thumbnails container, so the binding writes the boilerplate while you write only business logic. The module recommends preferring the output binding unless you need fine-grained control. The `connection=\"STORAGE_CONNECTION\"` property must name an app setting that holds the storage connection string, not contain the literal value; this keeps the secret out of code and preserves per-environment configuration, whereas hard-coding a literal connection string would leak the secret and break that configuration."
+    }
+  ]
+}
