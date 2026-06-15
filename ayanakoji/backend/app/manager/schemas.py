@@ -24,6 +24,16 @@ class ReadinessBreakdown(BaseModel):
     total: int = Field(ge=0)
 
 
+class CohortReadiness(BaseModel):
+    """Readiness for one sub-cohort of the team (e.g. a seniority band)."""
+
+    label: str
+    go: int = Field(ge=0)
+    conditional: int = Field(ge=0)
+    not_yet: int = Field(ge=0)
+    total: int = Field(ge=0)
+
+
 class CapacitySummary(BaseModel):
     """Aggregate team capacity (Work IQ; Source 1) — no per-learner detail."""
 
@@ -93,6 +103,7 @@ class TeamInsights(BaseModel):
     sprint_name: str | None = None
     sprint_goal: str | None = None
     readiness: ReadinessBreakdown
+    by_seniority: list[CohortReadiness] = Field(default_factory=list)
     capacity: CapacitySummary
     cert_targets: list[CertTargetProgress] = Field(default_factory=list)
     okrs: list[OkrProgress] = Field(default_factory=list)

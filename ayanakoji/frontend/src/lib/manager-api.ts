@@ -17,6 +17,14 @@ export interface ReadinessBreakdown {
   total: number;
 }
 
+export interface CohortReadiness {
+  label: string;
+  go: number;
+  conditional: number;
+  not_yet: number;
+  total: number;
+}
+
 export interface CapacitySummary {
   member_count: number;
   avg_meeting_hours_per_week: number;
@@ -69,6 +77,7 @@ export interface TeamInsights {
   sprint_name: string | null;
   sprint_goal: string | null;
   readiness: ReadinessBreakdown;
+  by_seniority: CohortReadiness[];
   capacity: CapacitySummary;
   cert_targets: CertTargetProgress[];
   okrs: OkrProgress[];

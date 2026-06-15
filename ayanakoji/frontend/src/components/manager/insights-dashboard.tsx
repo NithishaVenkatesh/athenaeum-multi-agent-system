@@ -82,6 +82,38 @@ function ReadinessCard({ insights }: { insights: TeamInsights }) {
           </span>
         ))}
       </div>
+      {insights.by_seniority.length > 1 && (
+        <div className="border-border/60 mt-3 space-y-2 border-t pt-3">
+          <div className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">
+            By seniority
+          </div>
+          {insights.by_seniority.map((c) => {
+            const t = Math.max(c.total, 1);
+            const bands = [
+              { n: c.go, cls: "bg-chart-2" },
+              { n: c.conditional, cls: "bg-chart-4" },
+              { n: c.not_yet, cls: "bg-destructive" },
+            ];
+            return (
+              <div key={c.label} className="flex items-center gap-2 text-xs">
+                <span className="text-foreground w-16 shrink-0">{c.label}</span>
+                <div className="flex h-1.5 flex-1 overflow-hidden rounded-full">
+                  {bands.map((b, i) => (
+                    <div
+                      key={i}
+                      className={cn(b.cls, b.n === 0 && "hidden")}
+                      style={{ width: `${(b.n / t) * 100}%` }}
+                    />
+                  ))}
+                </div>
+                <span className="text-muted-foreground w-12 shrink-0 text-right">
+                  {c.go}/{c.total} GO
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </Card>
   );
 }

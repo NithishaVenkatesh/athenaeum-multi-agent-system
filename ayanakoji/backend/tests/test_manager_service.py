@@ -2,18 +2,23 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
+from app.courses.models import Assessment, Course
 from app.manager.schemas import (
     CapacitySummary,
     PlatformEngagement,
     ReadinessBreakdown,
 )
-from app.manager.service import build_team_insights, risk_flags
+from app.manager.service import build_team_insights, platform_engagement, risk_flags
 from app.workiq.repository import get_repository
+from sqlmodel import Session
 
 MANAGER_ID = "EMP-011"
 TEAM_ID = "TEAM-A"
+# TEAM-A has 11 personas in the synthetic data, one of which is the manager (Polaris).
+TEAM_ENGINEER_COUNT = 10
 
 
 def _capacity(*, high: int = 0, members: int = 11) -> CapacitySummary:
@@ -93,6 +98,13 @@ def test_no_engagement_risk_with_healthy_pass_rate() -> None:
     assert not any(f.area == "engagement" for f in flags)
 
 
+def test_low_pass_rate_not_flagged_below_min_sample() -> None:
+    """A single failed attempt (n=1) is noise, not a team pass-rate risk."""
+    readiness = ReadinessBreakdown(go=11, conditional=0, not_yet=0, total=11)
+    flags = risk_flags(readiness, _capacity(), _engagement(active=1, attempted=1, passed=0))
+    assert not any(f.area == "engagement" for f in flags)
+
+
 def test_build_team_insights_grounds_in_work_iq(session: Any) -> None:
     repo = get_repository()
     manager = repo.get_persona(MANAGER_ID)
@@ -101,11 +113,44 @@ def test_build_team_insights_grounds_in_work_iq(session: Any) -> None:
     assert insights is not None
     assert insights.team_id == TEAM_ID
     assert insights.manager_codename == "Polaris"
-    # Source 1 readiness distribution (3 GO / 7 CONDITIONAL / 1 NOT_YET in the data).
+    # The manager is excluded from learner aggregates: engineers only.
+    assert insights.member_count == TEAM_ENGINEER_COUNT
     assert insights.readiness.total == insights.member_count
     assert insights.readiness.go + insights.readiness.conditional + insights.readiness.not_yet == (
         insights.readiness.total
     )
+    # "By role" view (seniority bands) is present and sums to the team.
+    assert insights.by_seniority
+    assert sum(c.total for c in insights.by_seniority) == insights.member_count
+    # Empty cert-target cohorts are never shown.
+    assert all(t.member_count > 0 for t in insights.cert_targets)
     # Source 2 is empty on a fresh DB — honest empty state, not a crash.
     assert insights.engagement.has_activity is False
     assert insights.engagement.members_active == 0
+
+
+def test_platform_engagement_counts_latest_attempt_only(session: Session) -> None:
+    """Retakes of the same module/type must not double-count (latest attempt only)."""
+    course = Course(persona_id="EMP-001", chat_name="Vega — AZ-204")
+    session.add(course)
+    session.commit()
+    session.refresh(course)
+    for attempt, score in ((1, 6.0), (2, 9.0)):
+        session.add(
+            Assessment(
+                course_id=course.id,
+                module_id="cb-c01-m01",
+                type="choices",
+                attempt_number=attempt,
+                score=score,
+                passed=True,
+                passed_at=datetime.now(UTC),
+            )
+        )
+    session.commit()
+
+    eng = platform_engagement(session, ["EMP-001"])
+    assert eng.assessments_attempted == 1  # one module/type, not two attempts
+    assert eng.assessments_passed == 1
+    assert eng.members_active == 1
+    assert eng.modules_with_a_pass == 1
