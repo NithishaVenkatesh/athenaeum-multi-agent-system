@@ -17,6 +17,16 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchTeamInsights, type TeamInsights } from "@/lib/manager-api";
 
+/**
+ * The sprint name in the data source already embeds the team (e.g.
+ * "Sprint 24 — Atlas"), and the team name is printed elsewhere in the header,
+ * so strip the redundant trailing " — <team>" to avoid printing "Atlas" twice.
+ */
+function sprintLabel(sprintName: string, teamName: string): string {
+  const suffix = new RegExp(`\\s*[—–-]\\s*${teamName}\\s*$`, "i");
+  return sprintName.replace(suffix, "").trim();
+}
+
 export function ManagerWorkspace({ employeeId }: { employeeId: string }) {
   const router = useRouter();
   const { signOut } = usePersona();
@@ -77,9 +87,15 @@ export function ManagerWorkspace({ employeeId }: { employeeId: string }) {
             </h1>
             <p className="text-muted-foreground mt-1 text-sm">
               {insights.manager_codename} · {insights.member_count} engineers
-              {insights.sprint_name ? ` · ${insights.sprint_name}` : ""}
-              {insights.sprint_goal ? ` — “${insights.sprint_goal}”` : ""}
+              {insights.sprint_name
+                ? ` · ${sprintLabel(insights.sprint_name, insights.team_name)}`
+                : ""}
             </p>
+            {insights.sprint_goal && (
+              <p className="text-muted-foreground/80 mt-1 text-sm italic">
+                “{insights.sprint_goal}”
+              </p>
+            )}
           </header>
 
           {/* Columns align at the top; the chat is a FIXED-height side section with its own

@@ -22,14 +22,25 @@ import type { RiskSeverity, TeamInsights } from "@/lib/manager-api";
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
+// The two data origins are visually distinct so "GO readiness" (static org
+// records) is never confused with "active" (real platform activity).
+type CardSource = "org" | "platform";
+
+const SOURCE_LABEL: Record<CardSource, string> = {
+  org: "Org records",
+  platform: "Platform activity",
+};
+
 function Card({
   title,
   icon,
+  source,
   className,
   children,
 }: {
   title?: string;
   icon?: React.ReactNode;
+  source?: CardSource;
   className?: string;
   children: React.ReactNode;
 }) {
@@ -44,6 +55,11 @@ function Card({
         <div className="text-muted-foreground mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.15em]">
           {icon}
           {title}
+          {source && (
+            <span className="text-muted-foreground/70 ml-auto text-[0.6rem] font-medium normal-case tracking-normal">
+              {SOURCE_LABEL[source]}
+            </span>
+          )}
         </div>
       )}
       {children}
@@ -60,7 +76,7 @@ function ReadinessCard({ insights }: { insights: TeamInsights }) {
     { n: not_yet, cls: "bg-destructive", label: "Not yet" },
   ];
   return (
-    <Card title="Exam readiness" icon={<GraduationCap className="size-3.5" />}>
+    <Card title="Exam readiness" icon={<GraduationCap className="size-3.5" />} source="org">
       <div className="flex items-baseline gap-2">
         <span className="font-display text-4xl text-foreground">{go}</span>
         <span className="text-muted-foreground text-sm">of {total} ready (GO)</span>
@@ -141,7 +157,7 @@ function Stat({ value, label }: { value: string; label: string }) {
 function CapacityCard({ insights }: { insights: TeamInsights }) {
   const c = insights.capacity;
   return (
-    <Card title="Capacity" icon={<CalendarClock className="size-3.5" />}>
+    <Card title="Capacity" icon={<CalendarClock className="size-3.5" />} source="org">
       <div className="flex items-end justify-between gap-4">
         <Stat value={`${c.avg_focus_hours_per_week}h`} label="avg focus / week" />
         <Stat value={`${c.avg_meeting_hours_per_week}h`} label="avg meetings / week" />
@@ -167,7 +183,7 @@ function CapacityCard({ insights }: { insights: TeamInsights }) {
 function CertTargetsCard({ insights }: { insights: TeamInsights }) {
   if (insights.cert_targets.length === 0) return null;
   return (
-    <Card title="Certification targets" icon={<Target className="size-3.5" />}>
+    <Card title="Certification targets" icon={<Target className="size-3.5" />} source="org">
       <ul className="space-y-3">
         {insights.cert_targets.map((t) => {
           const pct = t.member_count > 0 ? (t.ready_count / t.member_count) * 100 : 0;
@@ -176,7 +192,7 @@ function CertTargetsCard({ insights }: { insights: TeamInsights }) {
               <div className="flex items-baseline justify-between text-sm">
                 <span className="font-mono text-foreground">{t.cert}</span>
                 <span className="text-muted-foreground text-xs">
-                  {t.ready_count}/{t.member_count} ready · {t.target_quarter}
+                  {t.ready_count}/{t.member_count} GO · {t.target_quarter}
                 </span>
               </div>
               <div className="bg-muted mt-1.5 h-1.5 overflow-hidden rounded-full">
@@ -240,7 +256,7 @@ function RiskCard({ insights }: { insights: TeamInsights }) {
 function EngagementCard({ insights }: { insights: TeamInsights }) {
   const e = insights.engagement;
   return (
-    <Card title="Platform engagement" icon={<GraduationCap className="size-3.5" />}>
+    <Card title="Platform engagement" icon={<GraduationCap className="size-3.5" />} source="platform">
       {e.has_activity ? (
         <div className="grid grid-cols-3 gap-4">
           <Stat value={`${e.members_active}/${e.members_total}`} label="active" />
