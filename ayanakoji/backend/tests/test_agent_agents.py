@@ -384,6 +384,168 @@ def test_answer_foundry_redispatches_once_on_ungrounded_answer() -> None:
     assert steps[0].passed is False and steps[1].passed is True
 
 
+# ── Open-mode agentic catalog search (tool-calling) ─────────────────────────────
+
+
+class _SearchRouter:
+    """Fake router whose ``run_tools`` exercises the search_catalog handler (to drive the
+    real retriever + ``found`` accumulation) then returns a scripted ToolLoopResult.
+
+    ``search_queries`` are fed to the handler one per call so a test can surface a real
+    module (e.g. "azure functions triggers") or nothing ("how to bake bread")."""
+
+    def __init__(self, *, search_queries: list[str], final_text: str, rounds: int = 2) -> None:
+        self._search_queries = search_queries
+        self._final_text = final_text
+        self._rounds = rounds
+        self.run_tools_calls = 0
+        self.stream_calls = 0
+
+    def run_tools(
+        self,
+        capability: object,
+        messages: Sequence[dict[str, str]],
+        *,
+        tools: list[dict[str, object]],
+        handlers: dict[str, object],
+        **_: object,
+    ):  # type: ignore[no-untyped-def]
+        from app.agent.llm import Provider, ToolLoopResult
+
+        self.run_tools_calls += 1
+        handler = handlers["search_catalog"]
+        for query in self._search_queries:
+            handler({"query": query})  # type: ignore[operator]
+        return ToolLoopResult(
+            text=self._final_text,
+            provider=Provider.AZURE,
+            model="gpt-4o-mini",
+            tier=1,
+            rounds=self._rounds,
+        )
+
+    def stream(self, capability: object, messages: Sequence[dict[str, str]], **_: object):  # type: ignore[no-untyped-def]
+        from app.agent.llm import Provider, StreamHandle
+
+        self.stream_calls += 1
+
+        def _gen() -> Iterator[str]:
+            yield from ["Bread ", "needs ", "flour. ", "Outside ", "Athenaeum's ", "approved."]
+
+        return StreamHandle(tokens=_gen(), provider=Provider.AZURE, model="gpt-4o-mini", tier=1)
+
+
+def test_answer_foundry_open_online_agentic_search_surfaces_and_cites() -> None:
+    # (a) Open mode online: the learner's phrasing ("what is FaaS") misses the first
+    # lexical pass, so the model iterates a sharper search_catalog query that surfaces a
+    # real approved module; the answer cites it and that source rides the reply.
+    router = _SearchRouter(
+        search_queries=["azure functions triggers"],
+        final_text="Azure Functions run event-driven code. [cb-c01-m02]",
+    )
+    reply = answer_foundry(
+        "what is FaaS",
+        catalog_id=None,
+        router=router,  # type: ignore[arg-type]
+        settings=_online(),
+    )
+    assert router.run_tools_calls == 1
+    assert router.stream_calls == 0  # the agentic loop replaced the single stream
+    text = "".join(reply.tokens)
+    assert "[cb-c01-m02]" in text  # cited the surfaced module
+    assert any(s.ref == "cb-c01-m02" for s in reply.sources)  # surfaced source on the reply
+    assert reply.telemetry.sources == reply.sources
+    labels = [s.label for s in reply.telemetry.steps]
+    assert "Agentic catalog search" in labels
+
+
+def test_answer_foundry_open_online_agentic_search_finds_nothing() -> None:
+    # (b) Open mode online: the search finds no approved module → general-knowledge
+    # answer with the off-syllabus note, and NO fabricated citation survives.
+    router = _SearchRouter(
+        search_queries=["how to bake sourdough bread"],
+        final_text="Bread needs flour and time. This is outside Athenaeum's approved material.",
+    )
+    reply = answer_foundry(
+        "how do I bake sourdough bread",
+        catalog_id=None,
+        router=router,  # type: ignore[arg-type]
+        settings=_online(),
+    )
+    assert router.run_tools_calls == 1
+    assert reply.sources == []  # nothing approved surfaced
+    text = "".join(reply.tokens)
+    assert "Bread needs flour" in text
+    assert "outside Athenaeum's approved" in text
+    assert "[" not in text  # no fabricated module-id citation
+
+
+def test_answer_foundry_open_online_agentic_search_strips_fabricated_id() -> None:
+    # Open mode with no surfaced sources: a model-invented citation is scrubbed inline.
+    router = _SearchRouter(
+        search_queries=["bake bread"],
+        final_text="Bread needs flour [zz-c9-m9]. Outside Athenaeum's approved material.",
+    )
+    reply = answer_foundry(
+        "bake bread", catalog_id=None, router=router, settings=_online()  # type: ignore[arg-type]
+    )
+    text = "".join(reply.tokens)
+    assert "[zz-c9-m9]" not in text  # invented id dropped (no source backs it)
+    assert "Bread needs flour" in text
+
+
+class _ToolsDownRouter:
+    """Open-mode router whose run_tools blows up; stream() still serves a fallback answer."""
+
+    def __init__(self) -> None:
+        self.stream_calls = 0
+
+    def run_tools(self, *_: object, **__: object):  # type: ignore[no-untyped-def]
+        from app.agent.llm import AllProvidersDown
+
+        raise AllProvidersDown("tools unavailable")
+
+    def stream(self, capability: object, messages: Sequence[dict[str, str]], **_: object):  # type: ignore[no-untyped-def]
+        from app.agent.llm import Provider, StreamHandle
+
+        self.stream_calls += 1
+
+        def _gen() -> Iterator[str]:
+            yield from ["Bread ", "needs ", "flour. ", "Outside ", "Athenaeum's ", "approved."]
+
+        return StreamHandle(tokens=_gen(), provider=Provider.AZURE, model="gpt-4o-mini", tier=1)
+
+
+def test_answer_foundry_open_online_falls_back_when_tools_fail() -> None:
+    # (c) run_tools raising must NOT break the answer: it falls back to the existing
+    # streamed general-knowledge open-mode path.
+    router = _ToolsDownRouter()
+    reply = answer_foundry(
+        "how do I bake sourdough bread",
+        catalog_id=None,
+        router=router,  # type: ignore[arg-type]
+        settings=_online(),
+    )
+    assert router.stream_calls == 1  # fell back to the single stream
+    text = "".join(reply.tokens)
+    assert "Bread needs flour" in text  # answer still produced
+    assert reply.sources == []
+    assert reply.telemetry.tier == 1
+
+
+def test_answer_foundry_in_course_unchanged_uses_stream_not_tools() -> None:
+    # (d) in_course mode is untouched: it must still use the single stream, never run_tools.
+    router = _SearchRouter(search_queries=[], final_text="(should never be used)")
+    reply = answer_foundry(
+        "azure functions", catalog_id=None, router=router, settings=_online()  # type: ignore[arg-type]
+    )
+    assert router.run_tools_calls == 0  # in_course never enters the agentic loop
+    assert router.stream_calls == 1
+    text = "".join(reply.tokens).strip()
+    assert text.startswith("Bread needs flour")  # served by the in_course stream path
+    assert reply.sources  # grounded on the in_course module
+
+
 def test_answer_work_offline_uses_persona_signals() -> None:
     # Polaris is a manager; pick a known learner persona id from the roster.
     from app.workiq.repository import get_repository

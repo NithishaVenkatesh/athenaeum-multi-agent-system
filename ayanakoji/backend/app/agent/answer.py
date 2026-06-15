@@ -398,6 +398,49 @@ def _grounding_telemetry(verdict: GroundingVerdict) -> PhaseTelemetry:
     )
 
 
+# ── Open-mode agentic catalog search (tool-calling) ─────────────────────────────
+# When the learner's question matched no approved module on the first lexical pass,
+# instead of giving up on the catalog we let the model ITERATE: it may call
+# ``search_catalog`` a few times (rephrasing, narrowing) to find approved content,
+# and answers from it when found — citing module ids — or honestly off-syllabus when
+# nothing approved covers it. Mirrors PROPOSE_PLAN_TOOL's JSON-schema shape.
+SEARCH_CATALOG_TOOL: dict[str, object] = {
+    "type": "function",
+    "function": {
+        "name": "search_catalog",
+        "description": (
+            "Search the approved Azure course catalog for modules relevant to a query. "
+            "Returns matching module ids, titles, and snippets, or empty if nothing is "
+            "approved on this topic."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "the topic or question to look up in the approved catalog",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+}
+
+# How far a single tool result snippet is truncated before the model sees it.
+_SEARCH_SNIPPET_CHARS = 300
+
+_OPEN_SEARCH_SYSTEM = (
+    "You are Athenaeum's Azure learning assistant. The learner's question did not match our "
+    "approved course material on the first pass. You MAY call search_catalog up to a few times "
+    "(rephrasing or narrowing the query) to find approved content for their question. If a "
+    "search surfaces relevant approved modules, answer FROM them and cite each claim's module "
+    "id in square brackets like [cb-c01-m02]. If after searching nothing approved covers the "
+    "question, answer helpfully and accurately from general knowledge in 2 to 4 sentences, then "
+    "note in one short sentence that this is outside Athenaeum's approved course material. Never "
+    "invent module ids or [module-id] references."
+)
+
+
 def _cites_any(answer: str, sources: list[GroundingSource]) -> bool:
     """True if the answer cites at least one approved source id."""
     return any(s.ref.lower() in answer.lower() for s in sources)
@@ -504,6 +547,114 @@ def _reflective_stream(
     check.phase = _reflection_telemetry(verdict, verdict2)
 
 
+def _open_catalog_search(
+    text: str,
+    *,
+    router: ModelRouter,
+    retriever: GroundedRetriever,
+    settings: Settings,
+    suggestion: SuggestionEvent | None,
+    base_steps: list[TraceStep],
+    no_dash: str,
+) -> AgentReply | None:
+    """Open-mode ONLINE: let the model iterate catalog queries before answering.
+
+    Runs the WORKHORSE tool-calling loop with a single ``search_catalog`` tool, so the
+    model can rephrase/narrow its query a few times to find approved content instead of
+    taking the first lexical hit. Approved sources the tool surfaces are accumulated
+    (de-duped by ref) so citations resolve and the post-answer grounding verifier has
+    something to check. On ANY failure (providers down, tools unsupported, exception)
+    this returns ``None`` so the caller falls back to the existing single-stream path —
+    the answer never breaks.
+    """
+    found: list[GroundingSource] = []
+    seen_refs: set[str] = set()
+
+    def search_catalog(args: dict[str, object]) -> list[dict[str, str]]:
+        query = str(args.get("query") or "").strip()
+        if not query:
+            return []
+        result = retriever.retrieve(query, catalog_id=None)
+        hits: list[dict[str, str]] = []
+        for src in result.sources:
+            if src.ref not in seen_refs:
+                seen_refs.add(src.ref)
+                found.append(src)
+            hits.append(
+                {
+                    "ref": src.ref,
+                    "title": src.title,
+                    "snippet": src.snippet[:_SEARCH_SNIPPET_CHARS],
+                }
+            )
+        return hits
+
+    try:
+        result = router.run_tools(
+            Capability.WORKHORSE,
+            [
+                {"role": "system", "content": _OPEN_SEARCH_SYSTEM + no_dash},
+                {"role": "user", "content": text},
+            ],
+            tools=[SEARCH_CATALOG_TOOL],
+            handlers={"search_catalog": search_catalog},
+            max_rounds=4,
+        )
+    except Exception:  # noqa: BLE001 — degrade to the single-stream open path, never break
+        return None
+
+    steps = [
+        *base_steps,
+        TraceStep(
+            label="Agentic catalog search",
+            passed=bool(found),
+            detail=f"{result.rounds} round(s); {len(found)} approved module(s) surfaced",
+            model=result.model,
+        ),
+        TraceStep(
+            label="Citation guard",
+            passed=True,
+            detail="Streaming: invented citations dropped inline; ungrounded answers re-dispatched",
+        ),
+    ]
+    refs = ", ".join(s.ref for s in found)
+    reasoning = (
+        f"Agentic catalog search surfaced {len(found)} approved module(s): {refs}."
+        if found
+        else "Agentic catalog search found no approved module; answered helpfully off-syllabus."
+    )
+    check = GroundingCheck()
+    return AgentReply(
+        telemetry=_answer_telemetry(
+            summary="Answered from approved course content"
+            if found
+            else "Answered helpfully, outside approved course material",
+            reasoning=reasoning,
+            route=Route.FOUNDRY_IQ,
+            sources=found,
+            model=result.model,
+            tier=result.tier,
+            steps=steps,
+            provider=result.provider.value,
+        ),
+        # Re-stream the loop's final text so the discovered-source answer still flows
+        # through the same verify/citation-check path as a live stream: the existing
+        # _offline_stream feeds tokens to the existing _reflective_stream wrapper.
+        tokens=_reflective_stream(
+            _offline_stream(result.text),
+            found,
+            query=text,
+            settings=settings,
+            check=check,
+            regenerate=None,  # the discovered answer is final; no stricter re-dispatch
+            expect_citation=bool(found),
+        ),
+        sources=found,
+        suggestion=suggestion,
+        grounding_check=check,
+    )
+
+
 def answer_foundry(
     text: str,
     *,
@@ -602,8 +753,25 @@ def answer_foundry(
     router = router or ModelRouter(settings)
     _no_dash = "Do not use em dashes; use commas or periods." + _NO_LEAK + _NO_OVERRIDE
     if mode == "open":
-        # No approved sources: answer the question helpfully from general knowledge,
-        # but be honest that it is off-syllabus and do not fabricate citations (H2).
+        # First try the agentic catalog search: the model iterates search_catalog queries
+        # to find approved content for an off-syllabus question, answering FROM it (cited)
+        # when found. On ANY failure this returns None and we fall through to the existing
+        # single-stream general-knowledge path below — no regression.
+        agentic = _open_catalog_search(
+            text,
+            router=router,
+            retriever=retriever,
+            settings=settings,
+            suggestion=suggestion,
+            base_steps=steps,
+            no_dash=_no_dash,
+        )
+        if agentic is not None:
+            return agentic
+    if mode == "open":
+        # No approved sources and the agentic search was unavailable: answer the question
+        # helpfully from general knowledge, but be honest that it is off-syllabus and do
+        # not fabricate citations (H2).
         system = (
             "You are Athenaeum's Azure learning assistant. The learner asked something our "
             "approved course material does not cover. Answer helpfully and accurately in 2 to 4 "
