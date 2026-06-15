@@ -667,6 +667,12 @@ def _parse_decision(
     # Feedback pin: a follow-up the model files as general, while a feedback turn is
     # active, stays in FEEDBACK so it keeps grounding on the same test (mirrors the
     # offline pin in classify; an explicit competing intent already returned above).
-    if feedback_active and decision.route is Route.GENERAL:
+    # Gated on off_topic so a genuinely off-platform turn (the model confidently
+    # off-topic) still gets the steer-back instead of being pulled into feedback.
+    if (
+        feedback_active
+        and decision.route is Route.GENERAL
+        and decision.off_topic < _OFFTOPIC_TRUST_CEILING
+    ):
         return _feedback_decision(followup=True)
     return decision

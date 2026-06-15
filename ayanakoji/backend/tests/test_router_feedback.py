@@ -77,3 +77,20 @@ def test_pin_breaks_on_a_competing_intent() -> None:
 def test_pin_does_not_swallow_off_domain() -> None:
     """An off-platform question is still general, pin or not."""
     assert classify("what's the weather today?", feedback_active=True).route is Route.GENERAL
+
+
+def test_online_pin_overrides_general_only_when_on_platform() -> None:
+    """The online pin grounds an on-platform follow-up but lets off-domain steer back."""
+    from app.agent.router_agent import _parse_decision
+
+    # Model confidently off-platform → stays general even while pinned (steer back).
+    off = '{"route":"general","off_topic":0.9,"confidence":0.8}'
+    assert (
+        _parse_decision(off, "tell me a joke", None, feedback_active=True).route is Route.GENERAL
+    )
+    # Model files an on-platform follow-up as general → pin grounds it on the test.
+    on = '{"route":"general","off_topic":0.2,"confidence":0.6}'
+    assert (
+        _parse_decision(on, "tell me more about that", None, feedback_active=True).route
+        is Route.FEEDBACK
+    )
