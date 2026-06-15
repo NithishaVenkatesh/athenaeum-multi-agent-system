@@ -65,13 +65,46 @@ logger = logging.getLogger(__name__)
 
 # Em dashes are banned in user-facing copy (a standing product rule). The model
 # prompts ask for none, but we enforce it on the stream so one can never slip out.
-_EM_DASHES = str.maketrans({"—": ", ", "–": "-", "―": ", "})
+_DASHES = frozenset("—–―")  # em dash, en dash, horizontal bar
+
+
+def _dash_sub(dash: str, left: str, right: str) -> str:
+    """What an em/en dash becomes, given the char on each side.
+
+    A numeric range (digit-dash-digit) keeps a hyphen so "throughput 400—1000 RU/s" or
+    ports "8000—8010" are NOT split into two discrete values; an en dash always becomes a
+    hyphen (its only legitimate use here is a range); everything else is prose punctuation
+    and becomes ", " per the no-em-dash rule."""
+    if left.isdigit() and right.isdigit():
+        return "-"
+    if dash == "–":  # en dash
+        return "-"
+    return ", "
 
 
 def _no_em_dashes(tokens: Iterator[str]) -> Iterator[str]:
-    """Strip em/en dashes from a token stream, enforcing the no-em-dash rule."""
+    """Strip em/en dashes from a token stream, enforcing the no-em-dash rule.
+
+    A dash and its right-hand neighbour can land in different stream tokens, so a single
+    dash is carried across the token boundary until the next char arrives and the
+    numeric-range guard can see both sides."""
+    carry_dash = ""  # a deferred dash awaiting its right-hand context
+    prev_char = ""  # left context for a deferred dash (the last non-dash char emitted)
     for token in tokens:
-        yield token.translate(_EM_DASHES)
+        out: list[str] = []
+        for ch in token:
+            if carry_dash:
+                out.append(_dash_sub(carry_dash, prev_char, ch))
+                carry_dash = ""
+            if ch in _DASHES:
+                carry_dash = ch  # defer: we don't yet know the char to its right
+                continue
+            out.append(ch)
+            prev_char = ch
+        if out:
+            yield "".join(out)
+    if carry_dash:  # stream ended on a dash — no right neighbour, treat as prose
+        yield _dash_sub(carry_dash, prev_char, "")
 
 
 _BLOCKED_MESSAGE = (
