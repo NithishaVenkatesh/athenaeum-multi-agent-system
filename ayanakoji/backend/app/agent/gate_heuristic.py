@@ -204,9 +204,14 @@ def heuristic_injection_verdict(text: str) -> InjectionVerdict | None:
 
 # ── Benign-learning allowance (over-refusal recovery) ───────────────────────────
 # Course content a trigger verb can legitimately target (NOT the assistant itself).
+# "message" and "content" are deliberately EXCLUDED: they are exfiltration vocabulary,
+# not course nouns ("repeat the previous message", "show the previous content"), and the
+# allowance un-blocks a Prompt-Guard / classifier positive — so the recovery would be
+# strongest exactly where the deterministic net is weakest. Keep the allowance to genuine
+# course objects.
 _LEARNING_NOUN = (
-    r"module|modules|lesson|chapter|course|courses|lab|exercise|question|message|example|"
-    r"topic|unit|section|answer|note|step|assessment|quiz|exam|objective|objectives|content"
+    r"module|modules|lesson|chapter|course|courses|lab|exercise|question|example|"
+    r"topic|unit|section|answer|note|step|assessment|quiz|exam|objective|objectives"
 )
 _BENIGN_OVERRIDE_RE = re.compile(
     r"\b(forget|ignore|disregard|skip|drop|reset|clear|reveal|show|repeat)\b\s+"
