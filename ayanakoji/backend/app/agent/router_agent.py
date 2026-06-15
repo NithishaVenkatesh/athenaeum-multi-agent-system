@@ -77,6 +77,16 @@ _ORDINAL_RE = re.compile(
     r"|(?:number|option|the)\s+\d+|\d+(?:st|nd|rd|th)|that\s+(?:one|course))\b",
     re.IGNORECASE,
 )
+# A comparison / info question ABOUT the options ("what's the difference between the
+# first and the second?") names ordinals but is NOT a selection — picking option 1 from
+# it would silently enroll a course (a persisted side-effect). Such a turn must fall
+# through to the model, which can answer the comparison instead.
+_COMPARE_QUESTION_RE = re.compile(
+    r"\bdifference\b|\bcompare\b|\bversus\b|\bvs\.?\b|\bbetween\b"
+    r"|\bwhat'?s\b|\bwhat\s+(is|are)\b|\bwhich\s+(is|one\s+is|of|should|would)\b"
+    r"|\bhow\s+(do|does|is|are|much|long)\b|\bwhy\b|\btell\s+me\b|\bexplain\b|\bmore\s+about\b",
+    re.IGNORECASE,
+)
 
 
 def is_refusal(text: str) -> bool:
@@ -84,14 +94,27 @@ def is_refusal(text: str) -> bool:
     return bool(_NEGATION_RE.search(text))
 
 
+def is_options_question(text: str) -> bool:
+    """True if the message is a comparison / info question ABOUT the offered options
+    ("what's the difference between the first and the second?") rather than a selection of
+    one. Such a turn must NOT trigger an enroll side-effect — it falls through to the model
+    so the comparison gets answered."""
+    return bool(_COMPARE_QUESTION_RE.search(text))
+
+
 def is_suggestion_response(text: str) -> bool:
     """True if the message responds to an offered suggestion — accept or pick one.
 
-    A negated message ("not the second one", "no") is never a selection.
+    A negated message ("not the second one", "no") is never a selection, and neither is a
+    comparison/info question that merely names ordinals ("what's the difference between the
+    first and the second?") — enrolling on that would be a silent, persisted side-effect, so
+    it falls through to the model to answer instead.
     """
     if is_acceptance(text):
         return True
-    return not is_refusal(text) and bool(_ORDINAL_RE.search(text))
+    if is_refusal(text) or is_options_question(text):
+        return False
+    return bool(_ORDINAL_RE.search(text))
 
 
 # "Help me choose / explore courses" signals → Recommend (profile- or topic-scoped).
@@ -312,7 +335,8 @@ _ROUTE_SYSTEM = (
     "- foundry_iq: asks about the CONTENT of a specific course/cert/Azure topic.\n"
     "- work_iq: asks about THEIR OWN schedule, workload, meetings, capacity, or study timing.\n"
     "- practise_module: asks to practise / quiz / drill / test themselves on the CURRENT module.\n"
-    "- take_evaluation: says they are ready to take, or want to start, the module test / evaluation.\n"
+    "- take_evaluation: says they are ready to take, or want to start, the module "
+    "test / evaluation.\n"
     "- go_to_module: asks to open / go to / study the current module.\n"
     "- general: only genuinely off-platform topics.\n"
     'Reply ONLY with JSON: {"route":'

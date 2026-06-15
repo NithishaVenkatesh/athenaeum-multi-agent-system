@@ -38,6 +38,7 @@ from app.agent.orchestrator import run_pipeline
 from app.agent.router_agent import (
     is_acceptance,
     is_feedback_intent,
+    is_options_question,
     is_progress_intent,
     is_refusal,
 )
@@ -342,6 +343,12 @@ def _resolve_suggestion_choice(course: Course, content: str) -> str | None:
         return None
     # A refusal ("absolutely not", "please don't") selects nothing — never enroll on it.
     if is_refusal(content):
+        return None
+    # A comparison / info question about the options ("what's the difference between the
+    # first and the second one?") names ordinals but is not a selection — enrolling on it
+    # would be a silent, persisted side-effect. An explicit accept ("let's go with the
+    # second, tell me more") still selects.
+    if not is_acceptance(content) and is_options_question(content):
         return None
     low = content.lower()
     offered = {str(o.get("catalog_id") or "").lower() for o in options}

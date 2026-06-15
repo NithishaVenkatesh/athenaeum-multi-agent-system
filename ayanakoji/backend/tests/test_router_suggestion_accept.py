@@ -81,6 +81,27 @@ def test_resolve_choice_handles_ordinal_and_name() -> None:
     assert _resolve_suggestion_choice(course, "let's do as-c01") == "as-c01"
     # Ambiguous bare 'yes' over two options does not pick one.
     assert _resolve_suggestion_choice(course, "yes") is None
+    # A comparison question naming ordinals must NOT silently enroll (no side-effect).
+    assert (
+        _resolve_suggestion_choice(course, "what's the difference between the first and the second?")
+        is None
+    )
+    assert _resolve_suggestion_choice(course, "how does the first one compare to the second") is None
     # Already linked → nothing to accept.
     course.catalog_id = "cb-c01"
     assert _resolve_suggestion_choice(course, "the second one") is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "what's the difference between the first and the second one?",
+        "how does the first compare to the second?",
+        "which one is better, the first or the second?",
+        "tell me more about the second one",
+    ],
+)
+def test_comparison_question_is_not_a_selection(text: str) -> None:
+    # A question ABOUT the options must not be read as picking one (would enroll silently).
+    assert not is_suggestion_response(text), f"comparison wrongly read as a pick: {text!r}"
+    assert classify(text, pending="suggestion").route is not Route.STUDY_PLAN
