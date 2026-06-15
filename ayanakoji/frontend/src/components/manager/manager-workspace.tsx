@@ -82,12 +82,14 @@ export function ManagerWorkspace({ employeeId }: { employeeId: string }) {
             </p>
           </header>
 
-          {/* Equal-height columns: dashboard + dedicated chat side section align top and bottom. */}
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-stretch">
+          {/* Columns align at the top; the chat is a FIXED-height side section with its own
+              internal scroll, so a long conversation never grows the page or stretches the
+              dashboard. Sticky on wide screens so it stays in view while the dashboard scrolls. */}
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
             <div className="min-w-0 flex-1">
               <InsightsDashboard insights={insights} />
             </div>
-            <aside className="h-[75dvh] w-full shrink-0 lg:h-auto lg:w-[400px]">
+            <aside className="h-[75dvh] w-full shrink-0 lg:sticky lg:top-6 lg:h-[calc(100dvh-7rem)] lg:w-[400px]">
               <ManagerChat employeeId={employeeId} />
             </aside>
           </div>
