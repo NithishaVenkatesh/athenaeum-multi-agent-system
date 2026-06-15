@@ -17,6 +17,7 @@ from __future__ import annotations  # all annotations are strings at runtime
 
 import json
 import logging
+import math
 import random
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -123,11 +124,16 @@ def _choice_kind(q: ChoiceQuestion) -> str:
 
 
 def _choice_credit(learner_choice: list[str], correct_answers: list[str]) -> float:
-    """Proportional credit in [0, 1]: (right picks − wrong picks) / #correct, floored at 0.
+    """Proportional credit in [0, 1]: right/#correct, but ONLY when no wrong box is ticked.
 
     A single-answer (MCQ) question reduces to all-or-nothing. A multi-select (MSQ)
-    rewards partial correctness while penalising over-selection, so 3-of-4 right with
-    no wrong picks earns 0.75 of the question instead of a flat 0.
+    rewards genuine partial knowledge (3-of-4 correct picks, none wrong → 0.75) but any
+    incorrect pick zeroes the question. The old penalty divided by #correct, not by the
+    number of incorrect options, so over-selection was under-punished: ticking every box
+    on a 3-of-4 MSQ scored 0.667, making "select all" the rational strategy for any
+    unknown question (and that pass is then stamped permanently). Gating on ``wrong == 0``
+    means selecting a wrong answer demonstrates you cannot tell correct from incorrect, so
+    it earns nothing — while a clean partial answer still earns proportional credit.
     """
     correct = set(correct_answers)
     if not correct:
@@ -135,7 +141,23 @@ def _choice_credit(learner_choice: list[str], correct_answers: list[str]) -> flo
     chosen = set(learner_choice)
     right = len(chosen & correct)
     wrong = len(chosen - correct)
-    return max(0.0, (right - wrong) / len(correct))
+    if wrong:
+        return 0.0
+    return right / len(correct)
+
+
+_SCORE_EPSILON = 1e-9  # admits a true at-threshold score despite float-division noise
+
+
+def _grade_outcome(raw_score: float) -> tuple[float, bool]:
+    """Truncate a 0–10 score to 2 dp for display and decide the pass from the *raw* value.
+
+    Rounding before the threshold check let a sub-threshold result cross the line: a raw
+    4.995 rounded to 5.0 and passed. Truncating can never inflate a score, and deciding the
+    pass from the untruncated value (with a tiny float-noise epsilon so an exact-threshold
+    score still passes) keeps the displayed score and the pass/fail decision consistent."""
+    passed = raw_score + _SCORE_EPSILON >= PASS_THRESHOLD
+    return math.floor(raw_score * 100) / 100, passed
 
 
 def _record_pass(a: Assessment) -> None:
@@ -415,8 +437,7 @@ def submit_choices(
             )
         )
 
-    score = round((total_credit / max(len(questions), 1)) * 10, 2)
-    passed = score >= PASS_THRESHOLD
+    score, passed = _grade_outcome((total_credit / max(len(questions), 1)) * 10)
     a.score = score
     a.passed = passed
     a.completed_at = datetime.now(UTC)
@@ -667,8 +688,7 @@ def _auto_submit_llm_if_complete(repo: CourseRepository, a: Assessment) -> None:
     if not all(q.grading_complete for q in qs):
         return
     scores = [q.score for q in qs if q.score is not None]
-    avg = round(sum(scores) / max(len(scores), 1), 2)
-    passed = avg >= PASS_THRESHOLD
+    avg, passed = _grade_outcome(sum(scores) / max(len(scores), 1))
     a.score = avg
     a.passed = passed
     a.completed_at = datetime.now(UTC)
@@ -710,8 +730,7 @@ def submit_llm(
 
     qs = repo.list_llm_questions(assessment_id)
     scores = [q.score for q in qs if q.score is not None]
-    avg = round(sum(scores) / max(len(scores), 1), 2)
-    passed = avg >= PASS_THRESHOLD
+    avg, passed = _grade_outcome(sum(scores) / max(len(scores), 1))
     a.score = avg
     a.passed = passed
     a.completed_at = datetime.now(UTC)

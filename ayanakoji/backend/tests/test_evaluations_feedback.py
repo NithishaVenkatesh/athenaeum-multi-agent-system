@@ -209,13 +209,15 @@ def test_choice_credit_proportional() -> None:
     assert _choice_credit(["B"], ["A"]) == 0.0
     assert _choice_credit([], ["A"]) == 0.0
 
-    # MSQ correct = {A, B, C}: partial credit, penalising wrong picks.
+    # MSQ correct = {A, B, C}: clean partial credit, but any wrong pick zeroes it.
     abc = ["A", "B", "C"]
     assert _choice_credit(["A", "B", "C"], abc) == 1.0
-    assert round(_choice_credit(["A", "B"], abc), 2) == 0.67  # one missed
-    assert round(_choice_credit(["A", "B", "C", "D"], abc), 2) == 0.67  # one wrong
-    assert round(_choice_credit(["A", "B", "D"], abc), 2) == 0.33  # 2 right − 1 wrong
-    assert _choice_credit(["D"], abc) == 0.0  # 0 right − 1 wrong → floored at 0
+    assert round(_choice_credit(["A", "B"], abc), 2) == 0.67  # one missed, none wrong
+    # Over-selection must NOT be rewarded: ticking every box (or any wrong box) → 0, so
+    # "select all" can never pass an unknown MSQ.
+    assert _choice_credit(["A", "B", "C", "D"], abc) == 0.0  # select-all (one wrong)
+    assert _choice_credit(["A", "B", "D"], abc) == 0.0  # 2 right but 1 wrong → 0
+    assert _choice_credit(["D"], abc) == 0.0  # 0 right, 1 wrong → 0
 
 
 # ── attempts-to-pass + latest-only retake ─────────────────────────────────────
