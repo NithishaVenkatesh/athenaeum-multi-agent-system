@@ -22,6 +22,19 @@ from app.courses.models import (
     make_message,
 )
 
+# Newest attempt first, with a deterministic tie-break. The latest-only model is meant
+# to keep a single row per (course, module, type), but a racing double-start (a dev
+# StrictMode double-mount, or the 404-recovery force-start firing while the first start
+# is in flight) can leave two rows sharing the same ``attempt_number``. At a tie a
+# *completed* attempt outranks an in-progress duplicate (``completed_at`` desc → NULLs
+# last in SQLite), then ``id`` desc makes the result fully deterministic — so progress
+# resolves to the real, passed attempt instead of an orphaned in-progress one.
+_NEWEST_FIRST = (
+    col(Assessment.attempt_number).desc(),
+    col(Assessment.completed_at).desc(),
+    col(Assessment.id).desc(),
+)
+
 
 class CourseRepository:
     """Typed read/write access to one learner's workspace records."""
@@ -147,9 +160,21 @@ class CourseRepository:
     # CourseModule rows never loses progress.
 
     def cleared(self, course_id: str, module_id: str, type: str) -> bool:
-        """True if this module's test of ``type`` has been passed at least once."""
-        a = self.latest_assessment(course_id, module_id, type)
-        return a is not None and a.attempts_to_pass is not None
+        """True if this module's test of ``type`` has ever been passed.
+
+        Keys off the permanent success record (``attempts_to_pass``, set once and never
+        cleared) across *all* stored attempts rather than only the latest. Normally the
+        latest-only model keeps a single row per type, but a duplicate in-progress attempt
+        (a racing double-start) must not be able to mask an earlier pass: completion is a
+        permanent fact and never regresses, so any cleared attempt is enough.
+        """
+        statement = select(Assessment).where(
+            Assessment.course_id == course_id,
+            Assessment.module_id == module_id,
+            Assessment.type == type,
+            col(Assessment.attempts_to_pass).is_not(None),
+        )
+        return self._session.exec(statement).first() is not None
 
     def module_completed(self, course_id: str, module_id: str) -> bool:
         """A module is complete once both its quiz and oral have been cleared."""
@@ -220,7 +245,7 @@ class CourseRepository:
                 Assessment.module_id == module_id,
                 Assessment.type == type,
             )
-            .order_by(col(Assessment.attempt_number).desc())
+            .order_by(*_NEWEST_FIRST)
         )
         rows = list(self._session.exec(statement).all())
         prior = rows[0] if rows else None
@@ -245,7 +270,7 @@ class CourseRepository:
                 Assessment.module_id == module_id,
                 Assessment.type == type,
             )
-            .order_by(col(Assessment.attempt_number).desc())
+            .order_by(*_NEWEST_FIRST)
         )
         return self._session.exec(statement).first()
 
@@ -277,11 +302,11 @@ class CourseRepository:
         statement = (
             select(Assessment)
             .where(Assessment.course_id == course_id, Assessment.module_id == module_id)
-            .order_by(col(Assessment.type), col(Assessment.attempt_number))
+            .order_by(col(Assessment.type), *_NEWEST_FIRST)
         )
         latest_by_type: dict[str, Assessment] = {}
         for a in self._session.exec(statement).all():
-            latest_by_type[a.type] = a  # ascending attempt_number → last wins
+            latest_by_type.setdefault(a.type, a)  # newest-first → first (best) per type wins
         return list(latest_by_type.values())
 
     def save_assessment(self, a: Assessment) -> Assessment:
