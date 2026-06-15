@@ -118,6 +118,21 @@ export interface Assessment {
   created_at: string;
 }
 
+/**
+ * Error thrown by {@link requestJson} on a non-2xx response. Carries the HTTP
+ * `status` so callers can react to a specific code (e.g. recover from a stale
+ * resource on 404) instead of string-matching the message.
+ */
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(path: string, status: number) {
+    super(`Request to ${path} failed: ${status}`);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -128,7 +143,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
     },
   });
   if (!response.ok) {
-    throw new Error(`Request to ${path} failed: ${response.status}`);
+    throw new ApiError(path, response.status);
   }
   return (await response.json()) as T;
 }

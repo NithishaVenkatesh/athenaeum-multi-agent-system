@@ -19,6 +19,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  ApiError,
   getAssessmentSession,
   listModuleAssessments,
   listModules,
@@ -29,6 +30,7 @@ import {
   type AssessmentSession,
   type CourseModuleProgress,
   type LlmSubmitResult,
+  type SessionLlmQuestion,
 } from "@/lib/api";
 
 type Phase = "loading" | "chat" | "grading" | "results" | "redirect" | "error";
@@ -110,18 +112,39 @@ export default function LlmAssessmentPage({
             }
             return;
           }
-          // Resume in-progress LLM session, else start a new one.
+          // Resume in-progress LLM session, else start a new one. A stale
+          // in-progress id (deleted between the list and this fetch) 404s here;
+          // recover by starting fresh rather than erroring.
           const inProgress = llmSummaries.find((a) => a.completed_at === null);
-          s = inProgress
-            ? await getAssessmentSession(courseId, inProgress.id)
-            : await startAssessment(courseId, moduleId, "llm");
+          if (inProgress) {
+            try {
+              s = await getAssessmentSession(courseId, inProgress.id);
+            } catch (err: unknown) {
+              if (!(err instanceof ApiError) || err.status !== 404) throw err;
+              s = await startAssessment(courseId, moduleId, "llm", true);
+            }
+          } else {
+            s = await startAssessment(courseId, moduleId, "llm");
+          }
+        }
+        if (cancelled) return;
+
+        // Open the grader's first message. A 404 here means the attempt id we
+        // hold went stale — the backend's latest-only model deletes the prior
+        // attempt whenever a new one starts (a dev StrictMode double-mount, a
+        // back/forward re-entry, or a server restart can all replace it). That
+        // is recoverable, not terminal: mint a fresh attempt and retry once
+        // rather than dead-ending the learner on an error screen.
+        let q: SessionLlmQuestion;
+        try {
+          q = await startLlmQuestion(courseId, s.id);
+        } catch (err: unknown) {
+          if (!(err instanceof ApiError) || err.status !== 404) throw err;
+          s = await startAssessment(courseId, moduleId, "llm", true);
+          q = await startLlmQuestion(courseId, s.id);
         }
         if (cancelled) return;
         setSession(s);
-
-        // Load/obtain the grader opening message.
-        const q = await startLlmQuestion(courseId, s.id);
-        if (cancelled) return;
 
         const opening = q.messages[0];
         if (opening) {
