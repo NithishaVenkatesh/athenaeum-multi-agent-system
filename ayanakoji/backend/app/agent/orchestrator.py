@@ -58,6 +58,7 @@ from app.agent.contracts import (
 from app.agent.gate import screen
 from app.agent.grounding import CourseGrounding, get_grounding
 from app.agent.llm import AllProvidersDown, ModelRouter
+from app.agent.output_guard import safe_output_stream
 from app.agent.router_agent import mentions_other_person, route
 from app.agent.state import CourseState, transition_note
 from app.config import Settings, get_settings
@@ -352,9 +353,12 @@ def run_pipeline(
 
     yield PhaseEvent(phase=reply.telemetry)
 
-    # ── Stream the answer tokens (em-dash-free; mid-stream break → explicit error) ─
+    # ── Stream the answer tokens (em-dash-free, output-safety-screened; mid-stream break →
+    # explicit error). safe_output_stream is the SECOND perimeter: it screens the model's own
+    # output for a governance-prompt leak or attacker-persona adoption and halts the answer if
+    # one appears, so a single input-gate bypass cannot stream an unfiltered breach. ──
     try:
-        for token in _no_em_dashes(reply.tokens):
+        for token in safe_output_stream(_no_em_dashes(reply.tokens)):
             yield TokenEvent(token=token)
     except Exception as exc:  # noqa: BLE001, surface, never swallow, a stream break
         logger.warning("answer stream broke: %s", exc)
