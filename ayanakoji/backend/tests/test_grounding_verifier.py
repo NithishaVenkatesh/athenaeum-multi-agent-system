@@ -67,6 +67,60 @@ def test_verify_grounding_uses_lexical_when_evaluation_unavailable() -> None:
     assert verdict.grounded is True
 
 
+@pytest.mark.parametrize(
+    ("groundedness_score", "expected_grounded"),
+    [
+        (3.0, False),  # "some claims unsupported" — a C-minus that must NOT pass now
+        (3.9, False),  # still below the 4.0 mostly/fully-supported bar
+        (4.0, True),  # "mostly/fully supported" — clears the gate
+        (5.0, True),
+    ],
+)
+def test_azure_grounding_gate_at_four(
+    monkeypatch: pytest.MonkeyPatch, groundedness_score: float, expected_grounded: bool
+) -> None:
+    """The Azure groundedness gate passes at >=4 (default), not at 3.
+
+    A score of 3 on Azure's 1..5 rubric means "some claims unsupported" — a partially
+    grounded answer the gate must now reject; only 4+ ("mostly/fully supported") passes.
+    """
+    import app.agent.grounding_verifier as gv
+
+    # Stub the evaluator surface so no live Azure call is made: each evaluator returns
+    # the score we want under the {name} key; require_foundry needs no real creds here.
+    class _StubEval:
+        def __init__(self, _model_config: object) -> None: ...
+
+        def __call__(self, **_kw: object) -> dict[str, object]:
+            return {self._name: groundedness_score}
+
+    class _Grounded(_StubEval):
+        _name = "groundedness"
+
+    class _Relevance(_StubEval):
+        _name = "relevance"
+
+    class _Retrieval(_StubEval):
+        _name = "retrieval"
+
+    import sys
+    import types
+
+    fake = types.ModuleType("azure.ai.evaluation")
+    fake.AzureOpenAIModelConfiguration = lambda **_kw: object()  # type: ignore[attr-defined]
+    fake.GroundednessEvaluator = _Grounded  # type: ignore[attr-defined]
+    fake.RelevanceEvaluator = _Relevance  # type: ignore[attr-defined]
+    fake.RetrievalEvaluator = _Retrieval  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "azure.ai.evaluation", fake)
+    # Skip the Content-Safety-backed Pro evaluator (no project / no live call).
+    monkeypatch.setattr(gv, "_groundedness_pro", lambda *_a, **_k: None)
+
+    settings = _eval_settings()
+    assert settings.groundedness_min_score == 4.0  # the raised default
+    verdict = gv.azure_grounding("q", "an answer [cb-c01-m02]", _SRC, settings)
+    assert verdict.grounded is expected_grounded
+
+
 def test_extract_score_tolerates_nan_via_properties() -> None:
     from app.agent.grounding_verifier import _extract_score
 

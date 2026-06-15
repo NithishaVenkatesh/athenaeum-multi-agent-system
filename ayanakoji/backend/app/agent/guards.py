@@ -475,10 +475,13 @@ _GROUND_STOP = frozenset(
 )
 _GROUND_TOKEN = re.compile(r"[a-z0-9]+")
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
-# A cited sentence is "supported" if it shares at least this many salient terms with the
-# cited module's material (title + snippet). One meaningful term is a deliberately lenient
-# floor: it flags only a citation whose sentence is topically disjoint from its source.
-_MIN_SUPPORT_TERMS = 1
+# A cited sentence is "supported" if it shares at least this many salient (non-stopword,
+# >2-char) terms with the cited module's material (title + snippet). A single shared term
+# is too weak — one incidental keyword overlap (e.g. a stray "functions") makes almost any
+# on-topic-looking sentence "pass". Requiring 2 distinct salient overlaps means a real
+# topical connection, not one coincidental word, while still being a lenient floor that
+# only flags a citation whose sentence is genuinely disjoint from its source.
+_MIN_SUPPORT_TERMS = 2
 _CLAIM_DISCLAIMER = (
     " (Note: some statements above may not be fully supported by the cited modules, "
     "double-check them against the linked material.)"

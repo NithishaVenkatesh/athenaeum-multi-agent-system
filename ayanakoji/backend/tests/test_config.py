@@ -122,6 +122,23 @@ def test_offline_forced_overrides_configured_providers() -> None:
     assert settings.llm_offline is True
 
 
+def test_grader_offline_demo_only_for_explicit_offline() -> None:
+    # Explicit demo: OFFLINE_LLM=true → demo stub allowed.
+    demo = Settings(_env_file=None, offline_llm=True)  # type: ignore[call-arg]
+    assert demo.grader_offline_demo is True
+
+    # No provider but NOT an explicit demo: llm_offline is True yet the grader must
+    # NOT treat this as the demo (it fails closed instead of auto-passing).
+    no_creds = Settings(_env_file=None, offline_llm=False)  # type: ignore[call-arg]
+    assert no_creds.llm_offline is True
+    assert no_creds.grader_offline_demo is False
+
+
+def test_groundedness_min_score_default_is_four() -> None:
+    # Raised from 3.0 (a C-minus "some claims unsupported") to 4.0 (mostly/fully supported).
+    assert Settings(_env_file=None).groundedness_min_score == 4.0  # type: ignore[call-arg]
+
+
 # --- Azure AI Search / Foundry IQ knowledge base ---------------------------
 
 

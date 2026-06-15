@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -480,3 +481,55 @@ def test_grader_turn_offline_below_ceiling() -> None:
     # Below ceiling, offline grader asks a follow-up.
     assert result.grade is None
     assert result.reply
+
+
+def test_grader_explicit_demo_still_auto_passes_at_ceiling() -> None:
+    """OFFLINE_LLM=true is the explicit demo: the score-7 stub is intentional.
+
+    The autouse _offline_env fixture sets OFFLINE_LLM=true, so this is the demo lane.
+    """
+    from app.agent.grader import _OFFLINE_GRADE, run_turn
+    from app.config import get_settings
+
+    assert get_settings().grader_offline_demo is True
+    result = run_turn(
+        prompt="Explain partition pruning.",
+        reference_answer="ref",
+        history=[{"role": "user", "content": "files something"}],
+        turn_count=8,  # at ceiling
+    )
+    assert result.grade is not None
+    assert result.grade == _OFFLINE_GRADE
+    assert result.grade.score == 7  # the demo stub auto-passes
+
+
+def test_grader_no_provider_without_demo_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No provider AND OFFLINE_LLM unset → cannot grade → fail closed, never auto-pass.
+
+    A deploy booted without any LLM credentials must NOT silently certify free-text
+    answers. ``llm_offline`` is still True (no provider), but it is NOT an explicit demo,
+    so the grader returns the score-0 unavailable grade instead of the score-7 stub.
+
+    The grader reads settings via ``get_settings()``, which loads ``backend/.env`` (the
+    dev box may carry real provider creds), so we stub that call directly to model the
+    zero-credential, non-demo deploy independent of the local environment.
+    """
+    import app.agent.grader as grader_mod
+    from app.agent.grader import _GRADE_UNAVAILABLE, run_turn
+    from app.config import Settings
+
+    no_provider = Settings(_env_file=None, offline_llm=False)  # type: ignore[call-arg]
+    assert no_provider.grader_offline_demo is False  # not an explicit demo
+    assert no_provider.llm_offline is True  # no provider configured
+    monkeypatch.setattr(grader_mod, "get_settings", lambda: no_provider)
+
+    result = run_turn(
+        prompt="Explain partition pruning.",
+        reference_answer="ref",
+        history=[{"role": "user", "content": "files something"}],
+        turn_count=8,  # at ceiling — the deciding exchange
+    )
+    assert result.grade is not None
+    assert result.grade == _GRADE_UNAVAILABLE
+    assert result.grade.score == 0  # fail closed, NOT the score-7 auto-pass
+    assert result.grade.confidence == "low"

@@ -272,9 +272,12 @@ def test_answer_foundry_online_streams_grounded() -> None:
     router = FakeRouter(tokens=["Azure ", "Functions ", "[cb-c01-m02]"])
     reply = answer_foundry("azure functions", router=router, settings=_online())
     assert reply.telemetry.tier == 1
-    # Streamed live through the grounding scrubber; a real source's citation is
-    # kept verbatim (M5).
-    assert "".join(reply.tokens).strip() == "Azure Functions [cb-c01-m02]"
+    # Streamed live through the grounding scrubber; a real source's citation is kept
+    # verbatim (M5). The two-word answer shares only one salient term ("functions") with
+    # its module, so the raised claim-support floor (_MIN_SUPPORT_TERMS=2) now appends an
+    # honesty disclaimer — the citation itself is still passed through untouched.
+    text = "".join(reply.tokens).strip()
+    assert text.startswith("Azure Functions [cb-c01-m02]")
     assert reply.sources
 
 

@@ -55,6 +55,27 @@ def test_no_sources_is_grounded() -> None:
     assert verdict.grounded is True
 
 
+def test_single_shared_term_is_no_longer_grounded() -> None:
+    """The lexical floor now requires >=2 salient overlapping terms, not 1.
+
+    The source's only salient terms (after stopword/short-word filtering) here are
+    ``triggers`` and ``handlers``. A sentence that shares exactly ONE of them is now
+    flagged (a lone incidental keyword is not support); sharing BOTH is grounded.
+    """
+    src = GroundingSource(
+        ref="cb-c01-m02", title="Triggers", snippet="handlers", kind="course"
+    )
+    one_term = "The triggers diagram explains everything about distributed consensus [cb-c01-m02]."
+    two_terms = "The triggers and handlers are described here [cb-c01-m02]."
+
+    flagged = lexical_groundedness(one_term, [src])
+    assert flagged.grounded is False
+    assert "cb-c01-m02" in flagged.unsupported
+
+    ok = lexical_groundedness(two_terms, [src])
+    assert ok.grounded is True
+
+
 def test_partial_support_flags_only_the_unsupported_citation() -> None:
     answer = (
         "Azure Functions run on triggers and bindings [cb-c01-m02]. "

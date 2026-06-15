@@ -171,12 +171,16 @@ def _build_grader_system(
 
 _OFFLINE_OPENING = "**Question:** {prompt}\n\nPlease share your understanding of this concept."
 _OFFLINE_REPLY = "Thank you for your response. Can you elaborate on the key mechanism involved?"
+# Auto-pass stub for the EXPLICIT offline demo (OFFLINE_LLM=true) ONLY. It must never be
+# used for the no-credentials case (see grader_offline_demo): a deploy without a provider
+# silently auto-passing every free-text answer is a certification-integrity breach.
 _OFFLINE_GRADE = GradeResult(
     score=7, reasoning="Offline mode — deterministic stub.", confidence="high"
 )
-# A LIVE grading call that errors on the final exchange must never silently award a
-# pass: fail closed to a non-passing, low-confidence "unavailable" grade so the
-# learner is asked to retry rather than auto-passed (distinct from the offline stub).
+# A grade that cannot be produced — a LIVE call erroring on the final exchange, OR no
+# provider configured on a non-demo deploy — must never silently award a pass: fail
+# closed to a non-passing, low-confidence "unavailable" grade so the learner is asked to
+# retry rather than auto-passed (distinct from the explicit offline demo stub).
 _GRADE_UNAVAILABLE = GradeResult(
     score=0,
     reasoning="Grading was temporarily unavailable for this answer; it was not scored as a "
@@ -244,10 +248,21 @@ def run_turn(
     """
     settings = get_settings()
 
-    if settings.llm_offline:
+    # Explicit offline demo (OFFLINE_LLM=true): deterministic stub, auto-pass at ceiling.
+    if settings.grader_offline_demo:
         ceiling = settings.assessment_grader_ceiling
         if turn_count + 1 >= ceiling:
             return GraderTurnResult(reply="", grade=_OFFLINE_GRADE)
+        return GraderTurnResult(reply=_OFFLINE_REPLY, grade=None)
+
+    # No provider configured but NOT an explicit demo: we cannot grade. Never award the
+    # auto-pass stub here — that would silently certify free-text answers on a zero-cred
+    # deploy. Fail closed at the deciding (ceiling) exchange; before then a harmless
+    # follow-up keeps the loop going (still no pass awarded).
+    if settings.llm_offline:
+        ceiling = settings.assessment_grader_ceiling
+        if turn_count + 1 >= ceiling:
+            return GraderTurnResult(reply="", grade=_GRADE_UNAVAILABLE)
         return GraderTurnResult(reply=_OFFLINE_REPLY, grade=None)
 
     from app.agent.llm import ModelRouter

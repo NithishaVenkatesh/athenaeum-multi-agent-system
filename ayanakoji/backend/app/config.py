@@ -164,9 +164,12 @@ class Settings(BaseSettings):
     # the claim-support disclaimer and surfaces scores in the trace. Off → the
     # deterministic lexical groundedness proxy stands in (offline / CI).
     evaluation_enabled: bool = True
-    # Below this groundedness score (1..5 scale) the answer is treated as ungrounded and
-    # gets the honesty disclaimer even when it cites a real module id.
-    groundedness_min_score: float = 3.0
+    # Minimum Azure groundedness score (1..5 rubric) for an answer to count as grounded;
+    # below it the answer is treated as ungrounded and gets the honesty disclaimer even
+    # when it cites a real module id. On Azure's rubric 3 = "some claims unsupported" (a
+    # partially-grounded C-minus that should NOT pass); 4 = "mostly/fully supported".
+    # Default 4.0 so only a mostly/fully-supported answer clears the gate.
+    groundedness_min_score: float = 4.0
     # Cap evaluation so a slow judge can't stall a turn (seconds).
     evaluation_timeout_seconds: float = 20.0
 
@@ -238,6 +241,18 @@ class Settings(BaseSettings):
         provider is configured (zero-credential demo / CI lane).
         """
         return self.offline_llm or not (self.foundry_configured or self.groq_configured)
+
+    @property
+    def grader_offline_demo(self) -> bool:
+        """True ONLY for the explicit offline demo (``OFFLINE_LLM=true``).
+
+        The grader's auto-pass stub (a fixed passing score) is a deliberate demo
+        convenience, so it must fire only when offline is *explicitly* requested —
+        NOT in the no-credentials case that ``llm_offline`` also covers. A deploy
+        booted without any provider must never silently certify free-text answers;
+        the grader treats that case as "cannot grade" and fails closed instead.
+        """
+        return self.offline_llm
 
     def require_foundry(self) -> FoundryConfig:
         """Return a validated FoundryConfig or raise loudly listing what is missing.
