@@ -41,7 +41,8 @@ from app.catalog.content import get_module_content
 from app.catalog.loader import get_course as get_catalog_course
 from app.catalog.loader import is_valid_course_id
 from app.config import get_settings
-from app.courses.models import Assessment, Course, CourseModule
+from app.courses.feedback import feedback_performance
+from app.courses.models import Course, CourseModule
 from app.courses.repository import CourseRepository
 from app.courses.schemas import (
     AcceptCourse,
@@ -800,30 +801,6 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
 # ── Assessment feedback (in-chat, grounded, bypasses the topic gate) ─────────────
 
 
-def _feedback_performance(repo: CourseRepository, assessment: Assessment, type: str) -> str:
-    """A readable summary of what the learner actually got wrong, for the tutor prompt.
-
-    The feedback request is first-party (the learner just took this test), so we hand
-    the model the real per-question outcome instead of a bare natural-language question
-    that the topic gate would reject as ungrounded.
-    """
-    if type == "choices":
-        wrong = [q for q in repo.list_choice_questions(assessment.id) if q.is_correct is False]
-        if not wrong:
-            return "You answered every question correctly."
-        lines = [
-            f'- "{q.prompt}" You chose: {", ".join(q.learner_choice or []) or "nothing"}. '
-            f'Correct: {", ".join(q.correct_answers)}.'
-            for q in wrong
-        ]
-        return "Questions you missed:\n" + "\n".join(lines)
-    lines = [
-        f'- "{q.prompt}" Examiner note: {q.reasoning or "n/a"} (scored {q.score}/10).'
-        for q in repo.list_llm_questions(assessment.id)
-    ]
-    return "Your oral answers:\n" + "\n".join(lines)
-
-
 @router.post(
     "/{course_id}/modules/{module_id}/feedback",
     summary="Grounded feedback on the latest assessment, streamed into the chat (SSE)",
@@ -875,7 +852,7 @@ def _stream_feedback(course_id: str, module_id: str, type: str) -> Iterator[str]
         latest = repo.latest_assessment(course_id, module_id, type)
         if latest is not None and latest.completed_at is not None:
             score, passed = latest.score, latest.passed
-            performance = _feedback_performance(repo, latest, type)
+            performance = feedback_performance(repo, latest, type)
 
         reply = answer_feedback(
             module_id=module_id,

@@ -101,6 +101,30 @@ class RouteDecision(BaseModel):
     confidence: float = Field(ge=0, le=1, default=0.5)
 
 
+class FeedbackResolution(BaseModel):
+    """Which test an in-chat feedback ask resolved to, computed in the courses layer.
+
+    The pipeline is pure of the DB, so the courses layer resolves the target (the
+    learner's most recent miss in this course, a named module's miss, a cross-course
+    redirect, or nothing failed) and hands the answer inputs in as this value. The
+    FEEDBACK dispatch then grounds on ``material`` + ``performance`` without re-reading.
+    """
+
+    kind: Literal["answer", "redirect", "none"]
+    # answer: the resolved test + its grounding inputs.
+    module_id: str | None = None
+    module_title: str | None = None
+    type: str | None = Field(default=None, description="'choices' | 'llm'")
+    material: str = Field(default="", description="Trimmed module material to ground on")
+    performance: str = Field(default="", description="What the learner actually got wrong")
+    score: float | None = None
+    passed: bool | None = None
+    # redirect: the other course whose chat the learner should use instead.
+    other_course_title: str | None = None
+    # The course this chat is locked to (for both answer + redirect copy).
+    this_course_title: str = ""
+
+
 class GroundingSource(BaseModel):
     """One citation backing an answer — a module, a work signal, etc."""
 

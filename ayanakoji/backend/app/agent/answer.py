@@ -731,6 +731,62 @@ def answer_feedback(
     )
 
 
+def answer_feedback_redirect(*, this_course_title: str, other_course_title: str) -> AgentReply:
+    """Decline a feedback ask about ANOTHER course and point the learner to its chat.
+
+    Deterministic (no model): feedback is per-course, and each chat is locked to one
+    course, so a test from a different course belongs to that course's chat. Keeps the
+    learner's own data scoped to the right conversation.
+    """
+    here = this_course_title or "this course"
+    text = (
+        f"That test is part of your {other_course_title} course, and each chat only covers "
+        f"one course, so I can not pull it up here. Open your {other_course_title} chat and ask "
+        f"me there and I'll go over it with you. In this chat I can give you feedback on your "
+        f"{here} tests."
+    )
+    steps = [
+        TraceStep(label="Scope check", passed=True, detail=f"Cross-course → {other_course_title}")
+    ]
+    return AgentReply(
+        telemetry=_answer_telemetry(
+            summary="Pointed you to the right course chat",
+            reasoning=f"Feedback ask targeted {other_course_title}, not this chat's {here}.",
+            route=Route.FEEDBACK,
+            sources=[],
+            model="policy",
+            tier=None,
+            steps=steps,
+        ),
+        tokens=_offline_stream(text),
+    )
+
+
+def answer_feedback_none(*, this_course_title: str) -> AgentReply:
+    """Tell the learner there is no failed test in this course to review (deterministic)."""
+    here = this_course_title or "this course"
+    text = (
+        f"Good news, you have not failed any tests in {here} yet, so there's nothing to review "
+        f"right now. Once you take a quiz or oral exam and miss the mark, ask me here and I'll go "
+        f"over exactly what to revisit."
+    )
+    steps = [
+        TraceStep(label="Assessment lookup", passed=True, detail="No failed attempt in course")
+    ]
+    return AgentReply(
+        telemetry=_answer_telemetry(
+            summary="No failed test to review",
+            reasoning=f"No submitted failing assessment exists in {here}.",
+            route=Route.FEEDBACK,
+            sources=[],
+            model="policy",
+            tier=None,
+            steps=steps,
+        ),
+        tokens=_offline_stream(text),
+    )
+
+
 # ── Work IQ (tool scope: persona read only) ────────────────────────────────────
 
 

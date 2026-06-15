@@ -25,6 +25,9 @@ from datetime import date
 
 from app.agent.answer import (
     AgentReply,
+    answer_feedback,
+    answer_feedback_none,
+    answer_feedback_redirect,
     answer_foundry,
     answer_general,
     answer_greeting,
@@ -40,6 +43,7 @@ from app.agent.contracts import (
     BlockedEvent,
     DoneEvent,
     ErrorEvent,
+    FeedbackResolution,
     Pace,
     PhaseEvent,
     PipelineEvent,
@@ -104,6 +108,7 @@ def _dispatch(
     plan_constraints: dict[str, object] | None,
     modules: list[dict[str, object]],
     progress: ProgressSnapshot | None,
+    feedback: FeedbackResolution | None,
     router: ModelRouter | None,
     grounding: CourseGrounding,
     settings: Settings,
@@ -155,6 +160,30 @@ def _dispatch(
         return answer_assessor(
             text, decision.route, modules=modules, router=router, settings=settings
         )
+    if decision.route is Route.FEEDBACK:
+        # The courses layer resolved the target (DB-bound); we just render it. A
+        # missing/none resolution means there is nothing to review.
+        if feedback is None or feedback.kind == "none":
+            return answer_feedback_none(
+                this_course_title=feedback.this_course_title if feedback else ""
+            )
+        if feedback.kind == "redirect":
+            return answer_feedback_redirect(
+                this_course_title=feedback.this_course_title,
+                other_course_title=feedback.other_course_title or "another course",
+            )
+        return answer_feedback(
+            module_id=feedback.module_id or "",
+            module_title=feedback.module_title or "",
+            course_title=feedback.this_course_title,
+            material=feedback.material,
+            kind=feedback.type or "choices",
+            score=feedback.score,
+            passed=feedback.passed,
+            performance=feedback.performance,
+            router=router,
+            settings=settings,
+        )
     return answer_general(text, decision, router=router, settings=settings)
 
 
@@ -176,6 +205,8 @@ def run_pipeline(
     plan_constraints: dict[str, object] | None = None,
     modules: list[dict[str, object]] | None = None,
     progress: ProgressSnapshot | None = None,
+    feedback: FeedbackResolution | None = None,
+    feedback_active: bool = False,
     course_state: CourseState | None = None,
     history: list[dict[str, str]] | None = None,
     pending: str | None = None,
@@ -211,6 +242,7 @@ def run_pipeline(
         grounding=grounding,
         history=history,
         pending=pending,
+        feedback_active=feedback_active,
         settings=settings,
     )
     if course_state is not None:
@@ -248,6 +280,7 @@ def run_pipeline(
                 plan_constraints=plan_constraints,
                 modules=modules or [],
                 progress=progress,
+                feedback=feedback,
                 router=router,
                 grounding=grounding,
                 settings=settings,
