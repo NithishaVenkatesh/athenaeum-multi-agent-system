@@ -1,0 +1,23 @@
+# Render Blueprint — Athenaeum backend (FREE plan, no credit card required).
+#
+# The frontend deploys separately to Vercel. Secrets are NOT in this file — they
+# are pushed from backend/.env via the Render API (or pasted in the dashboard)
+# after the service is created, so nothing sensitive is committed to git.
+#
+# rootDir points Render into the backend; the repo clone keeps athenaeum/ and
+# assessments/ as siblings, so the catalog/bank loaders (parents[3]) still resolve.
+services:
+  - type: web
+    name: athenaeum-backend
+    runtime: python
+    plan: free
+    region: singapore            # closest free Render region to India
+    rootDir: ayanakoji/backend
+    healthCheckPath: /health
+    buildCommand: "pip install uv && uv sync --frozen --no-dev --group foundry"
+    startCommand: ".venv/bin/uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: ENVIRONMENT
+        value: production
