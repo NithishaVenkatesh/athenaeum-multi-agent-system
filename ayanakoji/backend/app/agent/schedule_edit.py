@@ -132,18 +132,36 @@ _PACE_CUES = (" pace", " make it", " go ", " revert", " switch to", " change to"
               " set it to", " keep it", " dial it", " move to")  # fmt: skip
 
 
+def _speed_directive(t: str, phrases: tuple[str, ...]) -> bool:
+    """True if a speed phrase is a pace directive, NOT an adverbial '<faster> to <do X>'.
+
+    'make it faster to query Cosmos DB' describes an action (faster *at* querying), not the
+    plan's pace, so a speed word immediately followed by ' to ' is not a pace change. A real
+    pace ask ('make it faster', 'go quicker please') has no trailing infinitive.
+    """
+    for p in phrases:
+        i = t.find(p)
+        while i != -1:
+            if not t[i + len(p) :].startswith(" to "):
+                return True
+            i = t.find(p, i + 1)
+    return False
+
+
 def parse_pace(text: str) -> Pace | None:
     """A requested pace change (slower|normal|faster), or None if the text isn't one.
 
-    Requires a steering cue (the word "pace" or a verb like "make it / revert")
-    so a topic mention ("an intensive security course") is not read as a pace edit.
+    Requires a steering cue (the word "pace" or a verb like "make it / revert") so a topic
+    mention ("an intensive security course") is not read as a pace edit, and a speed word
+    used adverbially ("make it faster to query Cosmos DB") is a content question, not a pace
+    edit, so it is excluded too.
     """
     t = f" {text.lower()} "
     has_cue = any(cue in t for cue in _PACE_CUES)
     if any(p in t for p in _PACE_NORMAL):
         return Pace.NORMAL
-    wants_slower = has_cue and any(p in t for p in _PACE_SLOWER)
-    wants_faster = has_cue and any(p in t for p in _PACE_FASTER)
+    wants_slower = has_cue and _speed_directive(t, _PACE_SLOWER)
+    wants_faster = has_cue and _speed_directive(t, _PACE_FASTER)
     # A self-contradiction ("faster but also slower") is not a confident edit — refuse
     # to silently guess one direction; let the planner keep its current pace.
     if wants_slower and wants_faster:

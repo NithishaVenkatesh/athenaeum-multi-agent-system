@@ -77,6 +77,10 @@ def test_parse_pace_requires_a_steering_cue() -> None:
     # A topic mention is not a pace edit (no false positive).
     assert parse_pace("I want an intensive course on security") is None
     assert parse_pace("how do Azure Functions work") is None
+    # A speed word used adverbially ("faster to <do X>") is a content question, not a pace
+    # edit — it must not hijack a Cosmos DB question into the study-plan route.
+    assert parse_pace("can you make it faster to query Cosmos DB?") is None
+    assert parse_pace("how do I make it quicker to load the dashboard") is None
 
 
 def test_only_days_restricts_to_given_days() -> None:
