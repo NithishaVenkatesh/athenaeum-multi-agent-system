@@ -25,22 +25,6 @@ export interface CohortReadiness {
   total: number;
 }
 
-export interface TrackRecord {
-  passed: number;
-  decided: number;
-  pass_rate: number | null;
-}
-
-export interface CapacitySummary {
-  member_count: number;
-  avg_meeting_hours_per_week: number;
-  avg_focus_hours_per_week: number;
-  high_meeting_load_count: number;
-  heavy_meeting_threshold_hours: number;
-  constrained: boolean;
-  target_study_hours_by_seniority: Record<string, number>;
-}
-
 export interface CertTargetProgress {
   vertical: string;
   cert: string;
@@ -49,23 +33,18 @@ export interface CertTargetProgress {
   ready_count: number;
 }
 
-export interface OkrProgress {
-  id: string;
-  objective: string;
-  progress: number;
-}
-
 export interface PlatformEngagement {
   members_total: number;
   members_active: number;
   assessments_attempted: number;
   assessments_passed: number;
   modules_with_a_pass: number;
+  modules_completed: number;
   pass_rate: number | null;
   has_activity: boolean;
 }
 
-export type RiskArea = "exam_readiness" | "capacity" | "engagement";
+export type RiskArea = "exam_readiness" | "engagement";
 export type RiskSeverity = "high" | "medium" | "low";
 
 export interface RiskFlag {
@@ -80,14 +59,9 @@ export interface TeamInsights {
   team_name: string;
   manager_codename: string;
   member_count: number;
-  sprint_name: string | null;
-  sprint_goal: string | null;
   readiness: ReadinessBreakdown;
   by_seniority: CohortReadiness[];
-  track_record: TrackRecord;
-  capacity: CapacitySummary;
   cert_targets: CertTargetProgress[];
-  okrs: OkrProgress[];
   engagement: PlatformEngagement;
   risks: RiskFlag[];
   disclaimer: string;

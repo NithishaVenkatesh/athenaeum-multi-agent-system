@@ -224,7 +224,7 @@ export function ManagerChat({ employeeId }: { employeeId: string }) {
   const pastSessions = sessions.filter((s) => s.turns.length > 0);
 
   return (
-    <section className="border-border bg-card/70 flex h-full flex-col overflow-hidden rounded-2xl border backdrop-blur-sm">
+    <section className="flex h-full flex-col overflow-hidden">
       {/* Header: title + New chat + History */}
       <header className="border-border/70 relative flex items-center justify-between gap-2 border-b px-4 py-3">
         <div className="min-w-0">
@@ -290,7 +290,7 @@ export function ManagerChat({ employeeId }: { employeeId: string }) {
       </header>
 
       {/* Conversation */}
-      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+      <div ref={scrollRef} className="no-scrollbar flex-1 space-y-4 overflow-y-auto px-4 py-4">
         {turns.length === 0 ? (
           <div className="flex flex-col gap-2">
             <p className="text-muted-foreground text-sm">Try one of these, or ask your own:</p>
@@ -311,7 +311,9 @@ export function ManagerChat({ employeeId }: { employeeId: string }) {
               <MessageBubble key={turn.id} role="user" content={turn.content} />
             ) : (
               <div key={turn.id} className="space-y-2">
-                {turn.phases.length > 0 && <PipelineTrace phases={turn.phases} defaultOpen={false} />}
+                {turn.phases.length > 0 && (
+                  <PipelineTrace phases={turn.phases} defaultOpen={turn.streaming} />
+                )}
                 {turn.streaming && !turn.content ? (
                   <TypingIndicator />
                 ) : (

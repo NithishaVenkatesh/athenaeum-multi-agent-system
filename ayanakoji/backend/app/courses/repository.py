@@ -204,41 +204,46 @@ class CourseRepository:
 
     # ── Assessment session (latest attempt only + carried attempt count) ──────
 
-    def create_assessment(
+    def create_session_atomic(
         self,
-        *,
-        course_id: str,
-        module_id: str,
-        course_module_id: str,
-        type: str,
-        attempt_number: int,
-        attempts_to_pass: int | None = None,
-        passed_at: datetime | None = None,
-    ) -> Assessment:
-        a = Assessment(
-            course_id=course_id,
-            module_id=module_id,
-            course_module_id=course_module_id,
-            type=type,
-            attempt_number=attempt_number,
-            attempts_to_pass=attempts_to_pass,
-            passed_at=passed_at,
-        )
-        self._session.add(a)
+        assessment: Assessment,
+        choice_qs: list[ChoiceQuestion],
+        llm_qs: list[LlmQuestion],
+    ) -> tuple[Assessment, list[ChoiceQuestion], list[LlmQuestion]]:
+        """Persist a new assessment *and* its sampled questions in ONE transaction.
+
+        Returns the persisted ``(assessment, choice_qs, llm_qs)``. Normally these are the
+        rows passed in; if a racing concurrent start already created the (course, module,
+        type) row, this call recovers the winner's row and *its* questions instead.
+
+        Why atomic: the (course, module, type) unique guard already collapses a StrictMode
+        double-start to a single assessment ROW. But if the row and its questions were
+        committed separately, the loser would recover the winner's row and then attach a
+        *second* sampled question set to it — doubling the question count and halving every
+        score (5 answered + 5 phantom-unanswered → 5/10). Committing the row and its
+        questions together means the loser's whole unit (row + its duplicate questions) is
+        rolled back by the same unique violation, and it recovers the winner's question set
+        instead of bolting on its own. The winner committed atomically, so a recovering
+        caller always reads the full set — never a partial one."""
+        self._session.add(assessment)
+        for cq in choice_qs:
+            self._session.add(cq)
+        for lq in llm_qs:
+            self._session.add(lq)
         try:
             self._session.commit()
         except IntegrityError:
-            # A concurrent start already created the (course, module, type) attempt and
-            # the unique guard rejected this duplicate. Recover idempotently: hand back the
-            # row that won the race instead of orphaning a second one (or 500-ing). Both
-            # racing callers then drive the same session — exactly the latest-only intent.
             self._session.rollback()
-            existing = self.latest_assessment(course_id, module_id, type)
-            if existing is not None:
-                return existing
-            raise
-        self._session.refresh(a)
-        return a
+            existing = self.latest_assessment(
+                assessment.course_id, assessment.module_id or "", assessment.type
+            )
+            if existing is None:
+                raise
+            ecq = self.list_choice_questions(existing.id) if existing.type == "choices" else []
+            elq = self.list_llm_questions(existing.id) if existing.type == "llm" else []
+            return existing, ecq, elq
+        self._session.refresh(assessment)
+        return assessment, choice_qs, llm_qs
 
     def reset_for_new_attempt(
         self, course_id: str, module_id: str, type: str
@@ -329,12 +334,6 @@ class CourseRepository:
 
     # ── Choice questions ─────────────────────────────────────────────────────
 
-    def add_choice_question(self, q: ChoiceQuestion) -> ChoiceQuestion:
-        self._session.add(q)
-        self._session.commit()
-        self._session.refresh(q)
-        return q
-
     def list_choice_questions(self, assessment_id: str) -> list[ChoiceQuestion]:
         statement = (
             select(ChoiceQuestion)
@@ -353,12 +352,6 @@ class CourseRepository:
         return q
 
     # ── LLM questions ────────────────────────────────────────────────────────
-
-    def add_llm_question(self, q: LlmQuestion) -> LlmQuestion:
-        self._session.add(q)
-        self._session.commit()
-        self._session.refresh(q)
-        return q
 
     def list_llm_questions(self, assessment_id: str) -> list[LlmQuestion]:
         statement = (

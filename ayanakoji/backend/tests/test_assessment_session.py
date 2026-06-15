@@ -145,6 +145,65 @@ def test_start_choices_random_sample_varies(client: TestClient, assessments_sess
     assert len(ids2) == 5
 
 
+def test_racing_double_start_does_not_duplicate_questions(
+    client: TestClient, assessments_session: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression: a racing second start must not bolt a second question set onto the row.
+
+    The unique (course, module, type) guard already collapses a StrictMode double-start to a
+    single assessment ROW, and ``create_session_atomic`` recovers the winner's row. The fix
+    persists the row and its questions in one transaction, so the loser's duplicate questions
+    roll back with its rejected row. Before it, the loser kept going and sampled a *second*
+    set of 5 questions, attaching them to that recovered row — so the row held 10
+    ``ChoiceQuestion`` records. The learner saw only 5; on submit, ``submit_choices`` graded
+    all 10, scoring the 5 phantom rows 0. A fully-correct quiz then read 5/10 (credit 5 / 10).
+
+    We reproduce the race deterministically: the second start's ``reset_for_new_attempt``
+    runs *before* the first start committed (so it does not delete the winner's row), which
+    we model by stubbing it to a no-op for the second call. The single row must still hold
+    exactly 5 questions and a clean sweep must score 10/10.
+    """
+    _seed_banks(assessments_session)
+    course_id, module_id = _make_course_with_plan(client)
+
+    r1 = client.post(
+        f"/api/courses/{course_id}/modules/{module_id}/assessments/start",
+        params={"type": "choices"},
+    ).json()
+    a_id = r1["id"]
+    assert len(r1["choice_questions"]) == 5
+
+    # Model the race window: the second start's reset sees no committed prior, so it neither
+    # deletes the winner's row nor bumps the attempt count.
+    from app.courses.repository import CourseRepository
+
+    monkeypatch.setattr(
+        CourseRepository,
+        "reset_for_new_attempt",
+        lambda self, course_id, module_id, type: (0, None, None),
+    )
+
+    r2 = client.post(
+        f"/api/courses/{course_id}/modules/{module_id}/assessments/start",
+        params={"type": "choices"},
+    ).json()
+    assert r2["id"] == a_id  # recovered the winner, not an orphan
+    assert len(r2["choice_questions"]) == 5  # the recovered set, not a fresh duplicate
+
+    full = client.get(f"/api/courses/{course_id}/assessments/{a_id}").json()
+    assert len(full["choice_questions"]) == 5  # exactly one question set on the row
+
+    for q in full["choice_questions"]:
+        client.post(
+            f"/api/courses/{course_id}/assessments/{a_id}/choices/{q['id']}/select",
+            json={"selections": ["A"]},
+        )
+    result = client.post(f"/api/courses/{course_id}/assessments/{a_id}/choices/submit").json()
+    assert len(result["questions"]) == 5
+    assert result["score"] == 10.0
+    assert result["passed"] is True
+
+
 def test_start_choices_blocks_before_plan(client: TestClient, assessments_session: Any) -> None:
     _seed_banks(assessments_session)
     course = client.post("/api/courses", json={"persona_id": "EMP-001", "content": "hello"}).json()

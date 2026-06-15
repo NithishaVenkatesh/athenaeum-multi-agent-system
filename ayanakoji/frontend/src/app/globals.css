@@ -173,6 +173,13 @@
       6px 6px;
     background-attachment: fixed, fixed, scroll;
   }
+  /* Keep an element scrollable while hiding its scrollbar (Firefox + WebKit/Blink). */
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* Lightweight markdown styling for rendered module content (Modules tab). */

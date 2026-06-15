@@ -6,7 +6,7 @@
  * colosseum backdrop (from the root layout), so it matches the rest of the app.
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -17,15 +17,11 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchTeamInsights, type TeamInsights } from "@/lib/manager-api";
 
-/**
- * The sprint name in the data source already embeds the team (e.g.
- * "Sprint 24 — Atlas"), and the team name is printed elsewhere in the header,
- * so strip the redundant trailing " — <team>" to avoid printing "Atlas" twice.
- */
-function sprintLabel(sprintName: string, teamName: string): string {
-  const suffix = new RegExp(`\\s*[—–-]\\s*${teamName}\\s*$`, "i");
-  return sprintName.replace(suffix, "").trim();
-}
+// How often the dashboard re-pulls team insights so the live "Platform engagement"
+// card reflects new course/assessment activity. Kept deliberately slow, and paused
+// when the tab is hidden, so an open dashboard makes at most one request per minute
+// (with an immediate refetch when the manager returns to the tab).
+const REFRESH_INTERVAL_MS = 60_000;
 
 export function ManagerWorkspace({ employeeId }: { employeeId: string }) {
   const router = useRouter();
@@ -33,17 +29,55 @@ export function ManagerWorkspace({ employeeId }: { employeeId: string }) {
   const [insights, setInsights] = useState<TeamInsights | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchTeamInsights(employeeId, controller.signal)
-      .then(setInsights)
-      .catch((cause: unknown) => {
-        if (!controller.signal.aborted) {
+  // One fetch. ``background`` polls keep the last-known dashboard on a transient error
+  // (never flip a working view to an error banner); only the first load reports failure.
+  const loadInsights = useCallback(
+    async (signal: AbortSignal, { background }: { background: boolean }) => {
+      try {
+        const next = await fetchTeamInsights(employeeId, signal);
+        if (!signal.aborted) {
+          setInsights(next);
+          setError(null);
+        }
+      } catch (cause: unknown) {
+        if (!signal.aborted && !background) {
           setError(cause instanceof Error ? cause.message : "Could not load team insights");
         }
-      });
-    return () => controller.abort();
-  }, [employeeId]);
+      }
+    },
+    [employeeId],
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    // Subscription effect: load from + poll an external system and setState only after
+    // the await resolves (no synchronous cascade), so the lint rule is a false positive
+    // here — same pattern as the notifications context.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadInsights(controller.signal, { background: false });
+
+    // Poll only while the tab is visible; refetch immediately on regaining focus so
+    // switching back after a learner finishes a course shows fresh numbers at once.
+    const interval = setInterval(() => {
+      if (active && !document.hidden) {
+        void loadInsights(controller.signal, { background: true });
+      }
+    }, REFRESH_INTERVAL_MS);
+    const onVisible = () => {
+      if (active && !document.hidden) {
+        void loadInsights(controller.signal, { background: true });
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      active = false;
+      controller.abort();
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [loadInsights]);
 
   function handleSignOut() {
     signOut();
@@ -51,7 +85,7 @@ export function ManagerWorkspace({ employeeId }: { employeeId: string }) {
   }
 
   return (
-    <main className="mx-auto w-full max-w-7xl px-6 py-8">
+    <main className="mx-auto w-full max-w-3xl px-6 py-8">
       <div className="mb-8 flex items-center justify-between">
         <Link
           href="/login"
@@ -69,46 +103,35 @@ export function ManagerWorkspace({ employeeId }: { employeeId: string }) {
           {error}. Is the backend running?
         </p>
       ) : !insights ? (
-        <div className="space-y-4">
+        <div className="space-y-6">
           <Skeleton className="h-10 w-72 rounded-xl" />
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <Skeleton className="h-36 rounded-2xl" />
-            <Skeleton className="h-36 rounded-2xl" />
-            <Skeleton className="h-36 rounded-2xl" />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <Skeleton className="h-48 rounded-2xl" />
+            <Skeleton className="h-48 rounded-2xl" />
+            <Skeleton className="h-48 rounded-2xl" />
+            <Skeleton className="h-48 rounded-2xl" />
           </div>
-          <Skeleton className="h-32 rounded-2xl" />
+          <Skeleton className="mx-auto h-[calc(100dvh-3.5rem)] w-full max-w-3xl rounded-2xl" />
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Full-width team header so both columns below align to the same top line. */}
           <header>
             <h1 className="font-display text-3xl tracking-tight text-foreground">
               {insights.team_name} · team readiness
             </h1>
             <p className="text-muted-foreground mt-1 text-sm">
-              {insights.manager_codename} · {insights.member_count} engineers
-              {insights.sprint_name
-                ? ` · ${sprintLabel(insights.sprint_name, insights.team_name)}`
-                : ""}
+              {insights.manager_codename} · {insights.member_count} engineers · live from real
+              course activity
             </p>
-            {insights.sprint_goal && (
-              <p className="text-muted-foreground/80 mt-1 text-sm italic">
-                “{insights.sprint_goal}”
-              </p>
-            )}
           </header>
 
-          {/* Columns align at the top; the chat is a FIXED-height side section with its own
-              internal scroll, so a long conversation never grows the page or stretches the
-              dashboard. Sticky on wide screens so it stays in view while the dashboard scrolls. */}
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-            <div className="min-w-0 flex-1">
-              <InsightsDashboard insights={insights} />
-            </div>
-            <aside className="h-[75dvh] w-full shrink-0 lg:sticky lg:top-6 lg:h-[calc(100dvh-7rem)] lg:w-[400px]">
-              <ManagerChat employeeId={employeeId} />
-            </aside>
-          </div>
+          {/* Cards as a bento on top, then the chat below at the EXACT learner-chat size:
+              centred, ``max-w-3xl`` wide, full viewport-tall column. */}
+          <InsightsDashboard insights={insights} />
+
+          <section className="mx-auto h-[calc(100dvh-3.5rem)] w-full max-w-3xl">
+            <ManagerChat employeeId={employeeId} />
+          </section>
         </div>
       )}
     </main>

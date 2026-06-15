@@ -39,15 +39,16 @@ def test_chat_streams_full_trace_gate_route_answer(client: TestClient) -> None:
     assert "ready" in text
 
 
-def test_chat_router_phase_classifies_a_capacity_question(client: TestClient) -> None:
+def test_chat_router_phase_classifies_a_cert_progress_question(client: TestClient) -> None:
     resp = client.post(
-        f"/api/manager/{MANAGER_ID}/chat", json={"content": "is the team's meeting load too high?"}
+        f"/api/manager/{MANAGER_ID}/chat",
+        json={"content": "how are we tracking on the AZ-305 certification target?"},
     )
     events = _events(resp.text)
     router_phase = next(
         e for e in events if e.get("type") == "phase" and e["phase"]["phase"] == "router"
     )
-    assert "capacity" in router_phase["phase"]["summary"].lower()
+    assert "certification" in router_phase["phase"]["summary"].lower()
 
 
 def test_chat_blocks_prompt_injection(client: TestClient) -> None:

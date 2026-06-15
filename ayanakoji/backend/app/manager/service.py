@@ -1,73 +1,124 @@
-"""Manager Insights assembly — pure functions over Work IQ + course activity.
+"""Manager Insights assembly — pure functions over real platform activity.
 
-Source 1 (Work IQ aggregates): readiness distribution, capacity, cert targets,
-OKRs — computed over the team's *learners* (the manager is excluded from learner
-aggregates). Source 2 (real platform activity): the latest assessment attempt per
-module for the team's members, read-only over ``athenaeum.db``. No seed; an empty
-result is reported honestly as "no activity yet".
+Everything here is derived live from the team's actual course and assessment activity
+in ``athenaeum.db`` and updates as learners progress; there are no static org metrics.
 
-Everything here is aggregate-only by construction: the functions only ever return
-counts, averages, and rates over a whole team — never one person's figures.
+- **Readiness** is computed per learner from real course completion: GO once any course
+  in their certification path (their vertical) is fully complete, CONDITIONAL once they
+  have started but finished none, NOT_YET with no activity.
+- **Certification-target progress** keeps the org's target list but fills ``ready_count``
+  from that real readiness.
+- **Platform engagement** aggregates real assessment attempts/passes.
+
+Everything is aggregate-only by construction: the functions only ever return counts,
+averages, and rates over a whole team, and cohorts below ``MIN_COHORT_SIZE`` are
+suppressed so no row can surface a single individual.
 """
 
 from __future__ import annotations
 
-import math
 from collections import Counter
 
+from sqlalchemy import or_
 from sqlmodel import Session, col, select
 
+from app.catalog.loader import get_catalog
 from app.courses.models import Assessment, Course
+from app.courses.repository import CourseRepository
 from app.manager.schemas import (
-    CapacitySummary,
     CertTargetProgress,
     CohortReadiness,
-    OkrProgress,
     PlatformEngagement,
     ReadinessBreakdown,
     RiskFlag,
     TeamInsights,
-    TrackRecord,
 )
-from app.workiq.models import Persona, Team
-from app.workiq.repository import HEAVY_MEETING_THRESHOLD_HOURS, WorkIQRepository
+from app.workiq.models import Persona
+from app.workiq.repository import WorkIQRepository
 
 # A team pass rate below this (with enough attempts) is flagged as a risk.
 LOW_PASS_RATE = 0.5
 # Don't flag a pass-rate risk until enough graded attempts make the rate meaningful.
 MIN_ATTEMPTS_FOR_PASS_RATE = 5
+# A per-cohort breakdown (a seniority band, a cert-target group) is only shown when it
+# has at least this many members. A row over a single member is not an aggregate: it is
+# that one person's figure, attributable by the manager. Suppressing sub-threshold
+# cohorts keeps every breakdown row aggregate-only (k-anonymity, k=2). The team-wide
+# totals are unaffected — only the per-cohort slicing is withheld.
+MIN_COHORT_SIZE = 2
 # Stable display order for the seniority breakdown (unknown tiers append after).
 _SENIORITY_ORDER = ("principal", "staff", "senior", "mid", "junior", "associate")
 
+# Readiness levels, derived from real course completion.
+_GO = "GO"
+_CONDITIONAL = "CONDITIONAL"
+_NOT_YET = "NOT_YET"
 
-def _readiness_of(members: list[Persona]) -> ReadinessBreakdown:
-    counts = Counter(m.learning.readiness_status for m in members)
-    go, cond, ny = counts.get("GO", 0), counts.get("CONDITIONAL", 0), counts.get("NOT_YET", 0)
+
+def _readiness_for_courses(repo: CourseRepository, session: Session, courses: list[Course]) -> str:
+    """A single learner's readiness from their certification-path courses (real data).
+
+    GO once any course is fully complete (every module's quiz and oral cleared);
+    CONDITIONAL once there is any progress (a module cleared, or a graded attempt) but
+    no finished course; NOT_YET with no activity. Mirrors the learner-side definition of
+    completion (``CourseRepository.module_completed``) so the manager sees the same truth.
+    """
+    if not courses:
+        return _NOT_YET
+    started = False
+    for course in courses:
+        modules = repo.list_modules(course.id)
+        done = repo.completed_module_ids(course.id)
+        # Compare against DISTINCT module ids so a duplicate CourseModule row can't keep
+        # a fully-completed course stuck at CONDITIONAL (done is a set; modules is a list).
+        if modules and len(done) == len({m.module_id for m in modules}):
+            return _GO  # a full course completed → ready
+        if done:
+            started = True  # partial progress; keep scanning for a completed course
+    if started:
+        return _CONDITIONAL
+    # No module cleared yet, but any graded attempt still counts as "in progress".
+    course_ids = [c.id for c in courses]
+    attempted = session.exec(
+        select(Assessment.id).where(
+            col(Assessment.course_id).in_(course_ids),
+            or_(col(Assessment.score).is_not(None), col(Assessment.passed_at).is_not(None)),
+        )
+    ).first()
+    return _CONDITIONAL if attempted is not None else _NOT_YET
+
+
+def _readiness_by_member(session: Session, members: list[Persona]) -> dict[str, str]:
+    """Real readiness for each member, keyed by ``employee_id``.
+
+    Restricts to each learner's certification path (courses whose catalog vertical matches
+    the learner's vertical), joining ``Course.catalog_id`` to the catalog. Read-only.
+    """
+    repo = CourseRepository(session)
+    vertical_of_course = {c.id: c.vertical for c in get_catalog()}
+    statuses: dict[str, str] = {}
+    for member in members:
+        path_courses = [
+            c
+            for c in repo.list_for_persona(member.employee_id)
+            if vertical_of_course.get(c.catalog_id or "") == member.vertical
+        ]
+        statuses[member.employee_id] = _readiness_for_courses(repo, session, path_courses)
+    return statuses
+
+
+def _readiness_of(members: list[Persona], statuses: dict[str, str]) -> ReadinessBreakdown:
+    counts = Counter(statuses[m.employee_id] for m in members)
+    go, cond, ny = counts.get(_GO, 0), counts.get(_CONDITIONAL, 0), counts.get(_NOT_YET, 0)
     return ReadinessBreakdown(go=go, conditional=cond, not_yet=ny, total=go + cond + ny)
 
 
-def _capacity_of(team: Team, members: list[Persona]) -> CapacitySummary:
-    n = max(len(members), 1)
-    meeting = [m.work_signals.meeting_hours_per_week for m in members]
-    focus = [m.work_signals.focus_hours_per_week for m in members]
-    avg_meeting = round(sum(meeting) / n, 2)
-    avg_focus = round(sum(focus) / n, 2)
-    high = sum(h > HEAVY_MEETING_THRESHOLD_HOURS for h in meeting)
-    return CapacitySummary(
-        member_count=len(members),
-        avg_meeting_hours_per_week=avg_meeting,
-        avg_focus_hours_per_week=avg_focus,
-        high_meeting_load_count=high,
-        heavy_meeting_threshold_hours=HEAVY_MEETING_THRESHOLD_HOURS,
-        # Constrained when meetings outweigh focus on average, or a third of the team
-        # is over the heavy-meeting line (only meaningful with members present).
-        constrained=bool(members) and (avg_meeting > avg_focus or high * 3 >= len(members)),
-        target_study_hours_by_seniority=dict(team.capacity_policy.target_study_hours_by_seniority),
-    )
+def _by_seniority(members: list[Persona], statuses: dict[str, str]) -> list[CohortReadiness]:
+    """Readiness grouped by seniority — the 'by role' rubric view, kept aggregate.
 
-
-def _by_seniority(members: list[Persona]) -> list[CohortReadiness]:
-    """Readiness grouped by seniority — the 'by role' rubric view, kept aggregate."""
+    A band with fewer than ``MIN_COHORT_SIZE`` members is suppressed: a one- (or near-)
+    person band would expose that individual's readiness, which the manager could attribute.
+    """
     groups: dict[str, list[Persona]] = {}
     for m in members:
         groups.setdefault(m.seniority, []).append(m)
@@ -75,43 +126,35 @@ def _by_seniority(members: list[Persona]) -> list[CohortReadiness]:
     ordered += [s for s in groups if s not in _SENIORITY_ORDER]
     out: list[CohortReadiness] = []
     for label in ordered:
-        counts = Counter(m.learning.readiness_status for m in groups[label])
+        group = groups[label]
+        if len(group) < MIN_COHORT_SIZE:
+            continue  # too small to be an aggregate — would surface one person
+        counts = Counter(statuses[m.employee_id] for m in group)
         out.append(
             CohortReadiness(
                 label=label.capitalize(),
-                go=counts.get("GO", 0),
-                conditional=counts.get("CONDITIONAL", 0),
-                not_yet=counts.get("NOT_YET", 0),
-                total=len(groups[label]),
+                go=counts.get(_GO, 0),
+                conditional=counts.get(_CONDITIONAL, 0),
+                not_yet=counts.get(_NOT_YET, 0),
+                total=len(group),
             )
         )
     return out
 
 
-def _track_record(members: list[Persona]) -> TrackRecord:
-    """Team historical exam outcomes — decided Pass/Fail only ('In Progress' excluded)."""
-    outcomes = [
-        m.learning.exam_outcome for m in members if m.learning.exam_outcome in ("Pass", "Fail")
-    ]
-    decided = len(outcomes)
-    passed = sum(1 for o in outcomes if o == "Pass")
-    return TrackRecord(
-        passed=passed,
-        decided=decided,
-        pass_rate=round(passed / decided, 2) if decided else None,
-    )
-
-
 def _cert_targets(
-    repo: WorkIQRepository, team: Team, members: list[Persona]
+    repo: WorkIQRepository, team_id: str, members: list[Persona], statuses: dict[str, str]
 ) -> list[CertTargetProgress]:
-    targets = repo.get_cert_targets(team.id) or []
+    """Progress toward the team's cert targets — ``ready_count`` from real readiness."""
+    targets = repo.get_cert_targets(team_id) or []
     out: list[CertTargetProgress] = []
     for target in targets:
         targeting = [m for m in members if m.learning.target_cert == target.cert]
-        if not targeting:
-            continue  # nobody on the team is working toward this cert — skip the empty row
-        ready = sum(1 for m in targeting if m.learning.readiness_status == "GO")
+        if len(targeting) < MIN_COHORT_SIZE:
+            # Skip empty rows AND single-member cohorts: a "x/1 GO" row is one person's
+            # readiness, not a team aggregate (k-anonymity, k=MIN_COHORT_SIZE).
+            continue
+        ready = sum(1 for m in targeting if statuses[m.employee_id] == _GO)
         out.append(
             CertTargetProgress(
                 vertical=target.vertical,
@@ -124,15 +167,8 @@ def _cert_targets(
     return out
 
 
-def _okrs(repo: WorkIQRepository, team_id: str) -> list[OkrProgress]:
-    return [
-        OkrProgress(id=o.id, objective=o.objective, progress=o.progress)
-        for o in (repo.get_okrs(team_id) or [])
-    ]
-
-
 def platform_engagement(session: Session, member_employee_ids: list[str]) -> PlatformEngagement:
-    """Aggregate the team's real assessment activity from ``athenaeum.db`` (Source 2).
+    """Aggregate the team's real assessment activity from ``athenaeum.db``.
 
     Joins on ``Course.persona_id`` (the learner id chosen at login == the Work IQ
     ``employee_id``). Reduces to the LATEST attempt per (course, module, type) —
@@ -169,6 +205,19 @@ def platform_engagement(session: Session, member_employee_ids: list[str]) -> Pla
         course_to_persona[a.course_id] for a in attempted_rows if a.course_id in course_to_persona
     }
     modules_passed = {a.module_id for a in passed_rows if a.module_id is not None}
+    # A module is COMPLETED only when both its tests have passed (quiz "choices" AND
+    # oral "llm") — the same definition the learner side uses. Counted per (course,
+    # module), so it reflects total module completions across the team's real activity.
+    passed_keys = {(a.course_id, a.module_id) for a in passed_rows if a.module_id is not None}
+    passed_typed = {
+        (a.course_id, a.module_id, a.type) for a in passed_rows if a.module_id is not None
+    }
+    modules_completed = sum(
+        1
+        for (course_id, module_id) in passed_keys
+        if (course_id, module_id, "choices") in passed_typed
+        and (course_id, module_id, "llm") in passed_typed
+    )
     attempted = len(attempted_rows)
     passed = len(passed_rows)
     pass_rate = round(passed / attempted, 2) if attempted else None
@@ -178,6 +227,7 @@ def platform_engagement(session: Session, member_employee_ids: list[str]) -> Pla
         assessments_attempted=attempted,
         assessments_passed=passed,
         modules_with_a_pass=len(modules_passed),
+        modules_completed=modules_completed,
         pass_rate=pass_rate,
         has_activity=attempted > 0,
     )
@@ -185,10 +235,9 @@ def platform_engagement(session: Session, member_employee_ids: list[str]) -> Pla
 
 def risk_flags(
     readiness: ReadinessBreakdown,
-    capacity: CapacitySummary,
     engagement: PlatformEngagement,
 ) -> list[RiskFlag]:
-    """Aggregate, name-free risk flags from the team signals (pure heuristics)."""
+    """Aggregate, name-free risk flags from the real team signals (pure heuristics)."""
     flags: list[RiskFlag] = []
 
     if readiness.not_yet > 0 and readiness.total > 0:
@@ -200,23 +249,8 @@ def risk_flags(
                 severity="high" if high else "medium",
                 title="Exam-readiness risk",
                 detail=(
-                    f"{readiness.not_yet} of {readiness.total} members are NOT_YET ready for "
-                    "their target certification."
-                ),
-            )
-        )
-
-    if capacity.high_meeting_load_count > 0:
-        high = capacity.high_meeting_load_count * 2 >= max(capacity.member_count, 1)
-        flags.append(
-            RiskFlag(
-                area="capacity",
-                severity="high" if high else "medium",
-                title="Capacity-constrained team",
-                detail=(
-                    f"{capacity.high_meeting_load_count} of {capacity.member_count} members are "
-                    f"above {math.floor(capacity.heavy_meeting_threshold_hours)}h of meetings per "
-                    "week, which squeezes study time."
+                    f"{readiness.not_yet} of {readiness.total} members have not completed any "
+                    "course in their certification path yet."
                 ),
             )
         )
@@ -258,17 +292,17 @@ def build_team_insights(
 ) -> TeamInsights | None:
     """Assemble the manager's team view. Returns None if the team is missing.
 
-    Learner aggregates exclude the manager themselves (they are not a learner), so
-    readiness, capacity, and engagement reflect the engineers on the team only.
+    All figures are real and live: readiness is computed from the team's actual course
+    completion and engagement from their real assessment attempts. The manager is
+    excluded from learner aggregates (they are not a learner).
     """
     team = repo.get_team(manager.team_id)
     if team is None:
         return None
     members = [m for m in repo.list_personas(team_id=team.id) if not m.is_manager]
-    sprint = repo.get_sprint(team.id)
 
-    readiness = _readiness_of(members)
-    capacity = _capacity_of(team, members)
+    statuses = _readiness_by_member(session, members)
+    readiness = _readiness_of(members, statuses)
     engagement = platform_engagement(session, [m.employee_id for m in members])
 
     return TeamInsights(
@@ -276,14 +310,9 @@ def build_team_insights(
         team_name=team.name,
         manager_codename=manager.codename,
         member_count=len(members),
-        sprint_name=sprint.name if sprint else None,
-        sprint_goal=sprint.goal if sprint else None,
         readiness=readiness,
-        by_seniority=_by_seniority(members),
-        track_record=_track_record(members),
-        capacity=capacity,
-        cert_targets=_cert_targets(repo, team, members),
-        okrs=_okrs(repo, team.id),
+        by_seniority=_by_seniority(members, statuses),
+        cert_targets=_cert_targets(repo, team.id, members, statuses),
         engagement=engagement,
-        risks=risk_flags(readiness, capacity, engagement),
+        risks=risk_flags(readiness, engagement),
     )

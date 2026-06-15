@@ -275,8 +275,14 @@ def start_assessment(
             detail=f"no {type} bank found for module '{module_id}'",
         )
 
-    # Create the session record (carrying the permanent success record forward).
-    assessment = repo.create_assessment(
+    # Build the session record (carrying the permanent success record forward) AND its
+    # sampled questions, then persist both in ONE transaction. Sampling before the commit
+    # lets the (course, module, type) unique guard protect the row and its questions as a
+    # single unit: a racing concurrent start that loses the guard rolls back its duplicate
+    # questions along with its rejected row and recovers the winner's set — instead of
+    # bolting a second 5-question set onto the surviving row (which doubled the question
+    # count and halved every score: 5 answered + 5 phantom-unanswered → 5/10).
+    assessment = Assessment(
         course_id=course_id,
         module_id=module_id,
         course_module_id=mod.id,
@@ -294,16 +300,16 @@ def start_assessment(
         # Sample 5 of 10 randomly; different each attempt.
         sample = random.sample(choice_bank, min(CHOICES_SAMPLE, len(choice_bank)))
         for seq, cbq in enumerate(sample, 1):
-            cq = ChoiceQuestion(
-                assessment_id=assessment.id,
-                bank_question_id=cbq.id,
-                sequence=seq,
-                prompt=cbq.prompt,
-                choices=list(cbq.choices),
-                correct_answers=list(cbq.correct_answers),
+            choice_qs.append(
+                ChoiceQuestion(
+                    assessment_id=assessment.id,
+                    bank_question_id=cbq.id,
+                    sequence=seq,
+                    prompt=cbq.prompt,
+                    choices=list(cbq.choices),
+                    correct_answers=list(cbq.correct_answers),
+                )
             )
-            repo.add_choice_question(cq)
-            choice_qs.append(cq)
 
     else:  # llm
         llm_bank = a_repo.llm_questions(bank.id)
@@ -312,14 +318,15 @@ def start_assessment(
         # Cycle through all 3 before repeating.
         idx = prior_attempts % len(llm_bank)
         lbq = llm_bank[idx]
-        lq = LlmQuestion(
-            assessment_id=assessment.id,
-            bank_question_id=lbq.id,
-            prompt=lbq.prompt,
+        llm_qs.append(
+            LlmQuestion(
+                assessment_id=assessment.id,
+                bank_question_id=lbq.id,
+                prompt=lbq.prompt,
+            )
         )
-        repo.add_llm_question(lq)
-        llm_qs.append(lq)
 
+    assessment, choice_qs, llm_qs = repo.create_session_atomic(assessment, choice_qs, llm_qs)
     return _to_session_read(assessment, choice_qs, llm_qs)
 
 

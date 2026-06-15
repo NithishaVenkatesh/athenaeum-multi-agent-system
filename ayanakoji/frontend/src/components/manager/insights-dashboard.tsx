@@ -8,15 +8,8 @@
  */
 
 import { motion, useReducedMotion } from "framer-motion";
-import {
-  AlertTriangle,
-  CalendarClock,
-  GraduationCap,
-  Target,
-  TriangleAlert,
-} from "lucide-react";
+import { AlertTriangle, GraduationCap, Target } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { RiskSeverity, TeamInsights } from "@/lib/manager-api";
 
@@ -27,8 +20,8 @@ const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 type CardSource = "org" | "platform";
 
 const SOURCE_LABEL: Record<CardSource, string> = {
-  org: "Org records",
-  platform: "Platform activity",
+  org: "Team plan",
+  platform: "Live activity",
 };
 
 function Card({
@@ -67,7 +60,13 @@ function Card({
   );
 }
 
-function ReadinessCard({ insights }: { insights: TeamInsights }) {
+function ReadinessCard({
+  insights,
+  className,
+}: {
+  insights: TeamInsights;
+  className?: string;
+}) {
   const { go, conditional, not_yet, total } = insights.readiness;
   const safeTotal = Math.max(total, 1);
   const segs = [
@@ -76,11 +75,20 @@ function ReadinessCard({ insights }: { insights: TeamInsights }) {
     { n: not_yet, cls: "bg-destructive", label: "Not yet" },
   ];
   return (
-    <Card title="Exam readiness" icon={<GraduationCap className="size-3.5" />} source="org">
+    <Card
+      title="Exam readiness"
+      icon={<GraduationCap className="size-3.5" />}
+      source="platform"
+      className={className}
+    >
       <div className="flex items-baseline gap-2">
         <span className="font-display text-4xl text-foreground">{go}</span>
         <span className="text-muted-foreground text-sm">of {total} ready (GO)</span>
       </div>
+      <p className="text-muted-foreground/80 mt-1 text-xs">
+        GO = finished a course in their certification path · Conditional = in progress · Not yet =
+        no activity
+      </p>
       <div className="mt-3 flex h-2.5 overflow-hidden rounded-full">
         {segs.map((s) => (
           <div
@@ -98,17 +106,6 @@ function ReadinessCard({ insights }: { insights: TeamInsights }) {
           </span>
         ))}
       </div>
-      {insights.track_record.decided > 0 && (
-        <p className="text-muted-foreground mt-2 text-xs">
-          Prior exam pass rate:{" "}
-          <span className="text-foreground font-medium">
-            {insights.track_record.pass_rate != null
-              ? `${Math.round(insights.track_record.pass_rate * 100)}%`
-              : "—"}
-          </span>{" "}
-          ({insights.track_record.passed}/{insights.track_record.decided} on record)
-        </p>
-      )}
       {insights.by_seniority.length > 1 && (
         <div className="border-border/60 mt-3 space-y-2 border-t pt-3">
           <div className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">
@@ -154,36 +151,32 @@ function Stat({ value, label }: { value: string; label: string }) {
   );
 }
 
-function CapacityCard({ insights }: { insights: TeamInsights }) {
-  const c = insights.capacity;
+function CertTargetsCard({
+  insights,
+  className,
+}: {
+  insights: TeamInsights;
+  className?: string;
+}) {
+  if (insights.cert_targets.length === 0) {
+    return (
+      <Card
+        title="Certification targets"
+        icon={<Target className="size-3.5" />}
+        source="platform"
+        className={className}
+      >
+        <p className="text-muted-foreground text-sm">No certification targets set for this team.</p>
+      </Card>
+    );
+  }
   return (
-    <Card title="Capacity" icon={<CalendarClock className="size-3.5" />} source="org">
-      <div className="flex items-end justify-between gap-4">
-        <Stat value={`${c.avg_focus_hours_per_week}h`} label="avg focus / week" />
-        <Stat value={`${c.avg_meeting_hours_per_week}h`} label="avg meetings / week" />
-      </div>
-      {c.high_meeting_load_count > 0 ? (
-        <p className="text-foreground/80 mt-3 flex items-center gap-1.5 text-xs">
-          <TriangleAlert className="text-chart-4 size-3.5" />
-          {c.high_meeting_load_count} of {c.member_count} over{" "}
-          {Math.floor(c.heavy_meeting_threshold_hours)}h meetings/week
-        </p>
-      ) : (
-        <p className="text-muted-foreground mt-3 text-xs">Meeting load within healthy range.</p>
-      )}
-      {c.constrained && (
-        <Badge className="bg-chart-4/15 text-chart-4 border-chart-4/20 mt-3 text-[0.65rem]">
-          Capacity-constrained
-        </Badge>
-      )}
-    </Card>
-  );
-}
-
-function CertTargetsCard({ insights }: { insights: TeamInsights }) {
-  if (insights.cert_targets.length === 0) return null;
-  return (
-    <Card title="Certification targets" icon={<Target className="size-3.5" />} source="org">
+    <Card
+      title="Certification targets"
+      icon={<Target className="size-3.5" />}
+      source="platform"
+      className={className}
+    >
       <ul className="space-y-3">
         {insights.cert_targets.map((t) => {
           const pct = t.member_count > 0 ? (t.ready_count / t.member_count) * 100 : 0;
@@ -214,7 +207,10 @@ const SEVERITY_STYLE: Record<RiskSeverity, string> = {
 
 function RiskCard({ insights }: { insights: TeamInsights }) {
   return (
-    <Card title="Needs attention" icon={<AlertTriangle className="size-3.5" />}>
+    <Card
+      title="Needs attention"
+      icon={<AlertTriangle className="size-3.5" />}
+    >
       {insights.risks.length === 0 ? (
         <p className="text-muted-foreground text-sm">No risks flagged. The team is on track.</p>
       ) : (
@@ -256,7 +252,11 @@ function RiskCard({ insights }: { insights: TeamInsights }) {
 function EngagementCard({ insights }: { insights: TeamInsights }) {
   const e = insights.engagement;
   return (
-    <Card title="Platform engagement" icon={<GraduationCap className="size-3.5" />} source="platform">
+    <Card
+      title="Platform engagement"
+      icon={<GraduationCap className="size-3.5" />}
+      source="platform"
+    >
       {e.has_activity ? (
         <div className="grid grid-cols-3 gap-4">
           <Stat value={`${e.members_active}/${e.members_total}`} label="active" />
@@ -264,37 +264,13 @@ function EngagementCard({ insights }: { insights: TeamInsights }) {
             value={e.pass_rate != null ? `${Math.round(e.pass_rate * 100)}%` : "—"}
             label="pass rate"
           />
-          <Stat value={`${e.assessments_passed}/${e.assessments_attempted}`} label="passed" />
+          <Stat value={`${e.modules_completed}`} label="modules done" />
         </div>
       ) : (
         <p className="text-muted-foreground text-sm">
           No team members have taken an assessment in the platform yet.
         </p>
       )}
-    </Card>
-  );
-}
-
-function OkrCard({ insights }: { insights: TeamInsights }) {
-  if (insights.okrs.length === 0) return null;
-  return (
-    <Card title="Team OKRs" icon={<Target className="size-3.5" />}>
-      <ul className="space-y-3">
-        {insights.okrs.map((o) => (
-          <li key={o.id}>
-            <div className="flex items-baseline justify-between gap-3 text-sm">
-              <span className="text-foreground truncate">{o.objective}</span>
-              <span className="text-muted-foreground text-xs">{Math.round(o.progress * 100)}%</span>
-            </div>
-            <div className="bg-muted mt-1.5 h-1.5 overflow-hidden rounded-full">
-              <div
-                className="bg-chart-5 h-full rounded-full"
-                style={{ width: `${o.progress * 100}%` }}
-              />
-            </div>
-          </li>
-        ))}
-      </ul>
     </Card>
   );
 }
@@ -306,20 +282,18 @@ export function InsightsDashboard({ insights }: { insights: TeamInsights }) {
       initial={reduce ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: EASE_OUT }}
-      className="space-y-4"
+      // Cards-only bento (the chat lives separately, below). On wide screens it is a 3x2
+      // board: Readiness is a tall tile (spans both rows), Cert targets is a wide tile
+      // (spans two columns), and Engagement + Needs-attention fill the remaining two
+      // cells. Rows size to their content (no fixed board height), so tiles stay just
+      // tall enough for what's in them instead of showing large empty space. Below lg it
+      // stacks 1- then 2-up.
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
     >
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <ReadinessCard insights={insights} />
-        <CapacityCard insights={insights} />
-        <CertTargetsCard insights={insights} />
-      </div>
-
+      <ReadinessCard insights={insights} className="lg:row-span-2" />
+      <CertTargetsCard insights={insights} className="lg:col-span-2" />
+      <EngagementCard insights={insights} />
       <RiskCard insights={insights} />
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <EngagementCard insights={insights} />
-        <OkrCard insights={insights} />
-      </div>
     </motion.div>
   );
 }

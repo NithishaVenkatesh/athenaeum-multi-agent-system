@@ -11,12 +11,17 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-RiskArea = Literal["exam_readiness", "capacity", "engagement"]
+RiskArea = Literal["exam_readiness", "engagement"]
 RiskSeverity = Literal["high", "medium", "low"]
 
 
 class ReadinessBreakdown(BaseModel):
-    """Team certification-readiness distribution (Work IQ; Source 1)."""
+    """Team certification-readiness distribution, derived from real platform activity.
+
+    GO = the learner has completed at least one course in their certification path
+    (every module passed); CONDITIONAL = started but no course finished yet; NOT_YET =
+    no activity. Computed live from ``athenaeum.db`` — updates as learners progress.
+    """
 
     go: int = Field(ge=0)
     conditional: int = Field(ge=0)
@@ -34,45 +39,19 @@ class CohortReadiness(BaseModel):
     total: int = Field(ge=0)
 
 
-class TrackRecord(BaseModel):
-    """Historical certification-exam outcomes for the team (Work IQ profile signal).
-
-    Only members with a decided Pass/Fail are counted; "In Progress" is excluded.
-    """
-
-    passed: int = Field(default=0, ge=0)
-    decided: int = Field(default=0, ge=0, description="Members with a Pass/Fail on record")
-    pass_rate: float | None = Field(default=None, description="passed/decided, None if no history")
-
-
-class CapacitySummary(BaseModel):
-    """Aggregate team capacity (Work IQ; Source 1) — no per-learner detail."""
-
-    member_count: int = Field(ge=0)
-    avg_meeting_hours_per_week: float
-    avg_focus_hours_per_week: float
-    high_meeting_load_count: int = Field(ge=0)
-    heavy_meeting_threshold_hours: float
-    constrained: bool = Field(description="True when meeting load squeezes study time")
-    target_study_hours_by_seniority: dict[str, int] = Field(default_factory=dict)
-
-
 class CertTargetProgress(BaseModel):
-    """Progress toward one of the team's certification targets (Source 1)."""
+    """Progress toward one of the team's certification targets.
+
+    The target (which cert, which quarter, who is aiming for it) is an org plan; the
+    ``ready_count`` is real — members aiming at this cert who have reached GO readiness
+    from actual course completion.
+    """
 
     vertical: str
     cert: str
     target_quarter: str
     member_count: int = Field(ge=0, description="Members whose target cert is this one")
     ready_count: int = Field(ge=0, description="Of those, members at GO readiness")
-
-
-class OkrProgress(BaseModel):
-    """One team OKR with its progress (Source 1)."""
-
-    id: str
-    objective: str
-    progress: float = Field(ge=0, le=1)
 
 
 class PlatformEngagement(BaseModel):
@@ -91,6 +70,9 @@ class PlatformEngagement(BaseModel):
     modules_with_a_pass: int = Field(
         default=0, ge=0, description="Distinct modules with >=1 passed attempt"
     )
+    modules_completed: int = Field(
+        default=0, ge=0, description="Modules with BOTH quiz and oral passed (true completion)"
+    )
     pass_rate: float | None = Field(default=None, description="passed/attempted, None if none yet")
     has_activity: bool = Field(default=False)
 
@@ -105,24 +87,23 @@ class RiskFlag(BaseModel):
 
 
 class TeamInsights(BaseModel):
-    """The manager's at-a-glance team view (Source 1 + Source 2 blended)."""
+    """The manager's at-a-glance team view — real platform activity only.
+
+    Every figure is derived live from the team's actual course and assessment activity
+    in ``athenaeum.db`` and updates as learners progress. No static org metrics.
+    """
 
     team_id: str
     team_name: str
     manager_codename: str
     member_count: int = Field(ge=0)
-    sprint_name: str | None = None
-    sprint_goal: str | None = None
     readiness: ReadinessBreakdown
     by_seniority: list[CohortReadiness] = Field(default_factory=list)
-    track_record: TrackRecord = Field(default_factory=TrackRecord)
-    capacity: CapacitySummary
     cert_targets: list[CertTargetProgress] = Field(default_factory=list)
-    okrs: list[OkrProgress] = Field(default_factory=list)
     engagement: PlatformEngagement
     risks: list[RiskFlag] = Field(default_factory=list)
     disclaimer: str = Field(
-        default="Synthetic demonstration data. Aggregate, team-level only — no personal data.",
+        default="Aggregate, team-level only — no personal data. Live from real activity.",
     )
 
 
