@@ -59,6 +59,7 @@ def _normalize(text: str) -> str:
     folded = _ZERO_WIDTH_RE.sub("", folded)
     return _TOKEN_RE.sub(lambda m: _deleet_token(m.group(0)), folded)
 
+
 # Named, jailbreak-associated personas (DAN family + the ones the battery uses).
 _JAILBREAK_PERSONAS = (
     r"dan|do anything now|evil[\s-]?gpt|freebot|stan|aim|dude|kevin|"
@@ -91,10 +92,12 @@ _RULES: tuple[_Rule, ...] = (
     # ── Instruction override: "ignore your instructions", "override the system prompt" ──
     _Rule(
         "instruction_override",
-        _c(r"\b(ignore|forget|disregard|drop|override|skip|delete|erase|bypass|discard)\b\s+"
-           r"(all\s+|any\s+)?(your|the|its|these|those)\s+"
-           r"(prior\s+|previous\s+|above\s+|earlier\s+|initial\s+|system\s+|original\s+)?"
-           r"(instructions?|prompt|rules?|directives?|guidelines?|guardrails?|programming|training)\b"),
+        _c(
+            r"\b(ignore|forget|disregard|drop|override|skip|delete|erase|bypass|discard)\b\s+"
+            r"(all\s+|any\s+)?(your|the|its|these|those)\s+"
+            r"(prior\s+|previous\s+|above\s+|earlier\s+|initial\s+|system\s+|original\s+)?"
+            r"(instructions?|prompt|rules?|directives?|guidelines?|guardrails?|programming|training)\b"
+        ),
     ),
     # ── Persona override: "you are EVIL-GPT", "you're an AI with no guardrails" ──
     _Rule("persona_override", _c(rf"\byou\s+are\s+(now\s+)?(an?\s+)?({_JAILBREAK_PERSONAS})\b")),
@@ -104,15 +107,19 @@ _RULES: tuple[_Rule, ...] = (
     ),
     _Rule(
         "persona_override",
-        _c(rf"\b(respond|reply|answer|act|behave|talk)\s+(only\s+)?as\s+"
-           rf"(if\s+you\s+(are|were)\s+|an?\s+)?({_JAILBREAK_PERSONAS})\b"),
+        _c(
+            rf"\b(respond|reply|answer|act|behave|talk)\s+(only\s+)?as\s+"
+            rf"(if\s+you\s+(are|were)\s+|an?\s+)?({_JAILBREAK_PERSONAS})\b"
+        ),
     ),
     # ── Policy nullification: "without any restrictions", "rules don't apply" ──
     _Rule(
         "policy_nullification",
-        _c(rf"\b(without|with\s+no|no\s+more|drop|remove|disable|bypass|ignore|forget|free\s+of|"
-           rf"free\s+from|lift|suspend|turn\s+off|get\s+rid\s+of|abandon)\b[^.]{{0,25}}?"
-           rf"\b({_GOVERNANCE})\b"),
+        _c(
+            rf"\b(without|with\s+no|no\s+more|drop|remove|disable|bypass|ignore|forget|free\s+of|"
+            rf"free\s+from|lift|suspend|turn\s+off|get\s+rid\s+of|abandon)\b[^.]{{0,25}}?"
+            rf"\b({_GOVERNANCE})\b"
+        ),
     ),
     _Rule(
         "policy_nullification",
@@ -120,44 +127,58 @@ _RULES: tuple[_Rule, ...] = (
     ),
     _Rule(
         "policy_nullification",
-        _c(r"\bnothing\s+is\s+(off[\s-]?limits|forbidden|restricted|banned)\b"
-           r"|\banything\s+goes\b|\bno\s+(limits|holds\s+barred|filter|boundaries)\b"),
+        _c(
+            r"\bnothing\s+is\s+(off[\s-]?limits|forbidden|restricted|banned)\b"
+            r"|\banything\s+goes\b|\bno\s+(limits|holds\s+barred|filter|boundaries)\b"
+        ),
     ),
     # ── Mode switch: "enter developer mode", "a mode where nothing is off limits" ──
     _Rule(
         "mode_switch",
-        _c(r"\b(enter|enable|activate|switch\s+(in)?to|go\s+(in)?to|turn\s+on)\b[^.]{0,20}?"
-           r"\b(developer|dan|jailbreak|god|sudo|admin|root|debug|unrestricted|maintenance)\s+mode\b"),
+        _c(
+            r"\b(enter|enable|activate|switch\s+(in)?to|go\s+(in)?to|turn\s+on)\b[^.]{0,20}?"
+            r"\b(developer|dan|jailbreak|god|sudo|admin|root|debug|unrestricted|maintenance)\s+mode\b"
+        ),
     ),
     _Rule(
         "mode_switch",
-        _c(r"\bmode\b[^.]{0,30}?\b(nothing\s+is\s+off|no\s+limits|no\s+rules|anything\s+goes|"
-           r"off[\s-]?limits|unrestricted|everything\s+is\s+allowed)\b"
-           r"|\bmode\s+where\s+(nothing|anything|everything)\b"),
+        _c(
+            r"\bmode\b[^.]{0,30}?\b(nothing\s+is\s+off|no\s+limits|no\s+rules|anything\s+goes|"
+            r"off[\s-]?limits|unrestricted|everything\s+is\s+allowed)\b"
+            r"|\bmode\s+where\s+(nothing|anything|everything)\b"
+        ),
     ),
     # ── Roleplay jailbreak: "roleplay an AI with no rules", "pretend rules gone" ──
     _Rule(
         "roleplay_jailbreak",
-        _c(rf"\b(roleplay|role-play|pretend|imagine|let'?s\s+play|play\s+a\s+game)\b[^.]{{0,45}}?"
-           rf"\b(no\s+({_GOVERNANCE})|do\s+anything|without\s+({_GOVERNANCE})|"
-           rf"({_JAILBREAK_PERSONAS}))\b"),
+        _c(
+            rf"\b(roleplay|role-play|pretend|imagine|let'?s\s+play|play\s+a\s+game)\b[^.]{{0,45}}?"
+            rf"\b(no\s+({_GOVERNANCE})|do\s+anything|without\s+({_GOVERNANCE})|"
+            rf"({_JAILBREAK_PERSONAS}))\b"
+        ),
     ),
     _Rule(
         "roleplay_jailbreak",
-        _c(rf"\bpretend\b[^.]{{0,25}}?\b({_GOVERNANCE})\b[^.]{{0,15}}?"
-           rf"\b(don'?t|do\s+not|no\s+longer)\s+apply\b"),
+        _c(
+            rf"\bpretend\b[^.]{{0,25}}?\b({_GOVERNANCE})\b[^.]{{0,15}}?"
+            rf"\b(don'?t|do\s+not|no\s+longer)\s+apply\b"
+        ),
     ),
     # ── System-prompt exfiltration: extract the assistant's own setup ──
     _Rule(
         "system_prompt_exfil",
-        _c(rf"\b(your|the|its)\s+({_SECRET})\s+"
-           rf"(prompt|message|instructions?|configuration|config|guidelines|rules|directives|setup)\b"),
+        _c(
+            rf"\b(your|the|its)\s+({_SECRET})\s+"
+            rf"(prompt|message|instructions?|configuration|config|guidelines|rules|directives|setup)\b"
+        ),
     ),
     _Rule(
         "system_prompt_exfil",
-        _c(r"\b(repeat|print|output|show|reveal|display|share|reproduce|give\s+me|tell\s+me)\b"
-           r"[^.]{0,40}?\b(text|words?|message|prompt|instructions?|everything|content)\b"
-           r"[^.]{0,15}?\b(above|before|earlier|prior|preceding|at\s+the\s+(top|start|beginning))\b"),
+        _c(
+            r"\b(repeat|print|output|show|reveal|display|share|reproduce|give\s+me|tell\s+me)\b"
+            r"[^.]{0,40}?\b(text|words?|message|prompt|instructions?|everything|content)\b"
+            r"[^.]{0,15}?\b(above|before|earlier|prior|preceding|at\s+the\s+(top|start|beginning))\b"
+        ),
     ),
     _Rule(
         "system_prompt_exfil",
@@ -165,14 +186,18 @@ _RULES: tuple[_Rule, ...] = (
     ),
     _Rule(
         "system_prompt_exfil",
-        _c(r"\b(repeat|say|output|print|reproduce|echo)\b[^.]{0,25}?\bverbatim\b"
-           r"|\bword\s+for\s+word\b[^.]{0,30}?\b(above|before|told|instructions?|prompt)\b"
-           r"|\b(above|before|told|instructions?|prompt)\b[^.]{0,30}?\bword\s+for\s+word\b"),
+        _c(
+            r"\b(repeat|say|output|print|reproduce|echo)\b[^.]{0,25}?\bverbatim\b"
+            r"|\bword\s+for\s+word\b[^.]{0,30}?\b(above|before|told|instructions?|prompt)\b"
+            r"|\b(above|before|told|instructions?|prompt)\b[^.]{0,30}?\bword\s+for\s+word\b"
+        ),
     ),
     _Rule(
         "system_prompt_exfil",
-        _c(r"\bstart(?:ing)?\s+(your\s+(reply|response|answer|message)\s+)?with\s+"
-           r"(the\s+words?\s+)?['\"]?you\s+are\b"),
+        _c(
+            r"\bstart(?:ing)?\s+(your\s+(reply|response|answer|message)\s+)?with\s+"
+            r"(the\s+words?\s+)?['\"]?you\s+are\b"
+        ),
     ),
     _Rule(
         "system_prompt_exfil",

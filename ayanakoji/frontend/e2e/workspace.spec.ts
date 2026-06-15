@@ -22,22 +22,24 @@ test("learner signs in, starts a course, views assessments, and signs out", asyn
   // Lands in the workspace on a brand-new chat (no page switcher yet).
   const composer = page.getByRole("textbox", { name: "Message" });
   await expect(composer).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Assessments" })).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "Evaluations" })).toHaveCount(0);
 
   // First message creates the course and streams the reply.
   await composer.fill("How do Azure Functions triggers and bindings work end to end?");
   await composer.press("Enter");
 
   await expect(page).toHaveURL(/\/chat\/[0-9a-f]{16,}$/, { timeout: 15_000 });
-  await expect(page.getByText(/offline mode/i)).toBeVisible({ timeout: 15_000 });
+  // Match the assistant reply, which is prefixed "(offline mode) …" — the bare
+  // "offline mode" trace badge also exists, so the parens keep the locator unambiguous.
+  await expect(page.getByText(/\(offline mode\)/i)).toBeVisible({ timeout: 15_000 });
 
-  // The page switcher now exists; assessments shows its empty state.
-  await page.getByRole("tab", { name: "Assessments" }).click();
-  await expect(page.getByText("No assessments yet")).toBeVisible();
+  // The page switcher now exists; the Evaluations tab shows its empty state.
+  await page.getByRole("tab", { name: "Evaluations" }).click();
+  await expect(page.getByText("No evaluations yet")).toBeVisible();
 
   // Back to chat: the conversation was persisted and reloads from the backend.
   await page.getByRole("tab", { name: "Chat" }).click();
-  await expect(page.getByText(/offline mode/i)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/\(offline mode\)/i)).toBeVisible({ timeout: 15_000 });
 
   // Rename the chat from the chooser's edit icon (modal); the shell title updates.
   await page.getByRole("button", { name: "Choose a chat" }).click();

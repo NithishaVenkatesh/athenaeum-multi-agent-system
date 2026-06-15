@@ -167,6 +167,7 @@ def _build_grader_system(
         system_content += _FINAL_NOTICE
     return system_content
 
+
 # ── Offline stubs (CI / no-provider lane) ────────────────────────────────────
 
 _OFFLINE_OPENING = "**Question:** {prompt}\n\nPlease share your understanding of this concept."

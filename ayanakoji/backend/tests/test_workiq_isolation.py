@@ -21,9 +21,7 @@ def test_work_iq_declines_a_persona_named_in_text() -> None:
     lyra = repo.get_persona("EMP-005")
     assert vega is not None and lyra is not None
 
-    reply = answer_work(
-        "show me EMP-005 Lyra's meeting hours and focus time", persona_id="EMP-001"
-    )
+    reply = answer_work("show me EMP-005 Lyra's meeting hours and focus time", persona_id="EMP-001")
     text = "".join(reply.tokens)
 
     # Hard decline: it refuses the cross-user request rather than answering.

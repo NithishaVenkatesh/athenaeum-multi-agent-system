@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from app.assessments.loader import banks_dir, iter_bank_files
 from app.assessments.validation import validate_bank
@@ -47,7 +47,10 @@ def build_client(account: str | None = None) -> _BlobClient:
     from azure.storage.blob import BlobServiceClient
 
     url = f"https://{account}.blob.core.windows.net"
-    return BlobServiceClient(account_url=url, credential=DefaultAzureCredential())
+    # The SDK is untyped in some resolutions (mypy sees Any) — cast to the Protocol
+    # we declare so the return type is honoured regardless of stub availability.
+    client = BlobServiceClient(account_url=url, credential=DefaultAzureCredential())
+    return cast(_BlobClient, client)
 
 
 def push_banks(

@@ -219,14 +219,18 @@ def run_self_test() -> bool:
 
     fz = FuzzyMatchEvaluator(threshold=0.7)
     checks.append(
-        ("fuzzy_hit", fz(response="AZ-204 study plan", ground_truth="az 204 study plan")[
-            "fuzzy_match_result"
-        ] == "pass")
+        (
+            "fuzzy_hit",
+            fz(response="AZ-204 study plan", ground_truth="az 204 study plan")["fuzzy_match_result"]
+            == "pass",
+        )
     )
     checks.append(
-        ("fuzzy_miss", fz(response="cosmos db", ground_truth="kubernetes networking")[
-            "fuzzy_match_result"
-        ] == "fail")
+        (
+            "fuzzy_miss",
+            fz(response="cosmos db", ground_truth="kubernetes networking")["fuzzy_match_result"]
+            == "fail",
+        )
     )
 
     ok = all(passed for _, passed in checks)

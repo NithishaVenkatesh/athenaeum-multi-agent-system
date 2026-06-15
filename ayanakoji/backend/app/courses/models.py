@@ -121,9 +121,7 @@ class Assessment(SQLModel, table=True):
     # mount, or a 404-recovery force-start firing mid-flight) is rejected instead of
     # silently inserting an orphan duplicate that masks the real, passed attempt.
     __table_args__ = (
-        UniqueConstraint(
-            "course_id", "module_id", "type", name="ux_assessment_course_module_type"
-        ),
+        UniqueConstraint("course_id", "module_id", "type", name="ux_assessment_course_module_type"),
     )
 
     id: str = Field(default_factory=_uuid, primary_key=True)

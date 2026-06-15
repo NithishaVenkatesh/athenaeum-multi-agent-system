@@ -47,9 +47,7 @@ def submit_practice(course_id: str, body: PracticeSubmit, session: SessionDep) -
     )
 
 
-def _stream_practice_review(
-    course_id: str, selections: dict[str, list[str]]
-) -> Iterator[str]:
+def _stream_practice_review(course_id: str, selections: dict[str, list[str]]) -> Iterator[str]:
     """SSE generator: grade against the server-side key, stream the review + CTA, clear."""
     with _course_lock(course_id), session_scope() as s:
         repo = CourseRepository(s)

@@ -109,9 +109,7 @@ def test_evaluations_oral_unlocks_after_quiz_pass(
 # ── Retake ──────────────────────────────────────────────────────────────────────
 
 
-def test_retake_with_force_allowed_after_pass(
-    client: TestClient, assessments_session: Any
-) -> None:
+def test_retake_with_force_allowed_after_pass(client: TestClient, assessments_session: Any) -> None:
     _seed_banks(assessments_session)
     course_id, module_id = _make_course_with_plan(client)
     _pass_choices(client, course_id, module_id)
@@ -166,9 +164,7 @@ def test_feedback_streams_grounded_text_not_a_refusal(
     assert "feedback" in text.lower()
 
 
-def test_feedback_persists_both_turns_in_chat(
-    client: TestClient, assessments_session: Any
-) -> None:
+def test_feedback_persists_both_turns_in_chat(client: TestClient, assessments_session: Any) -> None:
     _seed_banks(assessments_session)
     course_id, module_id = _make_course_with_plan(client)
     a = client.post(

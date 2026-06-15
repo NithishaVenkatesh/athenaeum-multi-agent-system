@@ -89,8 +89,7 @@ def test_resolve_choice_handles_ordinal_and_name() -> None:
         is None
     )
     assert (
-        _resolve_suggestion_choice(course, "how does the first one compare to the second")
-        is None
+        _resolve_suggestion_choice(course, "how does the first one compare to the second") is None
     )
     # Already linked → nothing to accept.
     course.catalog_id = "cb-c01"

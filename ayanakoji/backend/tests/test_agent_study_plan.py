@@ -384,9 +384,7 @@ def test_complete_before_is_actual_last_block_date_not_week_multiple() -> None:
     estimates = [_est(_module(3), 30)]  # 30 min → one block, the first slot (Tue wk1)
     plans = schedule_modules(estimates, slots, START)
     assert plans and plans[0].scheduled
-    real_last = max(
-        block_date(START, b.week, b.day) for b in plans[0].scheduled
-    ).isoformat()
+    real_last = max(block_date(START, b.week, b.day) for b in plans[0].scheduled).isoformat()
     assert plans[0].complete_before == real_last
     # And specifically the true Tuesday block date, not start_date + 1*7.
     assert plans[0].complete_before == "2026-06-16"

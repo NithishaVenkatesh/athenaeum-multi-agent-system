@@ -85,9 +85,7 @@ def test_online_pin_overrides_general_only_when_on_platform() -> None:
 
     # Model confidently off-platform → stays general even while pinned (steer back).
     off = '{"route":"general","off_topic":0.9,"confidence":0.8}'
-    assert (
-        _parse_decision(off, "tell me a joke", None, feedback_active=True).route is Route.GENERAL
-    )
+    assert _parse_decision(off, "tell me a joke", None, feedback_active=True).route is Route.GENERAL
     # Model files an on-platform follow-up as general → pin grounds it on the test.
     on = '{"route":"general","off_topic":0.2,"confidence":0.6}'
     assert (

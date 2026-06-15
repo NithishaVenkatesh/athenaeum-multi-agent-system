@@ -316,9 +316,7 @@ def _structural_problems(plan: StudyPlan) -> list[str]:
         problems.append(f"negative total_hours={plan.total_hours}")
 
     # weeks must equal the max scheduled-block week (or 0 when nothing is scheduled).
-    max_block_week = max(
-        (b.week for m in plan.modules for b in m.scheduled), default=0
-    )
+    max_block_week = max((b.week for m in plan.modules for b in m.scheduled), default=0)
     if plan.weeks != max_block_week:
         problems.append(f"weeks={plan.weeks} != max scheduled block week={max_block_week}")
 
@@ -429,11 +427,7 @@ def _run_case(case: PlanCase) -> CaseResult:
             )
 
     # (c) Number guard on the VISIBLE narration (only meaningful with a plan to check).
-    if (
-        plan is not None
-        and narration.strip()
-        and not plan_narration_is_grounded(narration, plan)
-    ):
+    if plan is not None and narration.strip() and not plan_narration_is_grounded(narration, plan):
         roles = role_violations(narration, plan)
         nums = ungrounded_numbers(narration, allowed_plan_numbers(plan))
         return CaseResult(

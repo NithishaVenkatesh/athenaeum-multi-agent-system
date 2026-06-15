@@ -62,9 +62,7 @@ def test_single_shared_term_is_no_longer_grounded() -> None:
     ``triggers`` and ``handlers``. A sentence that shares exactly ONE of them is now
     flagged (a lone incidental keyword is not support); sharing BOTH is grounded.
     """
-    src = GroundingSource(
-        ref="cb-c01-m02", title="Triggers", snippet="handlers", kind="course"
-    )
+    src = GroundingSource(ref="cb-c01-m02", title="Triggers", snippet="handlers", kind="course")
     one_term = "The triggers diagram explains everything about distributed consensus [cb-c01-m02]."
     two_terms = "The triggers and handlers are described here [cb-c01-m02]."
 

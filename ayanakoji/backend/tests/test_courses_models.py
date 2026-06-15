@@ -50,9 +50,7 @@ def test_assessment_success_record_round_trips(session: Session) -> None:
     session.commit()
 
     fresh = Assessment(course_id=course.id, type="choices", attempt_number=1)
-    passed = Assessment(
-        course_id=course.id, type="choices", attempt_number=2, attempts_to_pass=2
-    )
+    passed = Assessment(course_id=course.id, type="choices", attempt_number=2, attempts_to_pass=2)
     session.add(fresh)
     session.add(passed)
     session.commit()

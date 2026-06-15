@@ -1,0 +1,19 @@
+# gitleaks config — extend the default ruleset, add one narrow allowlist.
+#
+# CI runs `gitleaks dir . --redact --verbose`, which auto-loads this file from the
+# repo root. We keep the full default rule set and only suppress a single, known
+# false positive: a public Azure role-definition GUID used in course content.
+[extend]
+useDefault = true
+
+# Singular [allowlist] — gitleaks 8.21.2 applies this when extending the default
+# config; the plural [[allowlists]] form is ignored here.
+[allowlist]
+description = """
+Public Azure built-in role-definition GUID. 4633458b-17de-408a-b874-0445c86b69e6
+is the documented, non-secret id of the "Key Vault Secrets User" Azure RBAC role;
+it appears verbatim in a course module's Bicep example, not as a credential.
+"""
+regexes = [
+  '''4633458b-17de-408a-b874-0445c86b69e6''',
+]

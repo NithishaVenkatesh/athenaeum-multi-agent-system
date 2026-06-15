@@ -298,9 +298,13 @@ def _run_case(case: SchedCase) -> CaseResult:
 
     checker = case.checker or _sane
     ok, detail = checker(adj)
-    observed = "adj=None" if adj is None else (
-        f"start={adj.start_date} excl={sorted(adj.exclude_days)} "
-        f"weeks={sorted(adj.skip_weeks)} exam={adj.exam_date}"
+    observed = (
+        "adj=None"
+        if adj is None
+        else (
+            f"start={adj.start_date} excl={sorted(adj.exclude_days)} "
+            f"weeks={sorted(adj.skip_weeks)} exam={adj.exam_date}"
+        )
     )
     return CaseResult(
         case_id=case.case_id,

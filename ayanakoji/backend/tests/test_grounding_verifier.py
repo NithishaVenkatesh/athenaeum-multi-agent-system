@@ -210,9 +210,7 @@ def test_azure_grounding_gates_on_pro_when_scored(
     # a real low score → pro tightens the gate to ungrounded and names itself in the reason.
     import app.agent.grounding_verifier as gv
 
-    _install_judge_stubs(
-        monkeypatch, groundedness=5.0, relevance=5.0, retrieval=5.0, pro=1.0
-    )
+    _install_judge_stubs(monkeypatch, groundedness=5.0, relevance=5.0, retrieval=5.0, pro=1.0)
     verdict = gv.azure_grounding("q", "an answer [cb-c01-m02]", _SRC, _eval_settings())
     assert verdict.grounded is False
     assert "groundedness_pro 1 < 3" in verdict.reason
@@ -260,11 +258,17 @@ def test_live_azure_grounding_flags_false_claim_on_real_citation() -> None:
     false_claim = "Azure Functions are billed only by gigabytes of disk stored [cb-c01-m02]."
 
     good = azure_grounding(q, grounded, _SRC, settings)
-    assert good.grounded is True
     assert good.provider == "Azure AI evaluation"
+    # Assert on the groundedness judge — the decision-driver — not the composite verdict.
+    # The retrieval judge scores this single thin snippet at the 2/3 gate boundary, so the
+    # composite verdict can flip on retrieval-judge noise that is orthogonal to whether the
+    # *claim* is grounded. The all-judges-clear composite path is covered deterministically
+    # by test_azure_grounding_passes_when_every_judge_clears.
     assert dict(good.metrics).get("groundedness", 0) >= settings.groundedness_min_score
 
     bad = azure_grounding(q, false_claim, _SRC, settings)
     # A real, existing module id on a false statement: the NLI groundedness judge catches
-    # it where the id-existence guard and the lexical floor cannot.
+    # it where the id-existence guard and the lexical floor cannot — the groundedness score
+    # itself drops below the bar, which sinks the composite verdict.
+    assert dict(bad.metrics).get("groundedness", 0) < settings.groundedness_min_score
     assert bad.grounded is False

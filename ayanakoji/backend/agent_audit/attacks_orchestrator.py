@@ -142,9 +142,7 @@ def _providers_down(events: list[PipelineEvent]) -> bool:
     infra ``error`` (never a silent pass), exactly per the harness's flakiness contract.
     The structural contract (explicit error + terminal Done) is still enforced separately.
     """
-    return any(
-        isinstance(e, ErrorEvent) and e.message == _SERVICES_DOWN_MESSAGE for e in events
-    )
+    return any(isinstance(e, ErrorEvent) and e.message == _SERVICES_DOWN_MESSAGE for e in events)
 
 
 def _check_no_banned_dashes(events: list[PipelineEvent]) -> str | None:

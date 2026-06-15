@@ -487,7 +487,10 @@ def test_answer_foundry_open_online_agentic_search_strips_fabricated_id() -> Non
         final_text="Bread needs flour [zz-c9-m9]. Outside Athenaeum's approved material.",
     )
     reply = answer_foundry(
-        "bake bread", catalog_id=None, router=router, settings=_online()  # type: ignore[arg-type]
+        "bake bread",
+        catalog_id=None,
+        router=router,
+        settings=_online(),  # type: ignore[arg-type]
     )
     text = "".join(reply.tokens)
     assert "[zz-c9-m9]" not in text  # invented id dropped (no source backs it)
@@ -537,7 +540,10 @@ def test_answer_foundry_in_course_unchanged_uses_stream_not_tools() -> None:
     # (d) in_course mode is untouched: it must still use the single stream, never run_tools.
     router = _SearchRouter(search_queries=[], final_text="(should never be used)")
     reply = answer_foundry(
-        "azure functions", catalog_id=None, router=router, settings=_online()  # type: ignore[arg-type]
+        "azure functions",
+        catalog_id=None,
+        router=router,
+        settings=_online(),  # type: ignore[arg-type]
     )
     assert router.run_tools_calls == 0  # in_course never enters the agentic loop
     assert router.stream_calls == 1

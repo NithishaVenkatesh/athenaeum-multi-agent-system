@@ -90,8 +90,7 @@ def _offline_questions(module_title: str) -> list[PracticeQuestion]:
             PracticeQuestion(
                 id=f"p{i}",
                 prompt=(
-                    f"Practice question {i} on {module_title}: "
-                    "which statement is most accurate?"
+                    f"Practice question {i} on {module_title}: which statement is most accurate?"
                 ),
                 choices=[correct, f"Distractor {i}A", f"Distractor {i}B", f"Distractor {i}C"],
                 correct=correct,
@@ -419,7 +418,9 @@ def review_practice(
             f"learner just took for the module below. They scored {grade.correct}/{grade.total}. "
             f"{tone} Ground every point in the MODULE material; name the concepts they missed and "
             "what to revisit, in 3 to 4 sentences. Never invent content. Do not use em dashes; use "
-            "commas or periods." + _NO_LEAK + _NO_OVERRIDE
+            "commas or periods."
+            + _NO_LEAK
+            + _NO_OVERRIDE
             + f"\n\nMODULE [{module_id}] {module_title}:\n{material}\n\nMISSED QUESTIONS:\n{missed}"
         )
         active = router or ModelRouter(settings)
@@ -429,9 +430,7 @@ def review_practice(
                 {"role": "system", "content": system},
                 {
                     "role": "user",
-                    "content": (
-                        f"Review my practice; I scored {grade.correct}/{grade.total}."
-                    ),
+                    "content": (f"Review my practice; I scored {grade.correct}/{grade.total}."),
                 },
             ],
             max_tokens=500,
@@ -475,8 +474,7 @@ def _cta_reply(module_id: str, module_title: str, route: Route) -> AgentReply:
         summary = "Pointed the learner to the evaluation"
     else:
         msg = (
-            f'Sure, here is the module "{module_title}". '
-            "Use the button below to open it and study."
+            f'Sure, here is the module "{module_title}". Use the button below to open it and study.'
         )
         action = Action(kind="go_to_module", label="Go to the module", module_id=module_id)
         summary = "Pointed the learner to the module"

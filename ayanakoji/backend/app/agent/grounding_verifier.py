@@ -153,9 +153,7 @@ def azure_grounding(
     if retrieval_score is not None and retrieval_score < settings.retrieval_min_score:
         failures.append(f"retrieval {retrieval_score:g} < {settings.retrieval_min_score:g}")
     if pro_score is not None and pro_score < settings.groundedness_pro_min_score:
-        failures.append(
-            f"groundedness_pro {pro_score:g} < {settings.groundedness_pro_min_score:g}"
-        )
+        failures.append(f"groundedness_pro {pro_score:g} < {settings.groundedness_pro_min_score:g}")
 
     grounded = not failures
     if grounded:

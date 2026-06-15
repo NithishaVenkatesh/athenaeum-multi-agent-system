@@ -249,9 +249,7 @@ def screen(
     #     lane a deterministic exfil catch so the system-prompt leak isn't flaky (S2).
     heuristic = heuristic_injection_verdict(text)
     if heuristic is not None:
-        steps.append(
-            TraceStep(label="Heuristic detector", passed=False, detail=heuristic.reason)
-        )
+        steps.append(TraceStep(label="Heuristic detector", passed=False, detail=heuristic.reason))
         return heuristic, _build_telemetry(
             heuristic, model="heuristic-detector", tier=None, steps=steps
         )

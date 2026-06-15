@@ -338,9 +338,7 @@ def test_second_pass_disagreeing_with_a_key_drops_that_question(monkeypatch) -> 
         {"n": 0, "correct_index": 2, "key_correct": False, "grounded": True},
         *[{"n": i, "correct_index": 1, "key_correct": True, "grounded": True} for i in range(1, 5)],
     ]
-    router = VerifyRouter(
-        gen_text=_gen_payload(), verify_text=json.dumps({"verdicts": verdicts})
-    )
+    router = VerifyRouter(gen_text=_gen_payload(), verify_text=json.dumps({"verdicts": verdicts}))
     reply = assessor.generate_practice(
         module_id="cb-c01-m01", module_title="Functions", router=router, settings=_online_settings()
     )
@@ -374,9 +372,7 @@ def test_second_pass_all_confirmed_keeps_full_set(monkeypatch) -> None:
     verdicts = [
         {"n": i, "correct_index": 1, "key_correct": True, "grounded": True} for i in range(5)
     ]
-    router = VerifyRouter(
-        gen_text=_gen_payload(), verify_text=json.dumps({"verdicts": verdicts})
-    )
+    router = VerifyRouter(gen_text=_gen_payload(), verify_text=json.dumps({"verdicts": verdicts}))
     reply = assessor.generate_practice(
         module_id="cb-c01-m01", module_title="Functions", router=router, settings=_online_settings()
     )

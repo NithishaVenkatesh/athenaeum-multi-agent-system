@@ -9,7 +9,11 @@ const isCI = !!process.env.CI;
  */
 export default defineConfig({
   testDir: "./e2e",
-  fullyParallel: true,
+  // Serial within a file: each persona (pipeline=Mira, workspace=Vega) owns one
+  // streak row, and same-persona sign-ins must not race to create it on first load
+  // (UNIQUE persona_id). Different files use different personas, so they may still
+  // run on parallel workers without colliding.
+  fullyParallel: false,
   forbidOnly: isCI,
   retries: isCI ? 2 : 0,
   reporter: "list",

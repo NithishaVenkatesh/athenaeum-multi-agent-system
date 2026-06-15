@@ -123,8 +123,7 @@ def evaluate_persona(
                     if is_completed
                     else None
                 ),
-                next_completed=next_module is not None
-                and next_module.module_id in completed_ids,
+                next_completed=next_module is not None and next_module.module_id in completed_ids,
                 all_complete=all_complete,
                 today=today,
                 soon_days=soon_days,

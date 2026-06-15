@@ -342,9 +342,7 @@ def _run_case(case: RecCase) -> CaseResult:
     if case.expect_vertical is not None:
         got = vertical_from_text(case.text)
         if got != case.expect_vertical:
-            failures.append(
-                f"vertical_from_text → {got!r}, expected {case.expect_vertical!r}"
-            )
+            failures.append(f"vertical_from_text → {got!r}, expected {case.expect_vertical!r}")
         if options and not any(_in_vertical(o.catalog_id, case.expect_vertical) for o in options):
             # The offered ids should include the expected track; a clear ask landing
             # entirely outside it is a routing miss.

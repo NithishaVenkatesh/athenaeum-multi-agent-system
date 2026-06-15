@@ -347,8 +347,9 @@ def _case_content_filter_indistinguishable() -> CaseResult:
     typed_signal = False
     distinguishable = False
     try:
-        router_block.complete(Capability.FAST, [{"role": "user", "content": _JAILBREAK}],
-                              max_tokens=32)
+        router_block.complete(
+            Capability.FAST, [{"role": "user", "content": _JAILBREAK}], max_tokens=32
+        )
         block_outcome = "router returned a completion (no tier should have succeeded)"
     except ContentFiltered as exc:
         # ContentFiltered must NOT be the outage type, or it'd be indistinguishable.
@@ -365,9 +366,12 @@ def _case_content_filter_indistinguishable() -> CaseResult:
         )
     except Exception as exc:  # noqa: BLE001 — an unhandled escape would be worse
         return CaseResult(
-            cid, cat, False,
+            cid,
+            cat,
+            False,
             f"router raised an UNTYPED {type(exc).__name__} on a content_filtered prompt",
-            severity=sev, observed=f"{signal}; router raised {type(exc).__name__}",
+            severity=sev,
+            observed=f"{signal}; router raised {type(exc).__name__}",
         )
 
     # Also: ContentFiltered is a real, importable type that is NOT a subclass of the
@@ -378,13 +382,16 @@ def _case_content_filter_indistinguishable() -> CaseResult:
 
     ok = availability_ok and typed_signal and distinguishable and type_is_distinct
     return CaseResult(
-        cid, cat, ok,
+        cid,
+        cat,
+        ok,
         "FIXED: content_filter / RAI 'jailbreak detected' is surfaced as a TYPED, distinguishable "
         "ContentFiltered (not AllProvidersDown), while a benign fallback tier still answers for "
         "availability — so the gate can BLOCK on the provider's trained verdict instead of failing "
-        "open" if ok else
-        "content_filter is NOT yet a distinguishable typed signal (availability/typing/distinct "
-        "check failed)",
+        "open"
+        if ok
+        else "content_filter is NOT yet a distinguishable typed signal "
+        "(availability/typing/distinct check failed)",
         severity=sev,
         observed=f"{signal} | availability: {avail_outcome} | block: {block_outcome} | "
         f"ContentFiltered distinct-from-outage type? {type_is_distinct}",
@@ -418,37 +425,50 @@ def _case_content_filter_azure_only() -> CaseResult:
         sleep=lambda _s: None,
     )
     try:
-        res = router.complete(Capability.FAST, [{"role": "user", "content": _JAILBREAK}],
-                              max_tokens=32)
+        res = router.complete(
+            Capability.FAST, [{"role": "user", "content": _JAILBREAK}], max_tokens=32
+        )
         return CaseResult(
-            cid, cat, False, "Azure-only chain returned a completion for a content_filtered prompt",
-            severity=sev, observed=f"unexpected LLMResult tier={res.tier}",
+            cid,
+            cat,
+            False,
+            "Azure-only chain returned a completion for a content_filtered prompt",
+            severity=sev,
+            observed=f"unexpected LLMResult tier={res.tier}",
         )
     except ContentFiltered as exc:
         # The fix: a safety decline is its own type, NOT the outage type.
         distinguishable = not isinstance(exc, AllProvidersDown)
         return CaseResult(
-            cid, cat, distinguishable,
+            cid,
+            cat,
+            distinguishable,
             "FIXED: an Azure SAFETY block surfaces as the typed ContentFiltered, distinguishable "
             "from a total outage — the caller can tell 'declined as unsafe' from 'unreachable'"
-            if distinguishable else
-            "ContentFiltered subclasses AllProvidersDown — NOT distinguishable from an outage",
+            if distinguishable
+            else "ContentFiltered subclasses AllProvidersDown — NOT distinguishable from an outage",
             severity=sev,
             observed=f"{signal} -> ContentFiltered(cats={getattr(exc, 'categories', ())}); "
             f"distinct-from-AllProvidersDown={distinguishable}",
         )
     except AllProvidersDown as exc:
         return CaseResult(
-            cid, cat, False,
+            cid,
+            cat,
+            False,
             "a deliberate Azure SAFETY block is surfaced as AllProvidersDown — identical to a "
             "total outage; nothing on the exception tells the caller this was 'declined as unsafe'",
-            severity=sev, observed=f"{signal} -> AllProvidersDown: {str(exc)[:90]}",
+            severity=sev,
+            observed=f"{signal} -> AllProvidersDown: {str(exc)[:90]}",
         )
     except Exception as exc:  # noqa: BLE001
         return CaseResult(
-            cid, cat, False,
+            cid,
+            cat,
+            False,
             f"router raised an UNTYPED {type(exc).__name__} on a content_filtered prompt",
-            severity=sev, observed=f"{type(exc).__name__}: {str(exc)[:120]}",
+            severity=sev,
+            observed=f"{type(exc).__name__}: {str(exc)[:120]}",
         )
 
 
@@ -468,18 +488,30 @@ def _case_json_mode_returns_string() -> CaseResult:
         )
     except AllProvidersDown as exc:
         return CaseResult(
-            cid, cat, True, "all providers down (recorded as error, not a fail)", severity=sev,
-            error=True, observed=str(exc)[:120],
+            cid,
+            cat,
+            True,
+            "all providers down (recorded as error, not a fail)",
+            severity=sev,
+            error=True,
+            observed=str(exc)[:120],
         )
     except Exception as exc:  # noqa: BLE001
         return CaseResult(
-            cid, cat, False, f"json_mode call raised {type(exc).__name__}", severity=sev,
+            cid,
+            cat,
+            False,
+            f"json_mode call raised {type(exc).__name__}",
+            severity=sev,
             observed=str(exc)[:160],
         )
     ok = isinstance(res, LLMResult) and isinstance(res.text, str)
     return CaseResult(
-        cid, cat, ok,
-        "returned LLMResult.text as a string (caller parses safely)" if ok
+        cid,
+        cat,
+        ok,
+        "returned LLMResult.text as a string (caller parses safely)"
+        if ok
         else "json_mode did not return a plain string",
         severity=sev,
         observed=f"type(text)={type(res.text).__name__} text={res.text[:120]!r}",
@@ -496,19 +528,31 @@ def _live_pathological_case(case_id: str, content: str, severity: str = "high") 
             Capability.FAST, [{"role": "user", "content": content}], max_tokens=32
         )
         return CaseResult(
-            case_id, cat, True, "handled gracefully (LLMResult returned)", severity=severity,
+            case_id,
+            cat,
+            True,
+            "handled gracefully (LLMResult returned)",
+            severity=severity,
             observed=f"tier={res.tier} provider={res.provider} len(text)={len(res.text)}",
         )
     except AllProvidersDown as exc:
         # A typed, expected failure — degraded gracefully, not a crash.
         return CaseResult(
-            case_id, cat, True, "degraded to AllProvidersDown (typed, not a crash)",
-            severity=severity, observed=str(exc)[:120],
+            case_id,
+            cat,
+            True,
+            "degraded to AllProvidersDown (typed, not a crash)",
+            severity=severity,
+            observed=str(exc)[:120],
         )
     except Exception as exc:  # noqa: BLE001
         return CaseResult(
-            case_id, cat, False, f"UNHANDLED {type(exc).__name__} escaped the public API",
-            severity=severity, observed=f"{type(exc).__name__}: {str(exc)[:160]}",
+            case_id,
+            cat,
+            False,
+            f"UNHANDLED {type(exc).__name__} escaped the public API",
+            severity=severity,
+            observed=f"{type(exc).__name__}: {str(exc)[:160]}",
         )
 
 
@@ -537,18 +581,30 @@ def _case_huge_max_tokens() -> CaseResult:
             Capability.FAST, [{"role": "user", "content": "Say hi."}], max_tokens=10_000_000
         )
         return CaseResult(
-            "huge_max_tokens", cat, True, "handled absurd max_tokens gracefully", severity="high",
+            "huge_max_tokens",
+            cat,
+            True,
+            "handled absurd max_tokens gracefully",
+            severity="high",
             observed=f"tier={res.tier} len(text)={len(res.text)}",
         )
     except AllProvidersDown as exc:
         return CaseResult(
-            "huge_max_tokens", cat, True, "degraded to AllProvidersDown (typed)", severity="high",
+            "huge_max_tokens",
+            cat,
+            True,
+            "degraded to AllProvidersDown (typed)",
+            severity="high",
             observed=str(exc)[:120],
         )
     except Exception as exc:  # noqa: BLE001
         return CaseResult(
-            "huge_max_tokens", cat, False, f"UNHANDLED {type(exc).__name__} on huge max_tokens",
-            severity="high", observed=f"{type(exc).__name__}: {str(exc)[:160]}",
+            "huge_max_tokens",
+            cat,
+            False,
+            f"UNHANDLED {type(exc).__name__} on huge max_tokens",
+            severity="high",
+            observed=f"{type(exc).__name__}: {str(exc)[:160]}",
         )
 
 
@@ -574,10 +630,12 @@ def _case_transient_classified_retryable() -> CaseResult:
     bad = [k for k, v in checks.items() if not v]
     ok = not bad
     return CaseResult(
-        cid, cat, ok,
-        "transient vs non-transient classification is sane" if ok
-        else f"misclassified: {bad}",
-        severity=sev, observed=", ".join(f"{k}={v}" for k, v in checks.items()),
+        cid,
+        cat,
+        ok,
+        "transient vs non-transient classification is sane" if ok else f"misclassified: {bad}",
+        severity=sev,
+        observed=", ".join(f"{k}={v}" for k, v in checks.items()),
     )
 
 
@@ -596,16 +654,24 @@ def _case_permanent_error_not_retried() -> CaseResult:
         pass
     except Exception as exc:  # noqa: BLE001
         return CaseResult(
-            cid, cat, False, f"unexpected {type(exc).__name__}", severity=sev,
+            cid,
+            cat,
+            False,
+            f"unexpected {type(exc).__name__}",
+            severity=sev,
             observed=str(exc)[:120],
         )
     # FAST chain = 2 Azure rungs + 2 Groq rungs, each tried once (not retried).
     ok = az.attempts == 2 and gq.attempts == 2
     return CaseResult(
-        cid, cat, ok,
-        "permanent error tried once per rung (no wasted retries)" if ok
+        cid,
+        cat,
+        ok,
+        "permanent error tried once per rung (no wasted retries)"
+        if ok
         else "permanent error was retried — wasted spend",
-        severity=sev, observed=f"azure_calls={az.attempts} groq_calls={gq.attempts} (expect 2/2)",
+        severity=sev,
+        observed=f"azure_calls={az.attempts} groq_calls={gq.attempts} (expect 2/2)",
     )
 
 
@@ -635,10 +701,14 @@ def _case_transient_retried_within_budget() -> CaseResult:
     # WORKHORSE azure-only chain = 2 rungs; each retries up to 3 attempts → 6 total.
     ok = az.attempts == 6
     return CaseResult(
-        cid, cat, ok,
-        "transient retried within bounded budget (3/rung)" if ok
+        cid,
+        cat,
+        ok,
+        "transient retried within bounded budget (3/rung)"
+        if ok
         else f"retry budget off: {az.attempts} attempts (expect 6 = 2 rungs x 3)",
-        severity=sev, observed=f"azure_attempts={az.attempts}",
+        severity=sev,
+        observed=f"azure_attempts={az.attempts}",
     )
 
 
@@ -656,16 +726,21 @@ def _case_stream_break_surfaces_error() -> CaseResult:
             collected.append(tok)
     except (ConnectionError, LLMError, Exception) as exc:  # noqa: BLE001 — we WANT a raise
         return CaseResult(
-            cid, cat, True,
+            cid,
+            cat,
+            True,
             "mid-stream break surfaced as a raised error (not silently truncated)",
             severity=sev,
             observed=f"got {len(collected)} token(s) then raised {type(exc).__name__}",
         )
     # No raise → the consumer believes the (truncated) text is the full answer.
     return CaseResult(
-        cid, cat, False,
+        cid,
+        cat,
+        False,
         "mid-stream break was SILENTLY truncated — consumer sees a partial answer as complete",
-        severity=sev, observed=f"collected={''.join(collected)!r} with no error",
+        severity=sev,
+        observed=f"collected={''.join(collected)!r} with no error",
     )
 
 
@@ -690,13 +765,21 @@ def _case_no_provider_typed_failure() -> CaseResult:
         )
     except AllProvidersDown as exc:
         return CaseResult(
-            cid, cat, True, "raised typed AllProvidersDown (no crash)", severity=sev,
+            cid,
+            cat,
+            True,
+            "raised typed AllProvidersDown (no crash)",
+            severity=sev,
             observed=str(exc)[:120],
         )
     except Exception as exc:  # noqa: BLE001
         return CaseResult(
-            cid, cat, False, f"raised untyped {type(exc).__name__} instead of AllProvidersDown",
-            severity=sev, observed=f"{type(exc).__name__}: {str(exc)[:120]}",
+            cid,
+            cat,
+            False,
+            f"raised untyped {type(exc).__name__} instead of AllProvidersDown",
+            severity=sev,
+            observed=f"{type(exc).__name__}: {str(exc)[:120]}",
         )
 
 
@@ -714,7 +797,10 @@ def _case_breaker_opens_then_skips() -> CaseResult:
     # Turn 1: both Azure rungs fail (non-transient) → 2 failures cross threshold → open.
     az1 = _CountingPermanentProvider(Provider.AZURE)
     r1 = ModelRouter(
-        s_no_groq, azure=az1, breaker=breaker, sleep=lambda _s: None  # type: ignore[arg-type]
+        s_no_groq,
+        azure=az1,
+        breaker=breaker,
+        sleep=lambda _s: None,  # type: ignore[arg-type]
     )
     with contextlib.suppress(AllProvidersDown):
         r1.complete(Capability.FAST, [{"role": "user", "content": "1"}])
@@ -723,7 +809,10 @@ def _case_breaker_opens_then_skips() -> CaseResult:
     # Turn 2: Azure circuit open → its rungs must be SKIPPED (provider never called).
     az2 = _CountingPermanentProvider(Provider.AZURE)
     r2 = ModelRouter(
-        s_no_groq, azure=az2, breaker=breaker, sleep=lambda _s: None  # type: ignore[arg-type]
+        s_no_groq,
+        azure=az2,
+        breaker=breaker,
+        sleep=lambda _s: None,  # type: ignore[arg-type]
     )
     with contextlib.suppress(AllProvidersDown):
         r2.complete(Capability.FAST, [{"role": "user", "content": "2"}])
@@ -731,8 +820,11 @@ def _case_breaker_opens_then_skips() -> CaseResult:
 
     ok = opened and skipped
     return CaseResult(
-        cid, cat, ok,
-        "circuit opened after threshold and skipped the dead provider next turn" if ok
+        cid,
+        cat,
+        ok,
+        "circuit opened after threshold and skipped the dead provider next turn"
+        if ok
         else "breaker did not open/skip as designed",
         severity=sev,
         observed=f"opened={opened} turn2_azure_calls={az2.attempts} (expect open + 0 calls)",
