@@ -11,6 +11,7 @@ import {
   ArrowRight,
   CheckCircle2,
   GraduationCap,
+  Lightbulb,
   Lock,
   MessageSquareText,
   RotateCcw,
@@ -101,6 +102,18 @@ function EvaluationRow({ courseId, evaluation }: { courseId: string; evaluation:
             >
               Review
             </Link>
+            {/* Feedback is grounded on the learner's own answers, so it only makes
+                sense once a test was missed. Reuses the post-test deep link, which
+                lands on the Chat tab and auto-streams grounded feedback. */}
+            {evaluation.passed === false && (
+              <Link
+                href={`/chat/${courseId}?feedback=${evaluation.type}&module=${evaluation.module_id}`}
+                className="border-border hover:bg-accent inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors"
+              >
+                <Lightbulb className="size-3.5" />
+                Get feedback
+              </Link>
+            )}
             <Link
               href={`${takeHref(courseId, evaluation)}?retake=1`}
               className="text-brand hover:bg-brand/5 inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors"

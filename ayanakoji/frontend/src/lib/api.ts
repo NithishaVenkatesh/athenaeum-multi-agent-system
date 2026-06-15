@@ -213,6 +213,7 @@ export type Route =
   | "practise_module"
   | "take_evaluation"
   | "go_to_module"
+  | "feedback"
   | "general";
 
 export interface GroundingSource {

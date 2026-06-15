@@ -38,6 +38,7 @@ const ROUTE_LABEL: Record<Route, string> = {
   practise_module: "Practice · current module",
   take_evaluation: "Evaluation · ready to test",
   go_to_module: "Module · open to study",
+  feedback: "Feedback · your last test",
   general: "General",
 };
 
@@ -52,6 +53,7 @@ const ROUTE_DOT: Record<Route, string> = {
   practise_module: "bg-brand",
   take_evaluation: "bg-chart-5",
   go_to_module: "bg-chart-3",
+  feedback: "bg-chart-3",
   general: "bg-muted-foreground",
 };
 

@@ -39,6 +39,43 @@ describe("AssessmentsView", () => {
     );
   });
 
+  it("offers Get feedback on a failed evaluation, deep-linking to chat", async () => {
+    mockList.mockResolvedValue([
+      evaluation({
+        type: "choices",
+        completed: false,
+        attempted: true,
+        passed: false,
+        score: 3,
+        review_assessment_id: "a1",
+        attempts: 1,
+      }),
+    ]);
+    render(<AssessmentsView courseId="c1" />);
+
+    const link = await screen.findByRole("link", { name: /get feedback/i });
+    expect(link).toHaveAttribute("href", "/chat/c1?feedback=choices&module=m1");
+  });
+
+  it("does not offer Get feedback on a passed evaluation", async () => {
+    mockList.mockResolvedValue([
+      evaluation({
+        type: "choices",
+        completed: true,
+        attempted: true,
+        passed: true,
+        score: 9,
+        attempts_to_pass: 1,
+        review_assessment_id: "a1",
+        attempts: 1,
+      }),
+    ]);
+    render(<AssessmentsView courseId="c1" />);
+
+    await waitFor(() => expect(screen.getByText("Review")).toBeInTheDocument());
+    expect(screen.queryByRole("link", { name: /get feedback/i })).not.toBeInTheDocument();
+  });
+
   it("groups evaluations by module and surfaces score, lock, and progress", async () => {
     mockList.mockResolvedValue([
       evaluation({
