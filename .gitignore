@@ -63,3 +63,8 @@ Thumbs.db
 
 # Transient assessment authoring recovery state (unreviewed candidates)
 ayanakoji/assessments/.pending/
+
+# ─────────────────────────────────────────────────────────────
+# MSF Skill Fest 2026 strict evaluator — judge-side tooling, not shipped.
+# ─────────────────────────────────────────────────────────────
+msf-skillfest-evaluator/
