@@ -348,7 +348,9 @@ export function ManagerChat({ employeeId }: { employeeId: string }) {
           }}
           placeholder="Ask about readiness, capacity, certs…"
           rows={1}
-          className="max-h-28 min-h-10 flex-1 resize-none"
+          // `overflow-y-auto` makes `field-sizing-content` honour the cap (max-h-75 = 300px)
+          // and scroll past it instead of growing unbounded.
+          className="max-h-75 min-h-10 flex-1 resize-none overflow-y-auto"
           disabled={sending}
         />
         <Button type="submit" size="icon" disabled={sending || !draft.trim()}>

@@ -390,13 +390,17 @@ export default function LlmAssessmentPage({
         <div ref={bottomRef} />
       </div>
 
-      <div className="border-border mt-4 flex gap-2 border-t pt-4">
+      {/* Bordered composer (matches ChatComposer): a clearly visible surface so the
+          field reads as an input even when unfocused, with a focus-within ring. */}
+      <div className="border-border bg-card focus-within:border-brand/50 focus-within:ring-brand/15 mt-4 flex items-end gap-2 rounded-2xl border p-2 shadow-sm transition-shadow focus-within:ring-[3px]">
         <Textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Type your answer…"
           rows={3}
-          className="resize-none"
+          // `field-sizing-content` (base Textarea) auto-grows; `overflow-y-auto` is what
+          // makes it honour `max-h` and scroll past the cap instead of growing unbounded.
+          className="max-h-75 min-h-16 resize-none overflow-y-auto border-0 bg-transparent px-2 py-1.5 shadow-none focus-visible:ring-0 disabled:opacity-60 dark:bg-transparent"
           disabled={sending}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSend();
