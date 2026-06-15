@@ -10,6 +10,7 @@ import { MotionConfig, motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { ManagerEntry } from "@/components/manager/manager-entry";
 import { usePersona } from "@/components/persona-provider";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -128,6 +129,9 @@ export function PersonaChooser() {
                 ))}
           </div>
         )}
+
+        {/* Additive: managers (e.g. Polaris) open the aggregate team view instead. */}
+        <ManagerEntry />
       </main>
     </MotionConfig>
   );

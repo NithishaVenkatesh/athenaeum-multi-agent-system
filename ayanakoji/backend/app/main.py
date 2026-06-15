@@ -27,6 +27,7 @@ from app.courses.practice_router import router as practice_router
 from app.courses.router import router as courses_router
 from app.courses.skill_router import router as skill_router
 from app.db import init_db
+from app.manager.router import router as manager_router
 from app.notifications.background import run_notification_loop
 from app.notifications.router import router as notifications_router
 from app.workiq.router import router as workiq_router
@@ -101,6 +102,8 @@ def create_app() -> FastAPI:
     app.include_router(practice_router)
     # Learner notifications + streak score (cron-driven, polled by the frontend).
     app.include_router(notifications_router)
+    # Manager Insights: aggregate-only team dashboard + guarded manager chat.
+    app.include_router(manager_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     def health() -> HealthResponse:
