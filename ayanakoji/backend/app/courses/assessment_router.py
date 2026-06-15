@@ -40,6 +40,7 @@ from app.courses.schemas import (
     LlmSubmitResult,
     LlmTurnBody,
     ModuleAssessmentSummary,
+    Remediation,
     SessionChoiceQuestionRead,
     SessionLlmQuestionRead,
 )
@@ -168,6 +169,25 @@ def _record_pass(a: Assessment) -> None:
     if a.passed and a.attempts_to_pass is None:
         a.attempts_to_pass = a.attempt_number
         a.passed_at = a.completed_at or datetime.now(UTC)
+
+
+def _failure_remediation(a: Assessment) -> Remediation | None:
+    """Auto-surface the remediation loop on a failed evaluation (no learner click).
+
+    A failed module evaluation returns grounded feedback, a practice round, and a
+    revisit-in-plan offer right on the result, so the learner is steered into the recovery
+    loop without having to know to ask. The chat's feedback pin auto-primes from the same
+    latest-failed-assessment, so following up in chat stays grounded on this test."""
+    if a.passed is not False:  # passed, or not yet graded
+        return None
+    return Remediation(
+        module_id=a.module_id,
+        message=(
+            "You didn't pass this time, and that's okay. I've lined up feedback grounded in the "
+            "module on exactly what to revisit, a short practice round to rebuild confidence, and "
+            "I can move this module later in your plan so you have time before retaking."
+        ),
+    )
 
 
 def _sse(payload: dict) -> str:  # type: ignore[type-arg]
@@ -453,6 +473,7 @@ def submit_choices(
         score=score,
         passed=passed,
         questions=results,
+        remediation=_failure_remediation(a),
     )
 
 
@@ -493,6 +514,7 @@ def get_results(
                 )
                 for q in questions
             ],
+            remediation=_failure_remediation(a),
         )
     else:
         questions_llm = repo.list_llm_questions(assessment_id)
@@ -500,6 +522,7 @@ def get_results(
             assessment_id=assessment_id,
             score=a.score or 0.0,
             passed=a.passed or False,
+            remediation=_failure_remediation(a),
             questions=[
                 LlmQuestionResult(
                     id=q.id,
@@ -744,6 +767,7 @@ def submit_llm(
         assessment_id=assessment_id,
         score=avg,
         passed=passed,
+        remediation=_failure_remediation(a),
         questions=[
             LlmQuestionResult(
                 id=q.id,
