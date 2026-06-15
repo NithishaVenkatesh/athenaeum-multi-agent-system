@@ -343,8 +343,45 @@ def test_answer_foundry_supported_citation_has_no_disclaimer() -> None:
     reply = answer_foundry("azure functions", router=router, settings=_online())
     text = "".join(reply.tokens)
     assert "may not be fully supported" not in text
+
+
+class _TwoShotRouter:
+    """A router whose stream returns one set of tokens on the first call and another on the
+    second — to exercise the ungrounded-then-corrected re-dispatch."""
+
+    def __init__(self, first: list[str], second: list[str]) -> None:
+        self._scripts = [first, second]
+        self.stream_calls = 0
+
+    def stream(self, capability: object, messages: Sequence[dict[str, str]], **_: object):  # type: ignore[no-untyped-def]
+        from app.agent.llm import Provider, StreamHandle
+
+        script = self._scripts[min(self.stream_calls, len(self._scripts) - 1)]
+        self.stream_calls += 1
+
+        def _gen() -> Iterator[str]:
+            yield from script
+
+        return StreamHandle(tokens=_gen(), provider=Provider.AZURE, model="gpt-4o-mini", tier=1)
+
+
+def test_answer_foundry_redispatches_once_on_ungrounded_answer() -> None:
+    # First attempt is topic-disjoint from its cited module (ungrounded); the stricter
+    # re-dispatch returns a grounded answer. Both attempts must be surfaced in the trace.
+    router = _TwoShotRouter(
+        first=["Cosmos DB ", "partition keys ", "shard throughput ", "[cb-c01-m02]"],
+        second=["Azure Functions ", "use triggers and bindings to run code ", "[cb-c01-m02]"],
+    )
+    reply = answer_foundry("azure functions", router=router, settings=_online())
+    text = "".join(reply.tokens)
+    assert router.stream_calls == 2, "expected exactly one bounded re-dispatch"
+    assert "On review, let me restate" in text  # the reflection lead
+    assert "Azure Functions use triggers and bindings" in text  # the corrected answer streamed
+    # The trace records both attempts: a failed first, a grounded re-dispatch.
     assert reply.grounding_check is not None and reply.grounding_check.phase is not None
-    assert reply.grounding_check.phase.steps[0].passed is True
+    steps = reply.grounding_check.phase.steps
+    assert len(steps) == 2
+    assert steps[0].passed is False and steps[1].passed is True
 
 
 def test_answer_work_offline_uses_persona_signals() -> None:

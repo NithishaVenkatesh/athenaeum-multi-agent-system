@@ -16,7 +16,7 @@ stream a deterministic reply word-by-word (mirroring ``courses/service.py``).
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field, replace
 from datetime import date
 
@@ -398,20 +398,80 @@ def _grounding_telemetry(verdict: GroundingVerdict) -> PhaseTelemetry:
     )
 
 
-def _verified_stream(
+def _cites_any(answer: str, sources: list[GroundingSource]) -> bool:
+    """True if the answer cites at least one approved source id."""
+    return any(s.ref.lower() in answer.lower() for s in sources)
+
+
+# Appended to the system prompt on the ONE bounded re-dispatch when the first answer
+# wasn't grounded (or made claims without citing a source it had). It tells the model to
+# restate strictly from the sources and to drop anything they don't support.
+_STRICTER_GROUNDING = (
+    "\n\nIMPORTANT: a check found your previous answer was not fully grounded in the sources. "
+    "Restate the answer using ONLY facts the SOURCES below state. Cite each claim's module id "
+    "in square brackets. If the sources do not support part of the question, say so plainly and "
+    "omit it. Do not add outside facts."
+)
+_REFLECTION_LEAD = "\n\nOn review, let me restate that strictly from the approved sources:\n"
+
+
+def _reflection_telemetry(first: GroundingVerdict, second: GroundingVerdict) -> PhaseTelemetry:
+    """Trace phase for a re-dispatch: shows the failed first attempt and the corrected one."""
+    metric_str = ", ".join(f"{n}={v}" for n, v in second.metrics)
+    steps = [
+        TraceStep(
+            label="Claim-support check (attempt 1)",
+            passed=False,
+            detail=first.reason,
+            model=first.provider,
+        ),
+        TraceStep(
+            label="Re-dispatch (grounded, stricter)",
+            passed=second.grounded,
+            detail=second.reason,
+            model=second.provider,
+        ),
+    ]
+    return PhaseTelemetry(
+        phase=PhaseName.ANSWER,
+        status=PhaseStatus.PASSED,
+        summary="Groundedness reflection · re-dispatched once"
+        + (f" · {metric_str}" if metric_str else ""),
+        reasoning=f"First attempt: {first.reason}. After re-dispatch: {second.reason}.",
+        route=Route.FOUNDRY_IQ,
+        provider=second.provider,
+        steps=steps,
+    )
+
+
+# Note appended when an answer that HAD approved sources made claims without citing any of
+# them — the cheapest way to dodge the claim-support judge is to not cite, so an uncited
+# answer with sources is treated as a grounding failure and triggers the re-dispatch.
+_UNCITED_NOTE = (
+    " (Note: that answer did not cite the approved sources it should have, so I am restating "
+    "it grounded in them.)"
+)
+
+
+def _reflective_stream(
     tokens: Iterator[str],
     sources: list[GroundingSource],
     *,
     query: str,
     settings: Settings,
     check: GroundingCheck,
+    regenerate: Callable[[], StreamHandle] | None = None,
+    expect_citation: bool = False,
 ) -> Iterator[str]:
-    """Stream the grounded answer, then verify claim-support and append a disclaimer.
+    """Stream the grounded answer, verify it, and re-dispatch ONCE if it falls short.
 
-    Wraps ``stream_grounded`` (which scrubs invented ids inline + handles the no-citation
-    case). Once the full answer is known, it runs the groundedness verifier: if a cited
-    claim isn't supported, an honesty disclaimer is appended, and the verdict's scores are
-    stashed for the orchestrator to surface as a trailing trace phase.
+    Wraps ``stream_grounded`` (which scrubs invented ids inline). Once the full answer is
+    known it runs the groundedness verifier. The answer falls short when the verifier finds
+    it ungrounded, OR when it had approved sources but cited none of them (the cheapest way
+    to dodge the judge is to not cite). In that case it appends an honest note and, if a
+    ``regenerate`` thunk is available, re-dispatches the model ONCE under a stricter
+    sources-only prompt, streams the correction, and records BOTH attempts in the trace —
+    post-answer verification becomes post-answer reflection with one bounded re-dispatch.
     """
     buffer: list[str] = []
     for token in stream_grounded(tokens, sources):
@@ -419,11 +479,29 @@ def _verified_stream(
         yield token
     answer = "".join(buffer)
     verdict = verify_grounding(answer, sources, query=query, settings=settings)
-    if verdict.metrics:  # citations were actually verified (something to report)
+    uncited = expect_citation and bool(sources) and not _cites_any(answer, sources)
+
+    if verdict.grounded and not uncited:
+        if verdict.metrics:  # citations were actually verified (something to report)
+            check.phase = _grounding_telemetry(verdict)
+        return
+
+    # The answer fell short. Append the honest disclaimer (always), then reflect once.
+    yield groundedness_disclaimer(verdict) or _UNCITED_NOTE
+    if regenerate is None:  # offline / no router: disclaimer is the whole correction
         check.phase = _grounding_telemetry(verdict)
-    disclaimer = groundedness_disclaimer(verdict)
-    if disclaimer:
-        yield disclaimer
+        return
+
+    yield _REFLECTION_LEAD
+    buffer2: list[str] = []
+    for token in stream_grounded(regenerate().tokens, sources):
+        buffer2.append(token)
+        yield token
+    verdict2 = verify_grounding("".join(buffer2), sources, query=query, settings=settings)
+    disclaimer2 = groundedness_disclaimer(verdict2)
+    if disclaimer2:  # the stricter retry still fell short — stay honest
+        yield disclaimer2
+    check.phase = _reflection_telemetry(verdict, verdict2)
 
 
 def answer_foundry(
@@ -565,16 +643,29 @@ def answer_foundry(
             model=handle.model,
         )
     )
-    # Stream live through the grounding guard: invented [module-id] citations are
-    # dropped inline (no buffer-then-restream, M5), and an answer that makes claims
-    # without citing any approved source gets an honesty disclaimer (H5).
+    # Stream live through the grounding guard: invented [module-id] citations are dropped
+    # inline (M5). The answer is then verified; if it is ungrounded (or had sources but cited
+    # none of them), the model is re-dispatched ONCE under a stricter sources-only prompt and
+    # the correction is streamed, with both attempts surfaced in the trace.
     steps.append(
         TraceStep(
             label="Citation guard",
             passed=True,
-            detail="Streaming: invented citations dropped inline; uncited claims flagged",
+            detail="Streaming: invented citations dropped inline; ungrounded answers re-dispatched",
         )
     )
+
+    def _regenerate() -> StreamHandle:
+        """One stricter, sources-only re-dispatch for a first answer that fell short."""
+        return router.stream(
+            Capability.WORKHORSE,
+            [
+                {"role": "system", "content": system + _STRICTER_GROUNDING},
+                {"role": "user", "content": text},
+            ],
+            max_tokens=800,
+        )
+
     check = GroundingCheck()
     return AgentReply(
         telemetry=_answer_telemetry(
@@ -587,7 +678,15 @@ def answer_foundry(
             steps=steps,
             provider=activity.provider,
         ),
-        tokens=_verified_stream(handle.tokens, sources, query=text, settings=settings, check=check),
+        tokens=_reflective_stream(
+            handle.tokens,
+            sources,
+            query=text,
+            settings=settings,
+            check=check,
+            regenerate=_regenerate,
+            expect_citation=mode != "open",  # open mode is general-knowledge, no citation
+        ),
         sources=sources,
         suggestion=suggestion,
         grounding_check=check,
