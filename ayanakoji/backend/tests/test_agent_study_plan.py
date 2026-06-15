@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from app.agent.contracts import Pace
 from app.agent.study_plan import (
@@ -337,3 +337,57 @@ def test_build_plan_respects_max_session_minutes() -> None:
     )
     assert plan is not None
     assert all(b.minutes <= 30 for m in plan.modules for b in m.scheduled)
+
+
+# ── BUG 1: pathological no-fit loop is bounded (multi-course double-booking) ─────
+
+
+def test_schedule_modules_does_not_hang_when_all_slots_reserved() -> None:
+    """Every weekly slot reserved for years → return a bounded/partial plan, not hang.
+
+    This is the multi-course case `reserved` exists for: if another course has
+    booked every one of this learner's recurring slots on every calendar date, the
+    scheduler must stop at the `_MAX_PLAN_WEEK` ceiling and return what it has
+    (here: nothing placed) instead of advancing `week` unboundedly into a hang.
+    """
+    from app.agent.study_plan import _MAX_PLAN_WEEK
+
+    vega = get_repository().get_persona("EMP-001")
+    assert vega is not None
+    slots = weekly_study_slots(vega)  # tue/wed/thu 11:00–12:00
+    # Reserve those slots on every date for well past the ceiling — nothing can fit.
+    reserved = frozenset(
+        (block_date(START, week, s.day).isoformat(), s.start, s.end)
+        for week in range(1, _MAX_PLAN_WEEK + 60)
+        for s in slots
+    )
+    estimates = [_est(_module(3), 60)]
+    plans = schedule_modules(estimates, slots, START, reserved=reserved)
+    # Bounded: it returns (the loop terminated) rather than hanging. With no slot
+    # ever free, the module cannot be placed, so the partial plan is empty.
+    assert plans == []
+
+
+# ── BUG 2: complete_before is the module's real last block date, not start+week*7 ─
+
+
+def test_complete_before_is_actual_last_block_date_not_week_multiple() -> None:
+    """The deadline equals the calendar date of the module's last block.
+
+    The old `start_date + last_week*7` ignored the block's weekday, so a Tuesday
+    last session in plan-week 1 reported the following Monday (+6 days). The
+    deadline must be the real last study day instead.
+    """
+    vega = get_repository().get_persona("EMP-001")
+    assert vega is not None
+    slots = weekly_study_slots(vega)  # tue/wed/thu 11:00–12:00, START is a Monday
+    estimates = [_est(_module(3), 30)]  # 30 min → one block, the first slot (Tue wk1)
+    plans = schedule_modules(estimates, slots, START)
+    assert plans and plans[0].scheduled
+    real_last = max(
+        block_date(START, b.week, b.day) for b in plans[0].scheduled
+    ).isoformat()
+    assert plans[0].complete_before == real_last
+    # And specifically the true Tuesday block date, not start_date + 1*7.
+    assert plans[0].complete_before == "2026-06-16"
+    assert plans[0].complete_before != (START + timedelta(days=7)).isoformat()

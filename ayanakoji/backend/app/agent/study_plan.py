@@ -19,6 +19,7 @@ An LLM only narrates the result, every number here is computed and auditable.
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -35,6 +36,8 @@ from app.agent.contracts import (
 from app.catalog.loader import default_catalog_path
 from app.config import Settings, get_settings
 from app.workiq.models import DaySchedule, Persona
+
+logger = logging.getLogger(__name__)
 
 # --- Module time estimate (computed from content; headroom is internal) ---
 MODULE_BASE_MINUTES = 40
@@ -60,6 +63,11 @@ _MAX_FREE_GAP_MINUTES = 60
 # Warn when the plan stretches past this many weeks — likely means capacity is
 # very low or estimates are too high for a realistic schedule.
 _BALLOON_WEEKS_THRESHOLD = 14
+# Hard ceiling on plan weeks (10 years). Only trips on a pathological no-fit loop
+# — e.g. every weekly slot consumed by reserved intervals/skip_dates so nothing
+# can ever be placed — far beyond any legitimate plan. Without it the scheduler
+# advances `week` unboundedly and hangs into a replyless turn.
+_MAX_PLAN_WEEK = 520
 
 
 @dataclass(frozen=True)
@@ -410,6 +418,19 @@ def schedule_modules(
         blocks: list[ScheduledBlock] = []
         last_week = week
         while remaining > 0:
+            # Hard ceiling: if every weekly slot is consumed by reserved intervals
+            # or skip_dates, `week` advances without ever placing a block. Stop here
+            # and return the partial (still-valid) plan rather than hang forever.
+            if week > _MAX_PLAN_WEEK:
+                logger.warning(
+                    "study plan could not fully fit: stopped at week %d "
+                    "(ceiling %d) with %d module(s) unplaced; calendar is too "
+                    "constrained by reserved/skip dates",
+                    week,
+                    _MAX_PLAN_WEEK,
+                    len(estimates) - seq + 1,
+                )
+                return plans
             slot = slots[slot_idx]
             if cursor < slot.start:
                 cursor = slot.start
@@ -453,8 +474,14 @@ def schedule_modules(
             # slot so one sitting never exceeds the learner's chosen session size.
             if max_session_minutes and take >= max_session_minutes and remaining > 0:
                 cursor = slot.end
-        # Complete-before = end of the last week the module occupies.
-        complete_before = start_date + timedelta(days=last_week * 7)
+        # Complete-before = the module's actual last study day. Deriving it from the
+        # real calendar date of the last block (max over its blocks) keeps the
+        # deadline on the true last session, not `start_date + last_week*7` which
+        # ignores the block's weekday and can be off by up to 6 days.
+        complete_before = max(
+            (block_date(start_date, b.week, b.day) for b in blocks),
+            default=start_date + timedelta(days=(last_week - 1) * 7),
+        )
         plans.append(
             ModulePlan(
                 module_id=module.module_id,
@@ -547,9 +574,15 @@ def build_study_plan(
         for s in slots
     ]
 
-    # Balloon warning: plan too long or overruns exam date.
+    # Balloon warning: plan too long or overruns exam date. The plan ends on the
+    # latest real last-block date across modules (each ModulePlan.complete_before is
+    # now the module's true last study day), not `start_date + weeks*7` which is
+    # weekday-blind and can mis-state the exam overrun by up to 6 days.
     balloon_warning: str | None = None
-    plan_end = start_date + timedelta(days=weeks * 7)
+    plan_end = max(
+        (date.fromisoformat(m.complete_before) for m in module_plans),
+        default=start_date + timedelta(days=weeks * 7),
+    )
     if weeks > _BALLOON_WEEKS_THRESHOLD:
         balloon_warning = (
             f"This plan spans {weeks} weeks, which is unusually long. "
