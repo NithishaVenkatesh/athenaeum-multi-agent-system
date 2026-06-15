@@ -6,6 +6,7 @@ import {
   CalendarClock,
   CheckCircle2,
   ClipboardCheck,
+  Dumbbell,
   Loader2,
   Lock,
 } from "lucide-react";
@@ -66,6 +67,9 @@ export function ModuleDetailView({
   const index = modules?.findIndex((m) => m.module_id === moduleId) ?? -1;
   const next = modules && index >= 0 ? (modules[index + 1] ?? null) : null;
   const assessmentHref = `/chat/${courseId}/modules/${moduleId}/assessment/choices`;
+  // The Practise button lands in the chat, which auto-starts a generated practice
+  // round for THIS module (formative; never counts toward the official evaluation).
+  const practiseHref = `/chat/${courseId}?practise=${moduleId}`;
 
   // "Cleared" is permanent (passed at least once), derived from attempts_to_pass —
   // a later failed retake of the latest attempt must not flip this back.
@@ -146,18 +150,26 @@ export function ModuleDetailView({
       <div className="border-border mt-8 border-t pt-4">
         <div className="flex items-center justify-between">
           <div className="flex flex-col gap-1">
-            {current.completed ? (
-              <span className="text-brand inline-flex items-center gap-1.5 text-sm font-medium">
-                <CheckCircle2 className="size-4" /> Module complete
-              </span>
-            ) : (
-              <Link href={assessmentHref}>
-                <Button size="sm" className="gap-1.5">
-                  <ClipboardCheck className="size-4" />
-                  Take Assessment
+            <div className="flex flex-wrap items-center gap-2">
+              {current.completed ? (
+                <span className="text-brand inline-flex items-center gap-1.5 text-sm font-medium">
+                  <CheckCircle2 className="size-4" /> Module complete
+                </span>
+              ) : (
+                <Link href={assessmentHref}>
+                  <Button size="sm" className="gap-1.5">
+                    <ClipboardCheck className="size-4" />
+                    Take Assessment
+                  </Button>
+                </Link>
+              )}
+              <Link href={practiseHref}>
+                <Button size="sm" variant="outline" className="gap-1.5">
+                  <Dumbbell className="size-4" />
+                  Practise
                 </Button>
               </Link>
-            )}
+            </div>
             {totalAttempts > 0 && !current.completed && (
               <span className="text-muted-foreground text-[11px]">
                 {totalAttempts} attempt{totalAttempts !== 1 ? "s" : ""} ·{" "}

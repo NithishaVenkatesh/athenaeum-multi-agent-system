@@ -21,6 +21,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     getCourse: vi.fn(),
     streamMessage: vi.fn(),
     streamPractice: vi.fn(),
+    streamPracticeStart: vi.fn(),
     acceptCourse: vi.fn(),
   };
 });
@@ -357,6 +358,37 @@ describe("ChatView", () => {
     );
     // The card hides once submitted (practiceDone) so it can't be re-graded.
     expect(screen.queryByText("Q1?")).toBeNull();
+  });
+
+  it("auto-starts a practice round for a specific module from the ?practise deep-link", async () => {
+    const { streamPracticeStart } = await import("@/lib/api");
+    const mockStart = vi.mocked(streamPracticeStart);
+    // Course already has a turn, so the auto-start effect's "still loading" guard clears.
+    mockGet.mockResolvedValue(
+      course({
+        id: "c1",
+        catalog_id: "cb-c01",
+        messages: [{ role: "assistant", content: "Welcome back." }],
+      }),
+    );
+    mockStart.mockImplementation(async (_cid, _mid, handlers) => {
+      handlers.onToken?.("Here is a quick practice.");
+      handlers.onPractice?.({
+        module_id: "cb-c01-m02",
+        title: "Triggers",
+        questions: [
+          { id: "p1", kind: "mcq", prompt: "Q-trigger?", choices: ["a", "b", "c", "d"] },
+        ],
+      });
+      handlers.onDone?.({ route: "practise_module", suggested: false });
+    });
+
+    render(<ChatView courseId="c1" practise="cb-c01-m02" />);
+
+    await waitFor(() =>
+      expect(mockStart).toHaveBeenCalledWith("c1", "cb-c01-m02", expect.any(Object)),
+    );
+    await waitFor(() => expect(screen.getByText("Q-trigger?")).toBeInTheDocument());
   });
 
   it("restores an in-progress skill check from skill_check_active on reload", async () => {

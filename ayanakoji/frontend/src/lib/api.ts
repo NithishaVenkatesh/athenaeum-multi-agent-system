@@ -638,6 +638,50 @@ export async function streamPractice(
   }
 }
 
+/**
+ * Start a practice round for a SPECIFIC module and stream it into the chat.
+ *
+ * This is the module-page "Practise" button's path. Unlike the chat "quiz me"
+ * intent (which practises the current module), it targets the exact module the
+ * learner opened. The round arrives as a `practice` event (a card); grading is
+ * then handled by `streamPractice` (the submit endpoint).
+ */
+export async function streamPracticeStart(
+  courseId: string,
+  moduleId: string,
+  handlers: StreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/courses/${courseId}/modules/${moduleId}/practice/start`,
+    {
+      method: "POST",
+      headers: { Accept: "text/event-stream" },
+      signal,
+    },
+  );
+  if (!response.ok || !response.body) {
+    throw new Error(`Practice start failed: ${response.status}`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const events = buffer.split("\n\n");
+    buffer = events.pop() ?? "";
+    for (const event of events) {
+      const line = event.trim();
+      if (!line.startsWith("data:")) continue;
+      const payload = JSON.parse(line.slice(5).trim()) as PipelineEvent;
+      dispatchEvent(payload, handlers);
+    }
+  }
+}
+
 /** Accept a suggested course: link it to this chat and start attempt 1. */
 export function acceptCourse(
   courseId: string,

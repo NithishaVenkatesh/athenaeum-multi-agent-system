@@ -43,6 +43,7 @@ import {
   streamFeedback,
   streamMessage,
   streamPractice,
+  streamPracticeStart,
   type Action,
   type AssessmentType,
   type NewChat,
@@ -209,12 +210,15 @@ export function ChatView({
   courseId,
   feedback,
   completed = false,
+  practise,
 }: {
   courseId?: string;
   /** Set when arriving from the "Get Feedback" button — streams grounded feedback. */
   feedback?: { kind: AssessmentType; moduleId: string };
   /** Set when arriving from the last module's "Complete Course" button. */
   completed?: boolean;
+  /** Module id when arriving from a module page's "Practise" button — auto-starts a round. */
+  practise?: string;
 }) {
   const { personaId, reloadCourses } = useWorkspace();
   const [activeCourseId, setActiveCourseId] = useState<string | undefined>(courseId);
@@ -425,6 +429,43 @@ export function ChatView({
     }
   }
 
+  // Start a generated practice round for a SPECIFIC module (the module page's
+  // "Practise" button). Streams the card into the chat via the dedicated endpoint;
+  // the existing submit flow then grades it.
+  async function handlePractiseStart(moduleId: string) {
+    if (!activeCourseId) return;
+    setBusy(true);
+    setTurns((prev) => [
+      ...prev,
+      { kind: "user", text: "Let me practise this module." },
+      emptyAssistantTurn(),
+    ]);
+    try {
+      await streamPracticeStart(activeCourseId, moduleId, {
+        onPhase: (phase) => patchLastAssistant((t) => ({ ...t, phases: [...t.phases, phase] })),
+        onToken: (token) => patchLastAssistant((t) => ({ ...t, text: t.text + token })),
+        onPractice: (practiceRound) => patchLastAssistant((t) => ({ ...t, practice: practiceRound })),
+        onAction: (actions) => patchLastAssistant((t) => ({ ...t, actions })),
+        onError: (message) => {
+          toast.error("Something went wrong", { description: message });
+          patchLastAssistant((t) => ({ ...t, error: message, text: t.text || message }));
+        },
+      });
+      patchLastAssistant((t) => ({ ...t, streaming: false }));
+      void reloadCourses();
+    } catch {
+      toast.error("Connection lost", { description: "Could not start practice. Try again." });
+      patchLastAssistant((t) => ({
+        ...t,
+        streaming: false,
+        error: "Could not start practice.",
+        text: t.text || "Could not start practice. Please try again.",
+      }));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   // Submit a practice round and stream the assessor's review into a NEW turn. The
   // submitted card is marked done (hidden) so it can't be re-graded.
   async function handlePracticeSubmit(index: number, selections: Record<string, string[]>) {
@@ -585,6 +626,18 @@ export function ChatView({
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [feedback?.kind, feedback?.moduleId, turns.length, busy]);
+
+  // Auto-start a practice round once the course finishes loading (from a module
+  // page's Practise button). Uses the dedicated per-module endpoint, not the chat
+  // pipeline. Shares autoSentRef with feedback — only one deep-link fires per mount.
+  useEffect(() => {
+    if (!practise || autoSentRef.current || busy) return;
+    if (courseId && turns.length === 0) return; // still loading existing turns
+    autoSentRef.current = true;
+    const id = setTimeout(() => void handlePractiseStart(practise), 0);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [practise, turns.length, busy]);
 
   const isEmpty = turns.length === 0;
   // HITL gate: while the last turn is asking for a pace, or a quiz is open, typing

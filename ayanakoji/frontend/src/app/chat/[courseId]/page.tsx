@@ -4,7 +4,12 @@ export default async function CoursePage({
   params,
   searchParams,
 }: PageProps<"/chat/[courseId]"> & {
-  searchParams?: Promise<{ feedback?: string; module?: string; completed?: string }>;
+  searchParams?: Promise<{
+    feedback?: string;
+    module?: string;
+    completed?: string;
+    practise?: string;
+  }>;
 }) {
   const { courseId } = await params;
   const sp = searchParams ? await searchParams : {};
@@ -22,5 +27,16 @@ export default async function CoursePage({
   // chat congratulates the learner and offers a fresh chat for their next course.
   const completed = sp.completed === "1";
 
-  return <ChatView courseId={courseId} feedback={feedback} completed={completed} />;
+  // The module page's "Practise" button lands here with ?practise=<moduleId>; ChatView
+  // auto-starts a generated practice round for that specific module.
+  const practise = sp.practise;
+
+  return (
+    <ChatView
+      courseId={courseId}
+      feedback={feedback}
+      completed={completed}
+      practise={practise}
+    />
+  );
 }
