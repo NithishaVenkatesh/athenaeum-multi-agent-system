@@ -25,6 +25,7 @@ from datetime import date
 
 from app.agent.answer import (
     AgentReply,
+    _cross_user_decline_reply,
     answer_feedback,
     answer_feedback_none,
     answer_feedback_redirect,
@@ -57,7 +58,7 @@ from app.agent.contracts import (
 from app.agent.gate import screen
 from app.agent.grounding import CourseGrounding, get_grounding
 from app.agent.llm import AllProvidersDown, ModelRouter
-from app.agent.router_agent import route
+from app.agent.router_agent import mentions_other_person, route
 from app.agent.state import CourseState, transition_note
 from app.config import Settings, get_settings
 
@@ -120,6 +121,21 @@ _STREAM_BROKE_MESSAGE = "The reply was interrupted before it finished. Please re
 # Routes that act on a specific course, where naming an already-registered course
 # should steer the learner to its existing chat instead of duplicating it.
 _COURSE_INTENT_ROUTES = frozenset({Route.RECOMMEND, Route.FOUNDRY_IQ, Route.STUDY_PLAN})
+
+# Routes that act on the learner's OWN data/work — they must never do so for someone else.
+# work_iq / progress already decline inside their nodes; gating here closes the bypass
+# routes ("build a study plan for my colleague", "quiz my teammate") in one place.
+_OWN_DATA_ROUTES = frozenset(
+    {
+        Route.WORK_IQ,
+        Route.PROGRESS,
+        Route.UPCOMING,
+        Route.STUDY_PLAN,
+        Route.PRACTISE_MODULE,
+        Route.TAKE_EVALUATION,
+        Route.GO_TO_MODULE,
+    }
+)
 
 
 def _dispatch(
@@ -293,6 +309,16 @@ def run_pipeline(
         reply = cross_chat_redirect(
             text, registered=registered, catalog_id=catalog_id, settings=settings
         )
+    # Route-independent cross-person guard: an own-data route asked about someone else
+    # (the LLM router's third_party signal, or the deterministic marker floor) is declined
+    # before dispatch, so "build a study plan for my colleague" / "quiz my teammate" can't
+    # act on another person's behalf via a route that doesn't self-check.
+    if (
+        reply is None
+        and decision.route in _OWN_DATA_ROUTES
+        and (decision.third_party or mentions_other_person(text))
+    ):
+        reply = _cross_user_decline_reply(decision.route, settings=settings)
     if reply is None:
         try:
             reply = _dispatch(

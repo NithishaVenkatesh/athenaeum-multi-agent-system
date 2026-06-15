@@ -175,6 +175,11 @@ def wants_next_free_slot(text: str) -> bool:
 # reference). The personal-data answers (work_iq, progress) decline outright on a
 # match. Conservative: high-signal markers only, so a learner's own "my schedule /
 # my progress / my other courses" never trips it.
+# Deterministic floor ONLY (offline path + fallback when the model is unreachable). The
+# online path relies on the LLM router's ``third_party`` signal — far better at catching a
+# proper name ("Sarah's schedule") or role ("my manager's progress") than a regex NER. This
+# stays a conservative high-signal net so a learner's own "my schedule / my progress" never
+# trips it.
 _OTHER_PERSON_RE = re.compile(
     r"\bEMP-\d"
     r"|\bcolleagues?\b|\bteammates?\b|\bco-?workers?\b"
@@ -182,6 +187,8 @@ _OTHER_PERSON_RE = re.compile(
     r"|\bsomeone\s+else\b|\banother\s+(employee|person|learner|colleague|user)\b"
     r"|\bother\s+(employees?|people|persons?|learners?|users?|teammates?|staff)\b"
     r"|\bthis\s+person'?s?\b|\bthat\s+person'?s?\b"
+    r"|\b(manager|boss|supervisor|director|mentor)('s|s')\s+"
+    r"(schedule|calendar|workload|hours|meetings?|progress|courses?|data|load|signals?)\b"
     r"|\b(his|her|their)\s+"
     r"(schedule|calendar|workload|hours|meetings?|progress|courses|data|load|manager|signals?)\b",
     re.IGNORECASE,
@@ -189,7 +196,10 @@ _OTHER_PERSON_RE = re.compile(
 
 
 def mentions_other_person(text: str) -> bool:
-    """True if the message asks about a person other than the current learner."""
+    """True if the message asks about a person other than the current learner.
+
+    Deterministic floor (offline + fallback); the online guard also trusts the LLM router's
+    ``third_party`` signal, which catches proper names the regex cannot."""
     return bool(_OTHER_PERSON_RE.search(text))
 
 
@@ -339,10 +349,14 @@ _ROUTE_SYSTEM = (
     "test / evaluation.\n"
     "- go_to_module: asks to open / go to / study the current module.\n"
     "- general: only genuinely off-platform topics.\n"
+    "Set third_party=true when the message asks about a person OTHER than the learner "
+    "themselves — a named person ('what's Sarah's schedule'), a colleague, their manager, a "
+    "teammate, 'someone else', or building/quizzing 'for my colleague'. It is false when the "
+    "turn is about the learner's own data or is general course content.\n"
     'Reply ONLY with JSON: {"route":'
     '"greeting|recommend|upcoming|progress|study_plan|foundry_iq|work_iq|practise_module|'
     'take_evaluation|go_to_module|general",'
-    '"reasoning":"<short>","off_topic":0..1,"confidence":0..1}.'
+    '"reasoning":"<short>","off_topic":0..1,"confidence":0..1,"third_party":true|false}.'
 )
 
 
@@ -624,7 +638,37 @@ def route(
         return decision, _telemetry(decision, model="heuristic (providers down)", tier=None)
 
 
+def _json_third_party(raw: str) -> bool:
+    """Best-effort extract the model's third_party flag from the router JSON."""
+    try:
+        return bool(json.loads(raw).get("third_party", False))
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        return False
+
+
 def _parse_decision(
+    raw: str,
+    text: str,
+    grounding: CourseGrounding | None,
+    *,
+    pending: str | None = None,
+    feedback_active: bool = False,
+) -> RouteDecision:
+    """Parse the model's route, then carry the third-party signal onto the final decision.
+
+    The route can be deterministically overridden (a schedule edit, a feedback ask), but the
+    cross-user question — 'is this about someone other than the learner?' — is the model's to
+    judge ('build a study plan for Sarah'), so we read its ``third_party`` flag from the raw
+    JSON regardless of which route wins, OR'd with the deterministic marker floor.
+    """
+    decision = _route_decision(
+        raw, text, grounding, pending=pending, feedback_active=feedback_active
+    )
+    third_party = _json_third_party(raw) or mentions_other_person(text)
+    return decision.model_copy(update={"third_party": third_party}) if third_party else decision
+
+
+def _route_decision(
     raw: str,
     text: str,
     grounding: CourseGrounding | None,

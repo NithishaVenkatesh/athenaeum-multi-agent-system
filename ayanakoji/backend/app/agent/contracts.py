@@ -99,6 +99,11 @@ class RouteDecision(BaseModel):
         description="0=on-platform learning, 1=far off (drives nudge strength)",
     )
     confidence: float = Field(ge=0, le=1, default=0.5)
+    third_party: bool = Field(
+        default=False,
+        description="True if the turn asks about a person OTHER than the learner "
+        "(a named person, colleague, or manager); drives the cross-user decline",
+    )
 
 
 class FeedbackResolution(BaseModel):
