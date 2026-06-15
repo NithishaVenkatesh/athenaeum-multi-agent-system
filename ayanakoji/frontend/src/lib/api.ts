@@ -148,11 +148,60 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+/** A transient "backend still waking" failure (e.g. a free-tier cold start) — retry it. */
+function isWaking(error: unknown): boolean {
+  // Gateway / unavailable while the instance spins back up.
+  if (error instanceof ApiError) {
+    return error.status === 502 || error.status === 503 || error.status === 504;
+  }
+  // fetch() rejects with a TypeError on network failure / connection refused.
+  return error instanceof TypeError;
+}
+
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(new DOMException("Aborted", "AbortError"));
+      },
+      { once: true },
+    );
+  });
+}
+
+/**
+ * Like {@link requestJson} but retries transient "backend waking" failures with a
+ * short backoff up to a time budget. Lets the login chooser survive a cold start
+ * (a spun-down free instance can take ~50s to wake) instead of failing instantly.
+ */
+async function requestJsonResilient<T>(
+  path: string,
+  signal?: AbortSignal,
+  timeoutMs = 90_000,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await requestJson<T>(path, { signal });
+    } catch (error: unknown) {
+      if (signal?.aborted || !isWaking(error) || Date.now() >= deadline) {
+        throw error;
+      }
+      attempt += 1;
+      await delay(Math.min(4000, 1000 * attempt), signal);
+    }
+  }
+}
+
 /** The 10 learner personas (managers excluded) for the account chooser. */
 export function fetchLearners(signal?: AbortSignal): Promise<PersonaSummary[]> {
-  return requestJson<PersonaSummary[]>(
+  return requestJsonResilient<PersonaSummary[]>(
     "/api/workiq/personas?learners_only=true",
-    { signal },
+    signal,
   );
 }
 

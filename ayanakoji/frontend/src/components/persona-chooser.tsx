@@ -74,23 +74,42 @@ export function PersonaChooser() {
   const router = useRouter();
   const { selectPersona } = usePersona();
   const [learners, setLearners] = useState<PersonaSummary[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<"loading" | "waking" | "error">("loading");
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
+    // The backend may be a spun-down free instance. After a short wait with no
+    // response, tell the user it's waking instead of showing a bare skeleton.
+    const wakeTimer = setTimeout(() => {
+      setStatus((current) => (current === "loading" ? "waking" : current));
+    }, 3500);
+
     fetchLearners(controller.signal)
-      .then(setLearners)
-      .catch((cause: unknown) => {
+      .then((data) => setLearners(data))
+      .catch(() => {
         if (!controller.signal.aborted) {
-          setError(cause instanceof Error ? cause.message : "Could not load accounts");
+          setStatus("error");
         }
-      });
-    return () => controller.abort();
-  }, []);
+      })
+      .finally(() => clearTimeout(wakeTimer));
+
+    return () => {
+      controller.abort();
+      clearTimeout(wakeTimer);
+    };
+  }, [attempt]);
 
   function handleSelect(persona: PersonaSummary) {
     selectPersona(persona);
     router.push("/chat");
+  }
+
+  // Re-run the fetch effect from a clean slate (used by the "Try again" button).
+  function handleRetry() {
+    setLearners(null);
+    setStatus("loading");
+    setAttempt((n) => n + 1);
   }
 
   return (
@@ -109,25 +128,43 @@ export function PersonaChooser() {
           </p>
         </header>
 
-        {error ? (
-          <p role="alert" className="text-destructive text-sm">
-            {error}. Is the backend running?
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {learners
-              ? learners.map((persona, index) => (
-                  <PersonaCard
-                    key={persona.employee_id}
-                    persona={persona}
-                    index={index}
-                    onSelect={handleSelect}
-                  />
-                ))
-              : Array.from({ length: 6 }).map((_, index) => (
-                  <Skeleton key={index} className="h-22 rounded-2xl" />
-                ))}
+        {status === "error" ? (
+          <div role="alert" className="flex flex-col items-start gap-3">
+            <p className="text-destructive text-sm">
+              Couldn’t reach the server. A free instance may be waking up — give it a
+              moment and try again.
+            </p>
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="focus-visible:ring-brand/30 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground outline-none transition-colors hover:bg-accent focus-visible:ring-[3px]"
+            >
+              Try again
+            </button>
           </div>
+        ) : (
+          <>
+            {status === "waking" && !learners ? (
+              <p className="text-muted-foreground mb-4 text-sm">
+                Waking the server… the free tier spins down when idle, so this first
+                load can take up to a minute.
+              </p>
+            ) : null}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {learners
+                ? learners.map((persona, index) => (
+                    <PersonaCard
+                      key={persona.employee_id}
+                      persona={persona}
+                      index={index}
+                      onSelect={handleSelect}
+                    />
+                  ))
+                : Array.from({ length: 6 }).map((_, index) => (
+                    <Skeleton key={index} className="h-22 rounded-2xl" />
+                  ))}
+            </div>
+          </>
         )}
 
         {/* Additive: managers (e.g. Polaris) open the aggregate team view instead. */}
