@@ -333,7 +333,11 @@ def _direct_oracle(case: RouterCase, d: RouteDecision) -> tuple[bool, str]:
     if case.expect is not None and d.route is not case.expect:
         return False, f"expected route {case.expect.value}, got {d.route.value}"
     if case.forbid and d.route in case.forbid:
-        return False, f"routed to forbidden {d.route.value} (forbidden: {[r.value for r in case.forbid]})"
+        return (
+            False,
+            f"routed to forbidden {d.route.value} "
+            f"(forbidden: {[r.value for r in case.forbid]})",
+        )
     if case.off_topic_min is not None and d.off_topic < case.off_topic_min:
         return False, f"off_topic {d.off_topic:.2f} < required min {case.off_topic_min}"
     if case.off_topic_max is not None and d.off_topic > case.off_topic_max:

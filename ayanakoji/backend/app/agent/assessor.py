@@ -89,7 +89,10 @@ def _offline_questions(module_title: str) -> list[PracticeQuestion]:
         out.append(
             PracticeQuestion(
                 id=f"p{i}",
-                prompt=f"Practice question {i} on {module_title}: which statement is most accurate?",
+                prompt=(
+                    f"Practice question {i} on {module_title}: "
+                    "which statement is most accurate?"
+                ),
                 choices=[correct, f"Distractor {i}A", f"Distractor {i}B", f"Distractor {i}C"],
                 correct=correct,
                 explanation=f"See the module material on {module_title}.",
@@ -228,7 +231,12 @@ def _generate_questions_online(
         Capability.WORKHORSE,
         [
             {"role": "system", "content": system},
-            {"role": "user", "content": f"Write {PRACTICE_QUESTION_COUNT} practice questions on {module_title}."},
+            {
+                "role": "user",
+                "content": (
+                    f"Write {PRACTICE_QUESTION_COUNT} practice questions on {module_title}."
+                ),
+            },
         ],
         json_mode=True,
         max_tokens=1400,
@@ -261,7 +269,9 @@ def generate_practice(
             module_title, content.body, router or ModelRouter(settings)
         )
         if questions is None:
-            return _practice_unavailable(module_id, module_title, reason="generation produced no valid questions")
+            return _practice_unavailable(
+                module_id, module_title, reason="generation produced no valid questions"
+            )
 
     source = GroundingSource(
         ref=module_id, title=module_title, snippet=content.body[:200], kind="course"
@@ -385,7 +395,9 @@ def review_practice(
 ) -> AgentReply:
     """Honest, motivating review of a practice round, with the verdict's CTA."""
     settings = settings or get_settings()
-    source = GroundingSource(ref=module_id, title=module_title, snippet=material[:200], kind="course")
+    source = GroundingSource(
+        ref=module_id, title=module_title, snippet=material[:200], kind="course"
+    )
     reasoning = f"Practice review for {module_id}: {grade.correct}/{grade.total} → {grade.verdict}"
 
     if settings.llm_offline:
@@ -415,7 +427,12 @@ def review_practice(
             Capability.WORKHORSE,
             [
                 {"role": "system", "content": system},
-                {"role": "user", "content": f"Review my practice; I scored {grade.correct}/{grade.total}."},
+                {
+                    "role": "user",
+                    "content": (
+                        f"Review my practice; I scored {grade.correct}/{grade.total}."
+                    ),
+                },
             ],
             max_tokens=500,
         )
@@ -457,7 +474,10 @@ def _cta_reply(module_id: str, module_title: str, route: Route) -> AgentReply:
         action = Action(kind="take_evaluation", label="Take the evaluation", module_id=module_id)
         summary = "Pointed the learner to the evaluation"
     else:
-        msg = f'Sure, here is the module "{module_title}". Use the button below to open it and study.'
+        msg = (
+            f'Sure, here is the module "{module_title}". '
+            "Use the button below to open it and study."
+        )
         action = Action(kind="go_to_module", label="Go to the module", module_id=module_id)
         summary = "Pointed the learner to the module"
     return AgentReply(

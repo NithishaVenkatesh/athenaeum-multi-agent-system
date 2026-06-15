@@ -239,7 +239,12 @@ def test_pipeline_emits_practice_event_with_current_module() -> None:
 
     modules = [{"module_id": "cb-c01-m01", "title": "Functions", "completed": False}]
     events = list(
-        run_pipeline("quiz me on this module", persona_id="EMP-001", catalog_id="cb-c01", modules=modules)
+        run_pipeline(
+            "quiz me on this module",
+            persona_id="EMP-001",
+            catalog_id="cb-c01",
+            modules=modules,
+        )
     )
     practice = [e for e in events if isinstance(e, PracticeEvent)]
     assert len(practice) == 1
@@ -253,7 +258,12 @@ def test_pipeline_take_evaluation_emits_action_event() -> None:
 
     modules = [{"module_id": "cb-c01-m01", "title": "Functions", "completed": False}]
     events = list(
-        run_pipeline("I'm ready for the test", persona_id="EMP-001", catalog_id="cb-c01", modules=modules)
+        run_pipeline(
+            "I'm ready for the test",
+            persona_id="EMP-001",
+            catalog_id="cb-c01",
+            modules=modules,
+        )
     )
     actions = [e for e in events if isinstance(e, ActionEvent)]
     assert len(actions) == 1

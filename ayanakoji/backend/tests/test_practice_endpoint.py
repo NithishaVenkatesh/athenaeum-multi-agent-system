@@ -49,10 +49,20 @@ def _seed_active_round(session, course_id: str, correct_n: int) -> dict:
     course = repo.get(course_id)
     assert course is not None
     questions = [
-        {"id": f"p{i}", "prompt": f"Q{i}", "choices": ["w", "x", "y", "z"], "correct": "w", "explanation": "e"}
+        {
+            "id": f"p{i}",
+            "prompt": f"Q{i}",
+            "choices": ["w", "x", "y", "z"],
+            "correct": "w",
+            "explanation": "e",
+        }
         for i in range(1, 6)
     ]
-    course.practice_active = {"module_id": "cb-c01-m01", "title": "Functions", "questions": questions}
+    course.practice_active = {
+        "module_id": "cb-c01-m01",
+        "title": "Functions",
+        "questions": questions,
+    }
     repo.save(course)
     return {f"p{i}": (["w"] if i <= correct_n else ["x"]) for i in range(1, 6)}
 
