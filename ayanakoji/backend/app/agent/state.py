@@ -38,6 +38,8 @@ def derive_course_state(
     module_count: int,
     completed_count: int,
     skill_source: str | None = None,
+    module_ids: frozenset[str] | None = None,
+    passed_ids: frozenset[str] | None = None,
 ) -> CourseState:
     """Compute the course state from the persisted facts (pure).
 
@@ -45,9 +47,22 @@ def derive_course_state(
     course with no ``skill_source`` is CHOSEN (ask fresher / skill check); once the
     check is done it is ASSESSED (ask pace); with a pace it is PACED (build the
     preview). Modules only exist after the learner approves the preview.
+
+    Completion is measured against the *current* plan. When ``module_ids`` and
+    ``passed_ids`` are supplied, completion is the count of passed modules that
+    are still in the plan (``passed_ids & module_ids``) over the current plan
+    size — never a raw running tally. This matters after a re-plan that *shrinks*
+    the module set: a learner who passed 6 of the old 8 modules would, on a count
+    basis, look complete against a new 5-module plan (6 >= 5) and skip straight to
+    COMPLETED, even though the new modules may be untouched. Intersecting ids keeps
+    that course IN_PROGRESS until the current modules are actually passed. Callers
+    that pass only counts keep the legacy behaviour for backward compatibility.
     """
     if not catalog_id:
         return CourseState.NEW
+    if module_ids is not None and passed_ids is not None:
+        module_count = len(module_ids)
+        completed_count = len(passed_ids & module_ids)
     if module_count == 0:
         if skill_source is None:
             return CourseState.CHOSEN

@@ -69,6 +69,57 @@ def test_state_progression() -> None:
     )
 
 
+def test_shrunk_replan_does_not_auto_complete_from_stale_count() -> None:
+    # A re-plan shrank the module set 8 → 5. The learner passed 6 of the OLD
+    # modules, only 2 of which survive into the new plan. The raw count (6 >= 5)
+    # would wrongly jump to COMPLETED; intersecting passed ids with the current
+    # plan keeps it IN_PROGRESS until the new modules are actually passed.
+    new_plan = frozenset({"m04", "m05", "m06", "m07", "m08"})
+    passed = frozenset({"m01", "m02", "m03", "m04", "m05", "m06"})  # 6 of old 8
+    assert (
+        derive_course_state(
+            catalog_id="cb-c01",
+            pace=Pace.NORMAL,
+            module_count=8,  # stale legacy counts, intentionally inconsistent
+            completed_count=6,
+            module_ids=new_plan,
+            passed_ids=passed,
+        )
+        is CourseState.IN_PROGRESS
+    )
+    # When every current module is passed, ids still resolve to COMPLETED.
+    assert (
+        derive_course_state(
+            catalog_id="cb-c01",
+            pace=Pace.NORMAL,
+            module_count=8,
+            completed_count=6,
+            module_ids=new_plan,
+            passed_ids=new_plan,
+        )
+        is CourseState.COMPLETED
+    )
+    # No surviving passed module in the new plan → back to PLANNED, not COMPLETED.
+    assert (
+        derive_course_state(
+            catalog_id="cb-c01",
+            pace=Pace.NORMAL,
+            module_count=8,
+            completed_count=6,
+            module_ids=new_plan,
+            passed_ids=frozenset({"m01", "m02", "m03"}),
+        )
+        is CourseState.PLANNED
+    )
+    # Legacy count-only call is unchanged: stale 6 >= 5 still reads COMPLETED.
+    assert (
+        derive_course_state(
+            catalog_id="cb-c01", pace=Pace.NORMAL, module_count=5, completed_count=6
+        )
+        is CourseState.COMPLETED
+    )
+
+
 def test_transition_note_explains_the_gate() -> None:
     note = transition_note(CourseState.CHOSEN, Route.STUDY_PLAN)
     assert "skill check" in note

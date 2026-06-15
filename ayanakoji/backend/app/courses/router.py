@@ -672,6 +672,10 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
             skill_source=skill_source,
             module_count=len(existing_modules),
             completed_count=len(completed_ids),
+            # Pass ids so a shrunk re-plan can't auto-complete from a stale count: completion
+            # is len(passed ∩ current plan), not a raw count carried from the old module set.
+            module_ids=frozenset(m.module_id for m in existing_modules),
+            passed_ids=frozenset(completed_ids),
         )
         answer_parts: list[str] = []
         final_text = ""  # what gets persisted as the assistant turn
