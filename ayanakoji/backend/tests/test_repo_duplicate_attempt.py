@@ -1,92 +1,99 @@
-"""Module completion must survive a duplicate in-progress attempt.
+"""The latest-only invariant is enforced at the DB level, race-proof.
 
 Regression for the live bug where passing the oral after the quiz left the module
-stuck (next modules locked). A racing double-start (StrictMode double-mount, or the
-404-recovery force-start firing while the first start was in flight) had left two
-``llm`` rows sharing ``attempt_number`` — one passed, one orphaned in-progress. The
-derived completion keyed off the *latest* attempt with a non-deterministic tie-break,
-so it could resolve to the orphan and report the module incomplete forever.
+stuck (next modules locked). A racing double-start (StrictMode double-mount, or a
+404-recovery force-start firing while the first start was in flight) had inserted two
+``llm`` rows for one (course, module, type) — one passed, one orphaned in-progress —
+and the derived completion could resolve to the orphan and report the module
+incomplete forever.
+
+The fix is a unique guard on (course_id, module_id, type): a second concurrent start
+is rejected instead of orphaning a duplicate, and ``create_assessment`` recovers by
+handing back the row that won the race.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import pytest
 from app.courses.models import Assessment
 from app.courses.repository import CourseRepository
-from sqlmodel import Session
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import Session, select
 
 COURSE = "course-x"
 MODULE = "cb-c01-m01"
 
 
-def _passed(session: Session, type: str, attempt: int, when: datetime) -> Assessment:
-    a = Assessment(
-        course_id=COURSE,
-        module_id=MODULE,
-        type=type,
-        attempt_number=attempt,
-        score=10.0,
-        passed=True,
-        completed_at=when,
-        passed_at=when,
-        attempts_to_pass=attempt,
+def _pass(repo: CourseRepository, session: Session, type: str, when: datetime) -> Assessment:
+    """Create and pass a fresh attempt of ``type`` (single row per type — no duplicates)."""
+    a = repo.create_assessment(
+        course_id=COURSE, module_id=MODULE, course_module_id="cm-1", type=type, attempt_number=1
     )
+    a.score = 10.0
+    a.passed = True
+    a.completed_at = when
+    a.passed_at = when
+    a.attempts_to_pass = 1
     session.add(a)
     session.commit()
-    session.refresh(a)
     return a
 
 
-def _orphan_in_progress(session: Session, type: str, attempt: int) -> Assessment:
-    """An attempt that was started but never graded/submitted (the duplicate)."""
-    a = Assessment(course_id=COURSE, module_id=MODULE, type=type, attempt_number=attempt)
-    session.add(a)
-    session.commit()
-    session.refresh(a)
-    return a
-
-
-def test_module_completes_despite_orphan_in_progress_oral(session: Session) -> None:
+def test_module_completes_on_quiz_and_oral_pass(session: Session) -> None:
     repo = CourseRepository(session)
-    _passed(session, "choices", attempt=2, when=datetime(2026, 6, 15, 3, 15, tzinfo=UTC))
-    # The orphan is created FIRST (lower id), the real passed attempt SECOND — mirroring
-    # the live data where the in-progress row predates the completed one at the same number.
-    _orphan_in_progress(session, "llm", attempt=1)
-    _passed(session, "llm", attempt=1, when=datetime(2026, 6, 15, 3, 16, tzinfo=UTC))
+    _pass(repo, session, "choices", datetime(2026, 6, 15, 3, 15, tzinfo=UTC))
+    _pass(repo, session, "llm", datetime(2026, 6, 15, 3, 16, tzinfo=UTC))
 
     assert repo.cleared(COURSE, MODULE, "llm") is True
     assert repo.module_completed(COURSE, MODULE) is True
     assert repo.module_completed_at(COURSE, MODULE) is not None
 
 
-def test_latest_assessment_prefers_completed_over_orphan(session: Session) -> None:
+def test_unique_guard_rejects_a_duplicate_attempt_row(session: Session) -> None:
+    """A raw second row for the same (course, module, type) must be rejected."""
+    session.add(Assessment(course_id=COURSE, module_id=MODULE, type="llm", attempt_number=1))
+    session.commit()
+    session.add(Assessment(course_id=COURSE, module_id=MODULE, type="llm", attempt_number=1))
+    with pytest.raises(IntegrityError):
+        session.commit()
+    session.rollback()
+
+
+def test_create_assessment_is_idempotent_under_a_racing_start(session: Session) -> None:
+    """Two starts for the same (course, module, type) resolve to ONE row, not an orphan."""
     repo = CourseRepository(session)
-    _orphan_in_progress(session, "llm", attempt=1)
-    passed = _passed(session, "llm", attempt=1, when=datetime(2026, 6, 15, 3, 16, tzinfo=UTC))
+    first = repo.create_assessment(
+        course_id=COURSE, module_id=MODULE, course_module_id="cm-1", type="llm", attempt_number=1
+    )
+    second = repo.create_assessment(
+        course_id=COURSE, module_id=MODULE, course_module_id="cm-1", type="llm", attempt_number=1
+    )
 
-    latest = repo.latest_assessment(COURSE, MODULE, "llm")
-    assert latest is not None and latest.id == passed.id  # the real, passed attempt
+    assert second.id == first.id  # the racing duplicate got the winner, not a new orphan
+    llm_rows = [a for a in session.exec(select(Assessment)).all() if a.type == "llm"]
+    assert len(llm_rows) == 1
 
 
-def test_list_module_assessments_surfaces_the_passed_attempt(session: Session) -> None:
+def test_retake_replaces_the_row_and_carries_the_pass_record(session: Session) -> None:
+    """A forced retake deletes the prior row and carries attempts_to_pass forward —
+    so it stays a single row per type and completion never regresses."""
     repo = CourseRepository(session)
-    _passed(session, "choices", attempt=1, when=datetime(2026, 6, 15, 3, 15, tzinfo=UTC))
-    _orphan_in_progress(session, "llm", attempt=1)
-    _passed(session, "llm", attempt=1, when=datetime(2026, 6, 15, 3, 16, tzinfo=UTC))
-
-    by_type = {a.type: a for a in repo.list_module_assessments(COURSE, MODULE)}
-    assert by_type["llm"].passed is True  # not the orphan (passed is None)
-
-
-def test_retake_after_orphan_carries_the_pass_record_forward(session: Session) -> None:
-    """A fresh retake must carry the permanent pass record from the passed attempt,
-    not the orphan — otherwise the next attempt loses ``attempts_to_pass``."""
-    repo = CourseRepository(session)
-    _orphan_in_progress(session, "llm", attempt=1)
-    _passed(session, "llm", attempt=1, when=datetime(2026, 6, 15, 3, 16, tzinfo=UTC))
+    _pass(repo, session, "llm", datetime(2026, 6, 15, 3, 16, tzinfo=UTC))
 
     prior_count, attempts_to_pass, passed_at = repo.reset_for_new_attempt(COURSE, MODULE, "llm")
-    assert attempts_to_pass == 1  # carried from the passed row, not the NULL orphan
+    assert (prior_count, attempts_to_pass) == (1, 1)  # carried forward from the passed row
     assert passed_at is not None
-    assert prior_count == 1  # next attempt_number becomes 2 — no more duplicate at 1
+    # The retake row can now be created without tripping the unique guard (prior deleted).
+    retake = repo.create_assessment(
+        course_id=COURSE,
+        module_id=MODULE,
+        course_module_id="cm-1",
+        type="llm",
+        attempt_number=prior_count + 1,
+        attempts_to_pass=attempts_to_pass,
+        passed_at=passed_at,
+    )
+    assert retake.attempt_number == 2
+    assert repo.cleared(COURSE, MODULE, "llm") is True  # never regresses

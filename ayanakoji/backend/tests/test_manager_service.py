@@ -135,23 +135,27 @@ def test_build_team_insights_grounds_in_work_iq(session: Any) -> None:
 
 
 def test_platform_engagement_counts_latest_attempt_only(session: Session) -> None:
-    """Retakes of the same module/type must not double-count (latest attempt only)."""
+    """Retakes of the same module/type must not double-count (latest attempt only).
+
+    The latest-only model keeps a single row per (course, module, type) — a retake
+    replaces the prior row (and the DB unique guard enforces it), so the surviving row
+    is the latest attempt (attempt_number=2). Engagement must still count it once.
+    """
     course = Course(persona_id="EMP-001", chat_name="Vega — AZ-204")
     session.add(course)
     session.commit()
     session.refresh(course)
-    for attempt, score in ((1, 6.0), (2, 9.0)):
-        session.add(
-            Assessment(
-                course_id=course.id,
-                module_id="cb-c01-m01",
-                type="choices",
-                attempt_number=attempt,
-                score=score,
-                passed=True,
-                passed_at=datetime.now(UTC),
-            )
+    session.add(
+        Assessment(
+            course_id=course.id,
+            module_id="cb-c01-m01",
+            type="choices",
+            attempt_number=2,  # the surviving latest attempt after a retake
+            score=9.0,
+            passed=True,
+            passed_at=datetime.now(UTC),
         )
+    )
     session.commit()
 
     eng = platform_engagement(session, ["EMP-001"])

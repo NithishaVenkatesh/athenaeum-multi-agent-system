@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import JSON
+from sqlalchemy import JSON, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 # Two kinds of assessment / question record.
@@ -114,6 +114,17 @@ class CourseModule(SQLModel, table=True):
 
 class Assessment(SQLModel, table=True):
     """A grouping of question records for one module assessment session."""
+
+    # The latest-only model keeps at most ONE attempt row per (course, module, type):
+    # a retake deletes the prior row and carries its success record forward. This DB-level
+    # guard makes that invariant unbreakable — a racing second start (StrictMode double-
+    # mount, or a 404-recovery force-start firing mid-flight) is rejected instead of
+    # silently inserting an orphan duplicate that masks the real, passed attempt.
+    __table_args__ = (
+        UniqueConstraint(
+            "course_id", "module_id", "type", name="ux_assessment_course_module_type"
+        ),
+    )
 
     id: str = Field(default_factory=_uuid, primary_key=True)
     course_id: str = Field(foreign_key="course.id", index=True)

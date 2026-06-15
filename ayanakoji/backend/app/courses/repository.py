@@ -11,6 +11,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, delete, select
 
 from app.courses.models import (
@@ -224,7 +225,18 @@ class CourseRepository:
             passed_at=passed_at,
         )
         self._session.add(a)
-        self._session.commit()
+        try:
+            self._session.commit()
+        except IntegrityError:
+            # A concurrent start already created the (course, module, type) attempt and
+            # the unique guard rejected this duplicate. Recover idempotently: hand back the
+            # row that won the race instead of orphaning a second one (or 500-ing). Both
+            # racing callers then drive the same session — exactly the latest-only intent.
+            self._session.rollback()
+            existing = self.latest_assessment(course_id, module_id, type)
+            if existing is not None:
+                return existing
+            raise
         self._session.refresh(a)
         return a
 
