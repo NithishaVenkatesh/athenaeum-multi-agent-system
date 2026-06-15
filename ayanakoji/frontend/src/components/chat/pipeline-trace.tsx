@@ -144,6 +144,13 @@ function PhaseRow({ phase }: { phase: PhaseTelemetry }) {
           <MetaChip>off-topic {(phase.off_topic * 100).toFixed(0)}%</MetaChip>
         )}
         {phase.state && <MetaChip>state · {phase.state}</MetaChip>}
+        {phase.intents && phase.intents.length > 0 && (
+          <MetaChip>
+            compound · {phase.intents.map((r) => ROUTE_LABEL[r]).join(" → ")}
+          </MetaChip>
+        )}
+        {phase.third_party && <MetaChip>cross-user flagged</MetaChip>}
+        {phase.latency_ms != null && <MetaChip>{phase.latency_ms}ms</MetaChip>}
       </div>
       {phase.steps.length > 0 && (
         <ul className="border-border/40 mt-2 space-y-0.5 border-l pl-3">

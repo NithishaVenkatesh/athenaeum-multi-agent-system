@@ -306,6 +306,13 @@ class PhaseTelemetry(BaseModel):
     off_topic: float | None = Field(
         default=None, description="Router off-topic score 0..1 (0=on-platform, 1=far off)"
     )
+    third_party: bool = Field(
+        default=False, description="Router flagged a cross-user (other-person) question"
+    )
+    intents: list[Route] = Field(
+        default_factory=list,
+        description="Every intent served this turn, in order (a compound turn); empty=single",
+    )
 
 
 # ── Pipeline events (the SSE wire protocol) ────────────────────────────────────

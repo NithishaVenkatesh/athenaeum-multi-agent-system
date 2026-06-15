@@ -249,6 +249,10 @@ export interface PhaseTelemetry {
   steps: TraceStep[];
   confidence: number | null;
   off_topic: number | null;
+  /** Router flagged a cross-user (other-person) question → cross-user decline. */
+  third_party?: boolean;
+  /** Every intent served this turn, in order (a compound turn); empty/absent = single. */
+  intents?: Route[];
 }
 
 export interface CourseSuggestion {

@@ -565,19 +565,24 @@ def classify(
 def _telemetry(decision: RouteDecision, *, model: str | None, tier: int | None) -> PhaseTelemetry:
     is_heuristic = model is None or "heuristic" in (model or "")
     label = "Heuristic classifier" if is_heuristic else "LLM router"
-    step = TraceStep(
-        label=label,
-        passed=True,
-        detail=(
-            f"Route: {decision.route.value} · confidence {decision.confidence:.0%}"
-            f" · off-topic score {decision.off_topic:.0%}"
-        ),
-        model=model,
+    detail = (
+        f"Route: {decision.route.value} · confidence {decision.confidence:.0%}"
+        f" · off-topic score {decision.off_topic:.0%}"
     )
+    # Surface the compound plan + cross-user flag in the human-readable step too, so the
+    # decision is visible even where the structured fields aren't rendered.
+    if decision.intents:
+        detail += " · compound: " + " → ".join(i.value for i in decision.intents)
+    if decision.third_party:
+        detail += " · cross-user question flagged"
+    step = TraceStep(label=label, passed=True, detail=detail, model=model)
+    summary = f"Routed to {decision.route.value}"
+    if decision.intents:
+        summary = "Compound turn → " + " → ".join(i.value for i in decision.intents)
     return PhaseTelemetry(
         phase=PhaseName.ROUTE,
         status=PhaseStatus.PASSED,
-        summary=f"Routed to {decision.route.value}",
+        summary=summary,
         reasoning=decision.reasoning,
         route=decision.route,
         model=model,
@@ -585,6 +590,8 @@ def _telemetry(decision: RouteDecision, *, model: str | None, tier: int | None) 
         steps=[step],
         confidence=decision.confidence,
         off_topic=decision.off_topic,
+        third_party=decision.third_party,
+        intents=decision.intents,
     )
 
 
