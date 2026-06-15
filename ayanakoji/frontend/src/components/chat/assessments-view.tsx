@@ -88,23 +88,26 @@ function EvaluationRow({ courseId, evaluation }: { courseId: string; evaluation:
         </span>
       )}
 
-      {/* Actions */}
+      {/* Actions. Branch on `completed` (cleared = passed at least once) FIRST: a
+          cleared test must never offer Start/Resume — that hits a non-force start
+          endpoint which 409s ("already passed") and dead-ends the learner. A cleared
+          test only ever offers Review + a forced Retake. */}
       <div className="flex shrink-0 items-center gap-1.5">
         {evaluation.locked ? (
           <Badge variant="secondary" className="text-[10px]">
             Locked
           </Badge>
-        ) : graded ? (
+        ) : evaluation.completed ? (
           <>
-            <Link
-              href={reviewHref}
-              className="border-border hover:bg-accent inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors"
-            >
-              Review
-            </Link>
-            {/* Feedback is grounded on the learner's own answers, so it only makes
-                sense once a test was missed. Reuses the post-test deep link, which
-                lands on the Chat tab and auto-streams grounded feedback. */}
+            {graded && (
+              <Link
+                href={reviewHref}
+                className="border-border hover:bg-accent inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors"
+              >
+                Review
+              </Link>
+            )}
+            {/* Passed once but the latest retake missed → still offer grounded feedback. */}
             {evaluation.passed === false && (
               <Link
                 href={`/chat/${courseId}?feedback=${evaluation.type}&module=${evaluation.module_id}`}
@@ -119,10 +122,38 @@ function EvaluationRow({ courseId, evaluation }: { courseId: string; evaluation:
               className="text-brand hover:bg-brand/5 inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors"
             >
               <RotateCcw className="size-3.5" />
-              {evaluation.passed ? "Retake" : "Try again"}
+              Retake
+            </Link>
+          </>
+        ) : graded ? (
+          // Submitted but not cleared → a failed attempt. Review + feedback + try again.
+          <>
+            <Link
+              href={reviewHref}
+              className="border-border hover:bg-accent inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors"
+            >
+              Review
+            </Link>
+            {/* Feedback is grounded on the learner's own answers, so it only makes
+                sense once a test was missed. Reuses the post-test deep link, which
+                lands on the Chat tab and auto-streams grounded feedback. */}
+            <Link
+              href={`/chat/${courseId}?feedback=${evaluation.type}&module=${evaluation.module_id}`}
+              className="border-border hover:bg-accent inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors"
+            >
+              <Lightbulb className="size-3.5" />
+              Get feedback
+            </Link>
+            <Link
+              href={`${takeHref(courseId, evaluation)}?retake=1`}
+              className="text-brand hover:bg-brand/5 inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors"
+            >
+              <RotateCcw className="size-3.5" />
+              Try again
             </Link>
           </>
         ) : (
+          // No submitted attempt yet: resume an in-progress one, or start fresh.
           <Link
             href={takeHref(courseId, evaluation)}
             className="bg-brand inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90"
