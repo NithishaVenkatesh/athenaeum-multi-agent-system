@@ -49,9 +49,14 @@ _ACCEPT_RE = re.compile(
 # "please don't start", "yeah no", "ok but no" must NOT enroll (red-team: the worst bug
 # was silently enrolling a learner who explicitly declined). "start over"/"start again"
 # is a restart, not an accept, so it is excluded too.
+#
+# The generic contraction tail REQUIRES a real apostrophe (``n['’]t``): the apostrophe is
+# what separates a contraction (can't, isn't, won't, doesn't) from an ordinary word that
+# merely ends in "nt" (want, important, assessment, current, consent, student). Without it
+# the tail matched the "…nt" of acceptances and silently declined an enrolling learner.
 _NEGATION_RE = re.compile(
     r"\b(not|never|nope|nah|cancel|decline|refuse|don'?t|do\s+not|won'?t|"
-    r"no\s+thanks?|no\b|nvm|nevermind|never\s*mind|stop)\b|n'?t\b",
+    r"no\s+thanks?|no\b|nvm|nevermind|never\s*mind|stop)\b|n['’]t\b",
     re.IGNORECASE,
 )
 _RESTART_RE = re.compile(r"\bstart\s+(over|again|from\s+scratch|fresh)\b", re.IGNORECASE)
