@@ -24,16 +24,23 @@ from app.agent.clock import today_in_timezone
 from app.agent.contracts import (
     CourseProgress,
     DoneEvent,
+    FeedbackResolution,
     Pace,
     PhaseEvent,
     PlanEvent,
     ProgressSnapshot,
+    Route,
     ScheduledBlock,
     TakenCourse,
     TokenEvent,
 )
 from app.agent.orchestrator import run_pipeline
-from app.agent.router_agent import is_acceptance, is_progress_intent, is_refusal
+from app.agent.router_agent import (
+    is_acceptance,
+    is_feedback_intent,
+    is_progress_intent,
+    is_refusal,
+)
 from app.agent.schedule_edit import parse_adjustment, parse_pace
 from app.agent.state import derive_course_state
 from app.agent.study_plan import occupied_intervals
@@ -41,7 +48,7 @@ from app.catalog.content import get_module_content
 from app.catalog.loader import get_course as get_catalog_course
 from app.catalog.loader import is_valid_course_id
 from app.config import get_settings
-from app.courses.feedback import feedback_performance
+from app.courses.feedback import feedback_performance, resolve_feedback_target
 from app.courses.models import Course, CourseModule
 from app.courses.repository import CourseRepository
 from app.courses.schemas import (
@@ -418,9 +425,7 @@ def _course_lock(course_id: str) -> threading.Lock:
 def _course_passed(repo: CourseRepository, course: Course) -> bool:
     """A course is passed once it has modules and every one of them is complete."""
     modules = repo.list_modules(course.id)
-    return bool(modules) and all(
-        repo.module_completed(course.id, m.module_id) for m in modules
-    )
+    return bool(modules) and all(repo.module_completed(course.id, m.module_id) for m in modules)
 
 
 def _taken_courses(
@@ -697,6 +702,23 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
             repo=stream_repo,
             detailed=is_progress_intent(content),
         )
+        # In-chat feedback: resolve which test the ask is about (DB-bound) only when the
+        # turn is a feedback ask or a feedback context is pinned. ``feedback_active``
+        # also lets the router keep follow-ups grounded on that test. Other linked
+        # courses' titles drive the cross-course redirect.
+        feedback_active = bool(current.feedback_active)
+        feedback_res: FeedbackResolution | None = None
+        if is_feedback_intent(content) or feedback_active:
+            other_titles = [title for (_id, title) in registered.values()]
+            feedback_res = resolve_feedback_target(
+                stream_repo,
+                current,
+                content,
+                modules=modules_as_dicts,
+                other_course_titles=other_titles,
+                active=current.feedback_active or None,
+            )
+        final_route: Route | None = None
         completed = False
         try:
             for event in run_pipeline(
@@ -716,6 +738,8 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
                 plan_constraints=current.plan_constraints or None,
                 modules=modules_as_dicts,
                 progress=progress,
+                feedback=feedback_res,
+                feedback_active=feedback_active,
                 course_state=course_state,
                 history=history or None,
                 pending=pending,
@@ -760,6 +784,8 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
                     }
                 elif event.type == "action":
                     meta_actions = payload
+                elif event.type == "done":
+                    final_route = event.route  # to set/clear the feedback pin below
                 yield _sse(payload)
                 # Terminal, non-token messages become the persisted transcript text.
                 if event.type == "blocked":
@@ -780,6 +806,19 @@ def _stream_turn(course_id: str, content: str) -> Iterator[str]:
                 _persist_agent_constraints(stream_repo, current, agent_constraints)
             if practice_state is not None:
                 current.practice_active = practice_state
+                stream_repo.save(current)
+            # Feedback pin: a feedback turn that answered a specific test pins it so the
+            # next questions stay grounded; any other route (or a redirect/none) clears
+            # it, so "answer my questions from there on" ends when the learner moves on.
+            new_pin: dict[str, object] = {}
+            if (
+                final_route is Route.FEEDBACK
+                and feedback_res is not None
+                and feedback_res.kind == "answer"
+            ):
+                new_pin = {"module_id": feedback_res.module_id, "type": feedback_res.type}
+            if (current.feedback_active or {}) != new_pin:
+                current.feedback_active = new_pin
                 stream_repo.save(current)
             answer = "".join(answer_parts).strip() or final_text
             if answer:
@@ -841,6 +880,10 @@ def _stream_feedback(course_id: str, module_id: str, type: str) -> Iterator[str]
         # Persist a readable learner turn so the thread reads naturally on reload.
         request_text = f"Can you give me feedback on my {label} for {module_title}?"
         repo.append_message(course, role="user", content=request_text)
+        # Pin this test so follow-up questions in the chat stay grounded on it, exactly
+        # as a typed feedback ask would (the button and chat paths share the pin).
+        course.feedback_active = {"module_id": module_id, "type": type}
+        repo.save(course)
 
         # The module's own material grounds the feedback (trimmed for the prompt budget).
         content = get_module_content(module_id)
