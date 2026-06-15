@@ -217,6 +217,21 @@ class ChoiceQuestionResult(BaseModel):
     is_correct: bool | None
 
 
+class Remediation(BaseModel):
+    """Auto-surfaced next steps after a FAILED module evaluation.
+
+    The remediation is attached to the failing submit result itself so the learner does not
+    have to know to ask: grounded feedback is offered, a practice round is one tap away, and
+    the module is flagged to be revisited in the plan. ``None`` on a pass.
+    """
+
+    module_id: str | None
+    message: str
+    feedback_available: bool = True
+    practice_label: str = "Practise this module"
+    reschedule_label: str = "Revisit this module in my plan"
+
+
 class ChoiceSubmitResult(BaseModel):
     """Returned by POST /choices/submit."""
 
@@ -224,6 +239,7 @@ class ChoiceSubmitResult(BaseModel):
     score: float
     passed: bool
     questions: list[ChoiceQuestionResult]
+    remediation: Remediation | None = None
 
 
 class LlmTurnBody(BaseModel):
@@ -251,6 +267,7 @@ class LlmSubmitResult(BaseModel):
     score: float
     passed: bool
     questions: list[LlmQuestionResult]
+    remediation: Remediation | None = None
 
 
 # ── Skill-gap check (pre-study, choice-only, feeds scheduling) ────────────────

@@ -58,6 +58,7 @@ from app.agent.contracts import (
 from app.agent.gate import screen
 from app.agent.grounding import CourseGrounding, get_grounding
 from app.agent.llm import AllProvidersDown, ModelRouter
+from app.agent.output_guard import safe_output_stream
 from app.agent.router_agent import mentions_other_person, route
 from app.agent.state import CourseState, transition_note
 from app.config import Settings, get_settings
@@ -136,6 +137,60 @@ _OWN_DATA_ROUTES = frozenset(
         Route.GO_TO_MODULE,
     }
 )
+
+
+def _intent_plan(decision: RouteDecision) -> list[Route]:
+    """The ordered, deduped routes to serve this turn.
+
+    For a single-intent turn it's just ``[decision.route]``. For a compound turn we honor the
+    LLM's asked ORDER ('explain X, quiz me, then plan it' → [foundry, practise, study_plan]),
+    not the deterministic primary — a high-signal override (e.g. study_plan) must not be
+    forced to the front and reorder the request. The primary is prepended only if the model
+    left it out, so it is always served."""
+    if not decision.intents:
+        return [decision.route]
+    plan = list(decision.intents)
+    if decision.route not in plan:
+        plan.insert(0, decision.route)
+    return plan
+
+
+def _sub_decision(decision: RouteDecision, route: Route) -> RouteDecision:
+    """A decision for a chained intent in a compound turn, carrying the shared context."""
+    return RouteDecision(
+        route=route,
+        reasoning=f"Compound turn: also serving {route.value}.",
+        off_topic=decision.off_topic,
+        confidence=decision.confidence,
+        third_party=decision.third_party,
+    )
+
+
+def _emit_answer(reply: AgentReply) -> Iterator[PipelineEvent]:
+    """Stream one reply's tokens (em-dash-clean, output-safety-screened) then its trailing
+    events (grounding verdict, HITL gates, plan, suggestion, practice, actions). No DoneEvent.
+
+    A mid-stream break propagates to the caller, which surfaces it as an ErrorEvent — the
+    token loop is what can raise; the trailing events are pure.
+    """
+    for token in safe_output_stream(_no_em_dashes(reply.tokens)):
+        yield TokenEvent(token=token)
+    if reply.grounding_check is not None and reply.grounding_check.phase is not None:
+        yield PhaseEvent(phase=reply.grounding_check.phase)
+    if reply.skill_gate is not None:
+        yield reply.skill_gate
+    if reply.pace_request is not None:
+        yield reply.pace_request
+    if reply.plan is not None:
+        yield PlanEvent(plan=reply.plan, constraints=reply.plan_constraints)
+    if reply.suggestion is not None:
+        yield reply.suggestion
+    if reply.new_chat is not None:
+        yield reply.new_chat
+    if reply.practice is not None:
+        yield reply.practice
+    if reply.actions is not None:
+        yield reply.actions
 
 
 def _dispatch(
@@ -301,97 +356,72 @@ def run_pipeline(
         )
     yield PhaseEvent(phase=route_tel)
 
-    # ── Node 3: answer agent (open stream; all-providers-down → explicit error) ─
-    # Route-independent guard: an explicitly-named course already registered in
-    # another chat steers the learner there instead of duplicating it (no model).
-    reply: AgentReply | None = None
-    if decision.route in _COURSE_INTENT_ROUTES:
-        reply = cross_chat_redirect(
-            text, registered=registered, catalog_id=catalog_id, settings=settings
-        )
-    # Route-independent cross-person guard: an own-data route asked about someone else
-    # (the LLM router's third_party signal, or the deterministic marker floor) is declined
-    # before dispatch, so "build a study plan for my colleague" / "quiz my teammate" can't
-    # act on another person's behalf via a route that doesn't self-check.
-    if (
-        reply is None
-        and decision.route in _OWN_DATA_ROUTES
-        and (decision.third_party or mentions_other_person(text))
-    ):
-        reply = _cross_user_decline_reply(decision.route, settings=settings)
-    if reply is None:
-        try:
-            reply = _dispatch(
-                text,
-                decision,
-                persona_id=persona_id,
-                catalog_id=catalog_id,
-                taken=taken,
-                registered=registered,
-                reserved=reserved,
-                pace=pace,
-                skill_source=skill_source,
-                skill_scores=skill_scores,
-                start_date=start_date,
-                exclude_days=exclude_days,
-                skip_weeks=skip_weeks,
-                exam_date=exam_date,
-                plan_constraints=plan_constraints,
-                modules=modules or [],
-                progress=progress,
-                feedback=feedback,
-                router=router,
-                grounding=grounding,
-                settings=settings,
+    # ── Node 3: answer agent(s). The router may detect a COMPOUND turn ("explain X, quiz me,
+    # then plan it"); we serve EVERY intent in order so none is dropped. A single-intent turn
+    # is just [decision.route]. Each intent re-applies the route-independent guards (named-
+    # course redirect; cross-person decline) and streams through the output-safety screen. ──
+    dispatch_ctx: dict[str, object] = {
+        "persona_id": persona_id,
+        "catalog_id": catalog_id,
+        "taken": taken,
+        "registered": registered,
+        "reserved": reserved,
+        "pace": pace,
+        "skill_source": skill_source,
+        "skill_scores": skill_scores,
+        "start_date": start_date,
+        "exclude_days": exclude_days,
+        "skip_weeks": skip_weeks,
+        "exam_date": exam_date,
+        "plan_constraints": plan_constraints,
+        "modules": modules or [],
+        "progress": progress,
+        "feedback": feedback,
+        "router": router,
+        "grounding": grounding,
+        "settings": settings,
+    }
+    served = False
+    suggested = False
+    for route_i in _intent_plan(decision):
+        # Use the full primary decision for its own route; build a sub-decision for any other
+        # intent (the primary route can differ from the first plan item when a deterministic
+        # override set it — e.g. "explain X then quiz me" → primary practise, but X is served
+        # first as foundry_iq).
+        decision_i = decision if route_i == decision.route else _sub_decision(decision, route_i)
+        reply: AgentReply | None = None
+        if route_i in _COURSE_INTENT_ROUTES:
+            reply = cross_chat_redirect(
+                text, registered=registered, catalog_id=catalog_id, settings=settings
             )
-        except AllProvidersDown:
-            logger.warning("all providers down while answering route=%s", decision.route)
-            yield ErrorEvent(message=_SERVICES_DOWN_MESSAGE)
-            yield DoneEvent(route=decision.route)
-            return
+        if (
+            reply is None
+            and route_i in _OWN_DATA_ROUTES
+            and (decision.third_party or mentions_other_person(text))
+        ):
+            reply = _cross_user_decline_reply(route_i, settings=settings)
+        if reply is None:
+            try:
+                reply = _dispatch(text, decision_i, **dispatch_ctx)  # type: ignore[arg-type]
+            except AllProvidersDown:
+                logger.warning("all providers down while answering route=%s", route_i)
+                if not served:  # nothing delivered yet → explicit error
+                    yield ErrorEvent(message=_SERVICES_DOWN_MESSAGE)
+                    yield DoneEvent(route=decision.route)
+                    return
+                break  # earlier intents already answered; stop the chain cleanly
 
-    yield PhaseEvent(phase=reply.telemetry)
+        yield PhaseEvent(phase=reply.telemetry)
+        try:
+            yield from _emit_answer(reply)
+        except Exception as exc:  # noqa: BLE001 — surface a mid-stream break, never swallow
+            logger.warning("answer stream broke: %s", exc)
+            yield ErrorEvent(message=_STREAM_BROKE_MESSAGE)
+            if not served:
+                yield DoneEvent(route=decision.route)
+                return
+            break
+        served = True
+        suggested = suggested or reply.suggestion is not None
 
-    # ── Stream the answer tokens (em-dash-free; mid-stream break → explicit error) ─
-    try:
-        for token in _no_em_dashes(reply.tokens):
-            yield TokenEvent(token=token)
-    except Exception as exc:  # noqa: BLE001, surface, never swallow, a stream break
-        logger.warning("answer stream broke: %s", exc)
-        yield ErrorEvent(message=_STREAM_BROKE_MESSAGE)
-        yield DoneEvent(route=decision.route)
-        return
-
-    # ── Groundedness check (post-answer): the claim-support verdict over the streamed
-    # answer is only known once it is fully generated, so it is surfaced here as a
-    # trailing trace phase (any disclaimer already rode the answer stream itself). ──
-    if reply.grounding_check is not None and reply.grounding_check.phase is not None:
-        yield PhaseEvent(phase=reply.grounding_check.phase)
-
-    # ── Skill-gap HITL gate (ask before pacing) ───────────────────────────────
-    if reply.skill_gate is not None:
-        yield reply.skill_gate
-
-    # ── Pace HITL gate (ask before planning) ───────────────────────────────────
-    if reply.pace_request is not None:
-        yield reply.pace_request
-
-    # ── Structured study plan (rendered as a schedule card) ────────────────────
-    if reply.plan is not None:
-        yield PlanEvent(plan=reply.plan, constraints=reply.plan_constraints)
-
-    # ── The course-selection tool (1+ choosable courses) ───────────────────────
-    if reply.suggestion is not None:
-        yield reply.suggestion
-
-    # ── Course-lock: steer a "switch course" ask to a fresh chat ───────────────
-    if reply.new_chat is not None:
-        yield reply.new_chat
-
-    # ── Assessor practice card + CTA buttons ────────────────────────────────────
-    if reply.practice is not None:
-        yield reply.practice
-    if reply.actions is not None:
-        yield reply.actions
-
-    yield DoneEvent(route=decision.route, suggested=reply.suggestion is not None)
+    yield DoneEvent(route=decision.route, suggested=suggested)

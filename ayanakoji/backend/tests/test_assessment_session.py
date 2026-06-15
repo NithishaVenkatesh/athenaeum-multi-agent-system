@@ -123,7 +123,14 @@ def test_start_choices_random_sample_varies(client: TestClient, assessments_sess
     a1_id = r1["id"]
     # Submit without selecting → all wrong
     sub1 = client.post(f"/api/courses/{course_id}/assessments/{a1_id}/choices/submit")
-    assert sub1.json()["passed"] is False
+    sub1_body = sub1.json()
+    assert sub1_body["passed"] is False
+    # A failed evaluation auto-surfaces the remediation loop (no learner click needed).
+    rem = sub1_body["remediation"]
+    assert rem is not None
+    assert rem["module_id"] == module_id
+    assert rem["feedback_available"] is True
+    assert rem["practice_label"] and rem["reschedule_label"]
 
     # Start attempt 2
     r2 = client.post(
@@ -186,6 +193,7 @@ def test_select_and_submit_choices_all_correct(
     assert result["score"] == 10.0
     assert result["passed"] is True
     assert all(q["is_correct"] for q in result["questions"])
+    assert result["remediation"] is None  # a pass carries no remediation
 
 
 def test_submit_choices_all_wrong_score_0(client: TestClient, assessments_session: Any) -> None:

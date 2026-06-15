@@ -83,10 +83,15 @@ def test_resolve_choice_handles_ordinal_and_name() -> None:
     assert _resolve_suggestion_choice(course, "yes") is None
     # A comparison question naming ordinals must NOT silently enroll (no side-effect).
     assert (
-        _resolve_suggestion_choice(course, "what's the difference between the first and the second?")
+        _resolve_suggestion_choice(
+            course, "what's the difference between the first and the second?"
+        )
         is None
     )
-    assert _resolve_suggestion_choice(course, "how does the first one compare to the second") is None
+    assert (
+        _resolve_suggestion_choice(course, "how does the first one compare to the second")
+        is None
+    )
     # Already linked → nothing to accept.
     course.catalog_id = "cb-c01"
     assert _resolve_suggestion_choice(course, "the second one") is None

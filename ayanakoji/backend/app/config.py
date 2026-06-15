@@ -170,6 +170,18 @@ class Settings(BaseSettings):
     # partially-grounded C-minus that should NOT pass); 4 = "mostly/fully supported".
     # Default 4.0 so only a mostly/fully-supported answer clears the gate.
     groundedness_min_score: float = 4.0
+    # The verdict gates on EVERY judge that produced a score, not groundedness alone.
+    # Each threshold below is on the same 1..5 rubric and gates the verdict ONLY when
+    # that judge actually scored — an absent/errored judge (no number) never blocks the
+    # answer ("verification never blocks the answer"); a real low score does. Bias: these
+    # only tighten the gate, never relax groundedness.
+    # Relevance — does the answer address the question? Gates only when the judge scored.
+    relevance_min_score: float = 3.0
+    # Retrieval — was the cited context relevant/well-ranked? Gates only when it scored.
+    retrieval_min_score: float = 3.0
+    # Groundedness Pro (Content-Safety-backed, often absent). Read on a 1..5 scale and
+    # gates only when its judge returned a number; absent → no effect (fail-open).
+    groundedness_pro_min_score: float = 3.0
     # Cap evaluation so a slow judge can't stall a turn (seconds).
     evaluation_timeout_seconds: float = 20.0
 

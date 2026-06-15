@@ -487,7 +487,9 @@ def test_answer_assessor_take_evaluation_cta() -> None:
     from app.agent import assessor
 
     modules = [{"module_id": "cb-c01-m01", "title": "Functions", "completed": False}]
-    reply = assessor.answer_assessor("I'm ready for the test", Route.TAKE_EVALUATION, modules=modules)
+    reply = assessor.answer_assessor(
+        "I'm ready for the test", Route.TAKE_EVALUATION, modules=modules
+    )
     assert reply.practice is None
     assert reply.actions is not None and reply.actions.actions[0].kind == "take_evaluation"
     assert reply.actions.actions[0].module_id == "cb-c01-m01"

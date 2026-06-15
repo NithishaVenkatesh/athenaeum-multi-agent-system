@@ -133,12 +133,38 @@ def azure_grounding(
     if groundedness_score is None:
         raise RuntimeError("Azure groundedness evaluation produced no score")
 
-    grounded = groundedness_score >= settings.groundedness_min_score
-    reason = " | ".join(reasons) or (
-        "claims supported by the cited modules"
-        if grounded
-        else "a claim is not supported by the cited modules"
-    )
+    # The verdict gates on EVERY judge that produced a score. Groundedness is mandatory
+    # (it raised above if absent). Relevance / retrieval / pro gate ONLY when their judge
+    # returned a number: a judge that errored (result {} → _extract_score None) must not
+    # block the answer — fail-open for an absent judge, fail-closed only on a real low
+    # score. (groundedness_pro is read on the same 1..5 rubric; if that scale is ever
+    # wrong it can only wrongly *tighten* one already-OK-on-groundedness answer, and it's
+    # usually absent anyway, so we keep it in the same all-judges gate.)
+    relevance_score = _extract_score(results["relevance"], "relevance")
+    retrieval_score = _extract_score(results["retrieval"], "retrieval")
+
+    failures: list[str] = []
+    if groundedness_score < settings.groundedness_min_score:
+        failures.append(
+            f"groundedness {groundedness_score:g} < {settings.groundedness_min_score:g}"
+        )
+    if relevance_score is not None and relevance_score < settings.relevance_min_score:
+        failures.append(f"relevance {relevance_score:g} < {settings.relevance_min_score:g}")
+    if retrieval_score is not None and retrieval_score < settings.retrieval_min_score:
+        failures.append(f"retrieval {retrieval_score:g} < {settings.retrieval_min_score:g}")
+    if pro_score is not None and pro_score < settings.groundedness_pro_min_score:
+        failures.append(
+            f"groundedness_pro {pro_score:g} < {settings.groundedness_pro_min_score:g}"
+        )
+
+    grounded = not failures
+    if grounded:
+        reason = " | ".join(reasons) or "claims supported by the cited modules"
+    else:
+        # Name which judge(s) failed so the trace is honest, then append the judge prose.
+        reason = " | ".join([*failures, *reasons]) or (
+            "a claim is not supported by the cited modules"
+        )
     return GroundingVerdict(
         grounded=grounded,
         reason=reason[:400],

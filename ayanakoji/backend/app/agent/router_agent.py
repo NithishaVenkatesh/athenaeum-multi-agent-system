@@ -353,10 +353,15 @@ _ROUTE_SYSTEM = (
     "themselves — a named person ('what's Sarah's schedule'), a colleague, their manager, a "
     "teammate, 'someone else', or building/quizzing 'for my colleague'. It is false when the "
     "turn is about the learner's own data or is general course content.\n"
+    "intents: if the turn asks for SEVERAL things, list the route of EVERY intent in the order "
+    "asked, e.g. 'explain triggers, then quiz me, and build a plan' → "
+    '["foundry_iq","practise_module","study_plan"]. Put the SAME value as route first. For an '
+    "ordinary single-request turn use an empty list []. Do NOT split one request into many.\n"
     'Reply ONLY with JSON: {"route":'
     '"greeting|recommend|upcoming|progress|study_plan|foundry_iq|work_iq|practise_module|'
     'take_evaluation|go_to_module|general",'
-    '"reasoning":"<short>","off_topic":0..1,"confidence":0..1,"third_party":true|false}.'
+    '"reasoning":"<short>","off_topic":0..1,"confidence":0..1,"third_party":true|false,'
+    '"intents":["<route>",...]}.'
 )
 
 
@@ -646,6 +651,30 @@ def _json_third_party(raw: str) -> bool:
         return False
 
 
+# A compound turn serves at most this many intents (primary + extras) — a runaway-loop and
+# cost bound; a real multi-intent message rarely names more.
+_MAX_INTENTS = 4
+
+
+def _json_intents(raw: str) -> list[Route]:
+    """The ordered, deduped, valid-route intents the model detected in a compound turn."""
+    try:
+        items = json.loads(raw).get("intents")
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        return []
+    if not isinstance(items, list):
+        return []
+    out: list[Route] = []
+    for item in items:
+        try:
+            route = Route(str(item))
+        except ValueError:
+            continue
+        if route not in out:
+            out.append(route)
+    return out[:_MAX_INTENTS]
+
+
 def _parse_decision(
     raw: str,
     text: str,
@@ -664,8 +693,13 @@ def _parse_decision(
     decision = _route_decision(
         raw, text, grounding, pending=pending, feedback_active=feedback_active
     )
-    third_party = _json_third_party(raw) or mentions_other_person(text)
-    return decision.model_copy(update={"third_party": third_party}) if third_party else decision
+    updates: dict[str, object] = {}
+    if _json_third_party(raw) or mentions_other_person(text):
+        updates["third_party"] = True
+    intents = _json_intents(raw)
+    if len(intents) > 1:  # a genuine compound turn; a single/empty list adds nothing
+        updates["intents"] = intents
+    return decision.model_copy(update=updates) if updates else decision
 
 
 def _route_decision(

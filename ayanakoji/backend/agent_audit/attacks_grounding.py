@@ -107,7 +107,9 @@ class GroundingCase:
 # running) are absent from the whole catalog and that only brush a single generic
 # word ("best", "change") in one module — the retrieval must reject the brush.
 _FALSE_GROUNDING: tuple[GroundingCase, ...] = (
-    GroundingCase("bake_sourdough", "false_grounding", "how to bake sourdough bread", EMPTY, "crit"),
+    GroundingCase(
+        "bake_sourdough", "false_grounding", "how to bake sourdough bread", EMPTY, "crit"
+    ),
     GroundingCase(
         "quantum_keyex", "false_grounding", "quantum teleportation key exchange", EMPTY, "crit"
     ),

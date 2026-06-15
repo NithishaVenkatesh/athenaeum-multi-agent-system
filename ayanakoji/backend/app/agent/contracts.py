@@ -104,6 +104,12 @@ class RouteDecision(BaseModel):
         description="True if the turn asks about a person OTHER than the learner "
         "(a named person, colleague, or manager); drives the cross-user decline",
     )
+    intents: list[Route] = Field(
+        default_factory=list,
+        description="EVERY intent in a compound turn, in the order asked ('explain triggers, "
+        "quiz me, then plan it' → [foundry_iq, practise_module, study_plan]); the orchestrator "
+        "serves each in turn so none is dropped. Empty for an ordinary single-intent turn.",
+    )
 
 
 class FeedbackResolution(BaseModel):

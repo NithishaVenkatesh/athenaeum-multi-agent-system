@@ -29,7 +29,7 @@ We never edit app/ source; this file only observes.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date, timedelta
 from functools import lru_cache
 
@@ -355,9 +355,7 @@ def _is_degraded(plan: StudyPlan | None, narration: str) -> bool:
         return bool(narration.strip())
     if plan.balloon_warning:
         return True
-    if not plan.sessions:
-        return True
-    return False
+    return bool(not plan.sessions)
 
 
 # ── Per-case runner ──────────────────────────────────────────────────────────────
@@ -404,19 +402,18 @@ def _run_case(case: PlanCase) -> CaseResult:
     observed = f"{obs_plan} narr={narration[:140]!r}"
 
     # (a) Degraded-expectation cases: must degrade gracefully, never a silent break.
-    if case.expect_degraded:
-        if not _is_degraded(plan, narration):
-            return CaseResult(
-                case_id=case.case_id,
-                category=case.category,
-                passed=False,
-                detail=(
-                    "absurd constraint did NOT degrade: produced a normal-looking plan with "
-                    "no warning, no degradation signal"
-                ),
-                severity=case.severity,
-                observed=observed,
-            )
+    if case.expect_degraded and not _is_degraded(plan, narration):
+        return CaseResult(
+            case_id=case.case_id,
+            category=case.category,
+            passed=False,
+            detail=(
+                "absurd constraint did NOT degrade: produced a normal-looking plan with "
+                "no warning, no degradation signal"
+            ),
+            severity=case.severity,
+            observed=observed,
+        )
 
     # (b) Structural sanity whenever a plan object is present.
     if plan is not None:
@@ -432,21 +429,24 @@ def _run_case(case: PlanCase) -> CaseResult:
             )
 
     # (c) Number guard on the VISIBLE narration (only meaningful with a plan to check).
-    if plan is not None and narration.strip():
-        if not plan_narration_is_grounded(narration, plan):
-            roles = role_violations(narration, plan)
-            nums = ungrounded_numbers(narration, allowed_plan_numbers(plan))
-            return CaseResult(
-                case_id=case.case_id,
-                category=case.category,
-                passed=False,
-                detail=(
-                    "UNGROUNDED narration reached the user: "
-                    f"role_violations={sorted(roles)} ungrounded_numbers={sorted(nums)}"
-                ),
-                severity="crit",
-                observed=observed,
-            )
+    if (
+        plan is not None
+        and narration.strip()
+        and not plan_narration_is_grounded(narration, plan)
+    ):
+        roles = role_violations(narration, plan)
+        nums = ungrounded_numbers(narration, allowed_plan_numbers(plan))
+        return CaseResult(
+            case_id=case.case_id,
+            category=case.category,
+            passed=False,
+            detail=(
+                "UNGROUNDED narration reached the user: "
+                f"role_violations={sorted(roles)} ungrounded_numbers={sorted(nums)}"
+            ),
+            severity="crit",
+            observed=observed,
+        )
 
     # (d) Semantic judge for fabrication / instruction-leak cases.
     if case.run_judge and narration.strip():

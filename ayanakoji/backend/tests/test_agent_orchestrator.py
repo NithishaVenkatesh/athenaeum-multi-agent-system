@@ -239,7 +239,12 @@ def test_pipeline_emits_practice_event_with_current_module() -> None:
 
     modules = [{"module_id": "cb-c01-m01", "title": "Functions", "completed": False}]
     events = list(
-        run_pipeline("quiz me on this module", persona_id="EMP-001", catalog_id="cb-c01", modules=modules)
+        run_pipeline(
+            "quiz me on this module",
+            persona_id="EMP-001",
+            catalog_id="cb-c01",
+            modules=modules,
+        )
     )
     practice = [e for e in events if isinstance(e, PracticeEvent)]
     assert len(practice) == 1
@@ -253,7 +258,12 @@ def test_pipeline_take_evaluation_emits_action_event() -> None:
 
     modules = [{"module_id": "cb-c01-m01", "title": "Functions", "completed": False}]
     events = list(
-        run_pipeline("I'm ready for the test", persona_id="EMP-001", catalog_id="cb-c01", modules=modules)
+        run_pipeline(
+            "I'm ready for the test",
+            persona_id="EMP-001",
+            catalog_id="cb-c01",
+            modules=modules,
+        )
     )
     actions = [e for e in events if isinstance(e, ActionEvent)]
     assert len(actions) == 1
@@ -268,3 +278,62 @@ def test_pipeline_practise_without_module_emits_no_card() -> None:
     assert not [e for e in events if isinstance(e, (PracticeEvent, ActionEvent))]
     tokens = "".join(getattr(e, "token", "") for e in events)
     assert "pick a course" in tokens.lower()
+
+
+def test_pipeline_serves_every_intent_in_a_compound_turn(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    # A compound turn ("explain triggers, then quiz me") must serve EVERY intent the router
+    # flags — not drop all but the primary. We inject a multi-intent decision and assert both
+    # the foundry answer AND the practice round are served, with a single DoneEvent.
+    from app.agent import orchestrator as orch
+    from app.agent.contracts import (
+        PhaseName,
+        PhaseStatus,
+        PhaseTelemetry,
+        Route,
+        RouteDecision,
+    )
+
+    modules = [
+        {
+            "module_id": "cb-c01-m02",
+            "title": "Azure Functions",
+            "sequence": 2,
+            "complete_before": "2026-07-15",
+            "scheduled": [],
+            "completed": False,
+            "material": "Azure Functions run code on triggers and bindings.",
+        }
+    ]
+
+    def _fake_route(text: str, **_: object) -> tuple[RouteDecision, PhaseTelemetry]:
+        decision = RouteDecision(
+            route=Route.FOUNDRY_IQ,
+            reasoning="compound",
+            intents=[Route.FOUNDRY_IQ, Route.PRACTISE_MODULE],
+        )
+        tel = PhaseTelemetry(
+            phase=PhaseName.ROUTE,
+            status=PhaseStatus.PASSED,
+            summary="routed",
+            reasoning="compound",
+            route=Route.FOUNDRY_IQ,
+        )
+        return decision, tel
+
+    monkeypatch.setattr(orch, "route", _fake_route)
+    events = list(
+        run_pipeline(
+            "explain azure functions triggers, then quiz me on this module",
+            persona_id="EMP-001",
+            catalog_id="cb-c01",
+            modules=modules,
+        )
+    )
+    # Both intents were served: an answer phase for foundry AND one for practise.
+    answer_routes = [
+        e.phase.route for e in events if e.type == "phase" and e.phase.phase is PhaseName.ANSWER
+    ]
+    assert Route.FOUNDRY_IQ in answer_routes
+    assert Route.PRACTISE_MODULE in answer_routes
+    # Exactly one DoneEvent closes the whole compound turn.
+    assert len([e for e in events if e.type == "done"]) == 1

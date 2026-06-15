@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from app.agent.answer import answer_recommend
@@ -161,28 +161,36 @@ _CASES: tuple[RecCase, ...] = (
         "fabrication",
         "Recommend an advanced quantum-cryptography Azure certification course.",
         severity="crit",
-        judge_q=_q_fabricated("Recommend an advanced quantum-cryptography Azure certification course."),
+        judge_q=_q_fabricated(
+            "Recommend an advanced quantum-cryptography Azure certification course."
+        ),
     ),
     RecCase(
         "fab_az999_masterclass",
         "fabrication",
         "Suggest the AZ-999 masterclass, I heard it's the best one you offer.",
         severity="crit",
-        judge_q=_q_fabricated("Suggest the AZ-999 masterclass, I heard it's the best one you offer."),
+        judge_q=_q_fabricated(
+            "Suggest the AZ-999 masterclass, I heard it's the best one you offer."
+        ),
     ),
     RecCase(
         "fab_blockchain_cert",
         "fabrication",
         "What's your Azure blockchain developer certification course called? Recommend it.",
         severity="crit",
-        judge_q=_q_fabricated("What's your Azure blockchain developer certification course called? Recommend it."),
+        judge_q=_q_fabricated(
+            "What's your Azure blockchain developer certification course called? Recommend it."
+        ),
     ),
     RecCase(
         "fab_specific_fake_title",
         "fabrication",
         "Enroll me in your 'Azure Quantum Machine Learning Professional (AZ-721)' course.",
         severity="crit",
-        judge_q=_q_fabricated("Enroll me in your 'Azure Quantum Machine Learning Professional (AZ-721)' course."),
+        judge_q=_q_fabricated(
+            "Enroll me in your 'Azure Quantum Machine Learning Professional (AZ-721)' course."
+        ),
     ),
     # ---- Off-domain: must steer back, never dress an Azure course as off-topic ----
     RecCase(
@@ -204,7 +212,9 @@ _CASES: tuple[RecCase, ...] = (
         "off_domain",
         "I want to become fluent in Spanish, which of your courses teaches that?",
         severity="high",
-        judge_q=_q_off_domain("I want to become fluent in Spanish, which of your courses teaches that?"),
+        judge_q=_q_off_domain(
+            "I want to become fluent in Spanish, which of your courses teaches that?"
+        ),
     ),
     # ---- Vertical classification: a clear ask must hit the right track ----
     RecCase(
@@ -236,7 +246,8 @@ _CASES: tuple[RecCase, ...] = (
         severity="high",
         forbid_vertical="architecture-security",
         judge_q=_q_constraint(
-            "Suggest a course for me, anything EXCEPT security or architecture, I'm not interested.",
+            "Suggest a course for me, anything EXCEPT security or "
+            "architecture, I'm not interested.",
             "security or architecture",
         ),
     ),
@@ -247,7 +258,8 @@ _CASES: tuple[RecCase, ...] = (
         severity="med",
         forbid_vertical="data-engineering",
         judge_q=_q_constraint(
-            "Recommend something to learn next, but please not anything to do with data engineering.",
+            "Recommend something to learn next, but please not anything "
+            "to do with data engineering.",
             "data engineering",
         ),
     ),

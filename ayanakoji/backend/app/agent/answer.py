@@ -16,7 +16,7 @@ stream a deterministic reply word-by-word (mirroring ``courses/service.py``).
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field, replace
 from datetime import date
 
@@ -398,20 +398,123 @@ def _grounding_telemetry(verdict: GroundingVerdict) -> PhaseTelemetry:
     )
 
 
-def _verified_stream(
+# ── Open-mode agentic catalog search (tool-calling) ─────────────────────────────
+# When the learner's question matched no approved module on the first lexical pass,
+# instead of giving up on the catalog we let the model ITERATE: it may call
+# ``search_catalog`` a few times (rephrasing, narrowing) to find approved content,
+# and answers from it when found — citing module ids — or honestly off-syllabus when
+# nothing approved covers it. Mirrors PROPOSE_PLAN_TOOL's JSON-schema shape.
+SEARCH_CATALOG_TOOL: dict[str, object] = {
+    "type": "function",
+    "function": {
+        "name": "search_catalog",
+        "description": (
+            "Search the approved Azure course catalog for modules relevant to a query. "
+            "Returns matching module ids, titles, and snippets, or empty if nothing is "
+            "approved on this topic."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "the topic or question to look up in the approved catalog",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+}
+
+# How far a single tool result snippet is truncated before the model sees it.
+_SEARCH_SNIPPET_CHARS = 300
+
+_OPEN_SEARCH_SYSTEM = (
+    "You are Athenaeum's Azure learning assistant. The learner's question did not match our "
+    "approved course material on the first pass. You MAY call search_catalog up to a few times "
+    "(rephrasing or narrowing the query) to find approved content for their question. If a "
+    "search surfaces relevant approved modules, answer FROM them and cite each claim's module "
+    "id in square brackets like [cb-c01-m02]. If after searching nothing approved covers the "
+    "question, answer helpfully and accurately from general knowledge in 2 to 4 sentences, then "
+    "note in one short sentence that this is outside Athenaeum's approved course material. Never "
+    "invent module ids or [module-id] references."
+)
+
+
+def _cites_any(answer: str, sources: list[GroundingSource]) -> bool:
+    """True if the answer cites at least one approved source id."""
+    return any(s.ref.lower() in answer.lower() for s in sources)
+
+
+# Appended to the system prompt on the ONE bounded re-dispatch when the first answer
+# wasn't grounded (or made claims without citing a source it had). It tells the model to
+# restate strictly from the sources and to drop anything they don't support.
+_STRICTER_GROUNDING = (
+    "\n\nIMPORTANT: a check found your previous answer was not fully grounded in the sources. "
+    "Restate the answer using ONLY facts the SOURCES below state. Cite each claim's module id "
+    "in square brackets. If the sources do not support part of the question, say so plainly and "
+    "omit it. Do not add outside facts."
+)
+_REFLECTION_LEAD = "\n\nOn review, let me restate that strictly from the approved sources:\n"
+
+
+def _reflection_telemetry(first: GroundingVerdict, second: GroundingVerdict) -> PhaseTelemetry:
+    """Trace phase for a re-dispatch: shows the failed first attempt and the corrected one."""
+    metric_str = ", ".join(f"{n}={v}" for n, v in second.metrics)
+    steps = [
+        TraceStep(
+            label="Claim-support check (attempt 1)",
+            passed=False,
+            detail=first.reason,
+            model=first.provider,
+        ),
+        TraceStep(
+            label="Re-dispatch (grounded, stricter)",
+            passed=second.grounded,
+            detail=second.reason,
+            model=second.provider,
+        ),
+    ]
+    return PhaseTelemetry(
+        phase=PhaseName.ANSWER,
+        status=PhaseStatus.PASSED,
+        summary="Groundedness reflection · re-dispatched once"
+        + (f" · {metric_str}" if metric_str else ""),
+        reasoning=f"First attempt: {first.reason}. After re-dispatch: {second.reason}.",
+        route=Route.FOUNDRY_IQ,
+        provider=second.provider,
+        steps=steps,
+    )
+
+
+# Note appended when an answer that HAD approved sources made claims without citing any of
+# them — the cheapest way to dodge the claim-support judge is to not cite, so an uncited
+# answer with sources is treated as a grounding failure and triggers the re-dispatch.
+_UNCITED_NOTE = (
+    " (Note: that answer did not cite the approved sources it should have, so I am restating "
+    "it grounded in them.)"
+)
+
+
+def _reflective_stream(
     tokens: Iterator[str],
     sources: list[GroundingSource],
     *,
     query: str,
     settings: Settings,
     check: GroundingCheck,
+    regenerate: Callable[[], StreamHandle] | None = None,
+    expect_citation: bool = False,
 ) -> Iterator[str]:
-    """Stream the grounded answer, then verify claim-support and append a disclaimer.
+    """Stream the grounded answer, verify it, and re-dispatch ONCE if it falls short.
 
-    Wraps ``stream_grounded`` (which scrubs invented ids inline + handles the no-citation
-    case). Once the full answer is known, it runs the groundedness verifier: if a cited
-    claim isn't supported, an honesty disclaimer is appended, and the verdict's scores are
-    stashed for the orchestrator to surface as a trailing trace phase.
+    Wraps ``stream_grounded`` (which scrubs invented ids inline). Once the full answer is
+    known it runs the groundedness verifier. The answer falls short when the verifier finds
+    it ungrounded, OR when it had approved sources but cited none of them (the cheapest way
+    to dodge the judge is to not cite). In that case it appends an honest note and, if a
+    ``regenerate`` thunk is available, re-dispatches the model ONCE under a stricter
+    sources-only prompt, streams the correction, and records BOTH attempts in the trace —
+    post-answer verification becomes post-answer reflection with one bounded re-dispatch.
     """
     buffer: list[str] = []
     for token in stream_grounded(tokens, sources):
@@ -419,11 +522,137 @@ def _verified_stream(
         yield token
     answer = "".join(buffer)
     verdict = verify_grounding(answer, sources, query=query, settings=settings)
-    if verdict.metrics:  # citations were actually verified (something to report)
+    uncited = expect_citation and bool(sources) and not _cites_any(answer, sources)
+
+    if verdict.grounded and not uncited:
+        if verdict.metrics:  # citations were actually verified (something to report)
+            check.phase = _grounding_telemetry(verdict)
+        return
+
+    # The answer fell short. Append the honest disclaimer (always), then reflect once.
+    yield groundedness_disclaimer(verdict) or _UNCITED_NOTE
+    if regenerate is None:  # offline / no router: disclaimer is the whole correction
         check.phase = _grounding_telemetry(verdict)
-    disclaimer = groundedness_disclaimer(verdict)
-    if disclaimer:
-        yield disclaimer
+        return
+
+    yield _REFLECTION_LEAD
+    buffer2: list[str] = []
+    for token in stream_grounded(regenerate().tokens, sources):
+        buffer2.append(token)
+        yield token
+    verdict2 = verify_grounding("".join(buffer2), sources, query=query, settings=settings)
+    disclaimer2 = groundedness_disclaimer(verdict2)
+    if disclaimer2:  # the stricter retry still fell short — stay honest
+        yield disclaimer2
+    check.phase = _reflection_telemetry(verdict, verdict2)
+
+
+def _open_catalog_search(
+    text: str,
+    *,
+    router: ModelRouter,
+    retriever: GroundedRetriever,
+    settings: Settings,
+    suggestion: SuggestionEvent | None,
+    base_steps: list[TraceStep],
+    no_dash: str,
+) -> AgentReply | None:
+    """Open-mode ONLINE: let the model iterate catalog queries before answering.
+
+    Runs the WORKHORSE tool-calling loop with a single ``search_catalog`` tool, so the
+    model can rephrase/narrow its query a few times to find approved content instead of
+    taking the first lexical hit. Approved sources the tool surfaces are accumulated
+    (de-duped by ref) so citations resolve and the post-answer grounding verifier has
+    something to check. On ANY failure (providers down, tools unsupported, exception)
+    this returns ``None`` so the caller falls back to the existing single-stream path —
+    the answer never breaks.
+    """
+    found: list[GroundingSource] = []
+    seen_refs: set[str] = set()
+
+    def search_catalog(args: dict[str, object]) -> list[dict[str, str]]:
+        query = str(args.get("query") or "").strip()
+        if not query:
+            return []
+        result = retriever.retrieve(query, catalog_id=None)
+        hits: list[dict[str, str]] = []
+        for src in result.sources:
+            if src.ref not in seen_refs:
+                seen_refs.add(src.ref)
+                found.append(src)
+            hits.append(
+                {
+                    "ref": src.ref,
+                    "title": src.title,
+                    "snippet": src.snippet[:_SEARCH_SNIPPET_CHARS],
+                }
+            )
+        return hits
+
+    try:
+        result = router.run_tools(
+            Capability.WORKHORSE,
+            [
+                {"role": "system", "content": _OPEN_SEARCH_SYSTEM + no_dash},
+                {"role": "user", "content": text},
+            ],
+            tools=[SEARCH_CATALOG_TOOL],
+            handlers={"search_catalog": search_catalog},
+            max_rounds=4,
+        )
+    except Exception:  # noqa: BLE001 — degrade to the single-stream open path, never break
+        return None
+
+    steps = [
+        *base_steps,
+        TraceStep(
+            label="Agentic catalog search",
+            passed=bool(found),
+            detail=f"{result.rounds} round(s); {len(found)} approved module(s) surfaced",
+            model=result.model,
+        ),
+        TraceStep(
+            label="Citation guard",
+            passed=True,
+            detail="Streaming: invented citations dropped inline; ungrounded answers re-dispatched",
+        ),
+    ]
+    refs = ", ".join(s.ref for s in found)
+    reasoning = (
+        f"Agentic catalog search surfaced {len(found)} approved module(s): {refs}."
+        if found
+        else "Agentic catalog search found no approved module; answered helpfully off-syllabus."
+    )
+    check = GroundingCheck()
+    return AgentReply(
+        telemetry=_answer_telemetry(
+            summary="Answered from approved course content"
+            if found
+            else "Answered helpfully, outside approved course material",
+            reasoning=reasoning,
+            route=Route.FOUNDRY_IQ,
+            sources=found,
+            model=result.model,
+            tier=result.tier,
+            steps=steps,
+            provider=result.provider.value,
+        ),
+        # Re-stream the loop's final text so the discovered-source answer still flows
+        # through the same verify/citation-check path as a live stream: the existing
+        # _offline_stream feeds tokens to the existing _reflective_stream wrapper.
+        tokens=_reflective_stream(
+            _offline_stream(result.text),
+            found,
+            query=text,
+            settings=settings,
+            check=check,
+            regenerate=None,  # the discovered answer is final; no stricter re-dispatch
+            expect_citation=bool(found),
+        ),
+        sources=found,
+        suggestion=suggestion,
+        grounding_check=check,
+    )
 
 
 def answer_foundry(
@@ -524,8 +753,25 @@ def answer_foundry(
     router = router or ModelRouter(settings)
     _no_dash = "Do not use em dashes; use commas or periods." + _NO_LEAK + _NO_OVERRIDE
     if mode == "open":
-        # No approved sources: answer the question helpfully from general knowledge,
-        # but be honest that it is off-syllabus and do not fabricate citations (H2).
+        # First try the agentic catalog search: the model iterates search_catalog queries
+        # to find approved content for an off-syllabus question, answering FROM it (cited)
+        # when found. On ANY failure this returns None and we fall through to the existing
+        # single-stream general-knowledge path below — no regression.
+        agentic = _open_catalog_search(
+            text,
+            router=router,
+            retriever=retriever,
+            settings=settings,
+            suggestion=suggestion,
+            base_steps=steps,
+            no_dash=_no_dash,
+        )
+        if agentic is not None:
+            return agentic
+    if mode == "open":
+        # No approved sources and the agentic search was unavailable: answer the question
+        # helpfully from general knowledge, but be honest that it is off-syllabus and do
+        # not fabricate citations (H2).
         system = (
             "You are Athenaeum's Azure learning assistant. The learner asked something our "
             "approved course material does not cover. Answer helpfully and accurately in 2 to 4 "
@@ -565,16 +811,29 @@ def answer_foundry(
             model=handle.model,
         )
     )
-    # Stream live through the grounding guard: invented [module-id] citations are
-    # dropped inline (no buffer-then-restream, M5), and an answer that makes claims
-    # without citing any approved source gets an honesty disclaimer (H5).
+    # Stream live through the grounding guard: invented [module-id] citations are dropped
+    # inline (M5). The answer is then verified; if it is ungrounded (or had sources but cited
+    # none of them), the model is re-dispatched ONCE under a stricter sources-only prompt and
+    # the correction is streamed, with both attempts surfaced in the trace.
     steps.append(
         TraceStep(
             label="Citation guard",
             passed=True,
-            detail="Streaming: invented citations dropped inline; uncited claims flagged",
+            detail="Streaming: invented citations dropped inline; ungrounded answers re-dispatched",
         )
     )
+
+    def _regenerate() -> StreamHandle:
+        """One stricter, sources-only re-dispatch for a first answer that fell short."""
+        return router.stream(
+            Capability.WORKHORSE,
+            [
+                {"role": "system", "content": system + _STRICTER_GROUNDING},
+                {"role": "user", "content": text},
+            ],
+            max_tokens=800,
+        )
+
     check = GroundingCheck()
     return AgentReply(
         telemetry=_answer_telemetry(
@@ -587,7 +846,15 @@ def answer_foundry(
             steps=steps,
             provider=activity.provider,
         ),
-        tokens=_verified_stream(handle.tokens, sources, query=text, settings=settings, check=check),
+        tokens=_reflective_stream(
+            handle.tokens,
+            sources,
+            query=text,
+            settings=settings,
+            check=check,
+            regenerate=_regenerate,
+            expect_citation=mode != "open",  # open mode is general-knowledge, no citation
+        ),
         sources=sources,
         suggestion=suggestion,
         grounding_check=check,
