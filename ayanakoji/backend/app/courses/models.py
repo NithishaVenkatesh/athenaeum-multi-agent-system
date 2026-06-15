@@ -80,6 +80,11 @@ class Course(SQLModel, table=True):
     # cleared on submit. Never written to the Assessment table, so it never affects
     # official completion / progress.
     practice_active: dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
+    # The test a feedback turn is currently grounded on: {"module_id", "type"}.
+    # Set when feedback is given (via chat or the Get Feedback button) so follow-up
+    # questions stay pinned to that test; cleared the moment the learner routes
+    # elsewhere. Empty until the first feedback turn. Never affects progress.
+    feedback_active: dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
     # Staged study-plan modules awaiting the learner's approval. Promoted to real
     # CourseModule rows by POST /plan/approve; the chat path never writes modules.
     pending_modules: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON)

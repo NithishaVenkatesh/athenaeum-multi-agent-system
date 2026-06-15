@@ -15,7 +15,7 @@ def test_ensure_course_columns_adds_missing_columns_idempotently() -> None:
     ensure_course_columns(engine)  # second run must be a no-op, not an error
     with engine.begin() as conn:
         cols = {row[1] for row in conn.execute(text("PRAGMA table_info(course)"))}
-    assert {"skill_source", "skill_scores", "pending_modules"} <= cols
+    assert {"skill_source", "skill_scores", "pending_modules", "feedback_active"} <= cols
 
 
 def test_ensure_schema_drops_removed_columns_and_adds_assessment_columns() -> None:

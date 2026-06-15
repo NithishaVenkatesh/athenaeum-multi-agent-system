@@ -249,6 +249,26 @@ class CourseRepository:
         )
         return self._session.exec(statement).first()
 
+    def latest_failed_assessment(
+        self, course_id: str, module_id: str | None = None
+    ) -> Assessment | None:
+        """The most recently submitted FAILED assessment in a course (optionally one module).
+
+        'Failed' is a submitted attempt (``completed_at`` set) with ``passed`` False;
+        in-progress (``passed`` None) and passed attempts are skipped. Ordered by
+        ``completed_at`` desc so a bare 'feedback on my failed test' resolves to the
+        learner's latest miss. Course-scoped, so it only ever returns this chat's tests.
+        """
+        statement = select(Assessment).where(
+            Assessment.course_id == course_id,
+            col(Assessment.passed).is_(False),
+            col(Assessment.completed_at).is_not(None),
+        )
+        if module_id is not None:
+            statement = statement.where(Assessment.module_id == module_id)
+        statement = statement.order_by(col(Assessment.completed_at).desc())
+        return self._session.exec(statement).first()
+
     def get_assessment(self, assessment_id: str) -> Assessment | None:
         return self._session.get(Assessment, assessment_id)
 
