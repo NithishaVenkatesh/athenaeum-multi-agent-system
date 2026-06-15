@@ -88,6 +88,7 @@ def is_suggestion_response(text: str) -> bool:
         return True
     return not is_refusal(text) and bool(_ORDINAL_RE.search(text))
 
+
 # "Help me choose / explore courses" signals → Recommend (profile- or topic-scoped).
 _RECOMMEND_RE = re.compile(
     r"\b(suggest|recommend|which)\b.{0,40}\bcourse"
@@ -162,6 +163,8 @@ _OTHER_PERSON_RE = re.compile(
 def mentions_other_person(text: str) -> bool:
     """True if the message asks about a person other than the current learner."""
     return bool(_OTHER_PERSON_RE.search(text))
+
+
 # Weaker timing signals → Work IQ only if the turn isn't really about course content.
 _WORK_TIMING_RE = re.compile(
     r"when\s+should\s+i\s+study|how\s+much\s+time|fit\s+(this|it|study)\s+(in|around)"
@@ -191,6 +194,28 @@ _GO_MODULE_RE = re.compile(
     r"|\bstudy\s+(the\s+)?module\b|\bopen\s+(the\s+)?module\b",
     re.IGNORECASE,
 )
+# "Give me feedback on my failed test / why did I fail / what did I get wrong" →
+# the in-chat feedback route (grounded review of a test in THIS course). Kept
+# disjoint from _TAKE_EVAL_RE ("take the test") and _PRACTISE_RE ("quiz me") so a
+# request to review past results never reads as a request to start a new attempt.
+_FEEDBACK_RE = re.compile(
+    r"\bfeedback\b"
+    r"|why\s+did\s+i\s+(fail|not\s+pass|do\s+(so\s+)?(badly|poorly))"
+    r"|why\s+(was|were|is|are)\s+[^?.!]{0,40}\bwrong\b"
+    r"|what\s+did\s+i\s+(get\s+wrong|miss)"
+    r"|where\s+did\s+i\s+go\s+wrong"
+    r"|(go|walk)\s+(me\s+)?(over|through)\s+(my|the)\s+(results?|answers?|mistakes?|quiz|exam|test)"
+    r"|review\s+(my|the)\s+(results?|answers?|mistakes?)"
+    r"|how\s+did\s+i\s+do\s+(on|in)\s+(my|the)\s+(test|quiz|exam|assessment|oral)",
+    re.IGNORECASE,
+)
+
+
+def is_feedback_intent(text: str) -> bool:
+    """True if the learner is asking for feedback / a review of a test they took."""
+    return bool(_FEEDBACK_RE.search(text))
+
+
 # Clearly-not-our-domain topics → general with a stronger nudge.
 _OFF_DOMAIN_RE = re.compile(
     r"\b(weather|football|cricket|soccer|world\s+cup|movie|film|recipe|cook|sport|"
@@ -366,18 +391,32 @@ def _go_module_decision() -> RouteDecision:
     )
 
 
+def _feedback_decision(*, followup: bool = False) -> RouteDecision:
+    reasoning = (
+        "Continuing feedback on the test just discussed (pinned context)."
+        if followup
+        else "Wants feedback on a test they took in this course."
+    )
+    return RouteDecision(route=Route.FEEDBACK, reasoning=reasoning, off_topic=0.0, confidence=0.85)
+
+
 def classify(
     text: str,
     *,
     grounding: CourseGrounding | None = None,
     pending: str | None = None,
+    feedback_active: bool = False,
 ) -> RouteDecision:
     """Deterministic intent classifier (offline path + fallback for the online path).
 
-    Priority: affirmation→pending → plan/edit/pace → recommend → greeting →
-    strong-work → course-content → weak-work-timing → off-topic → general.
-    Course content outranks weak timing words so a question that merely says "how
-    much time" about a real topic still gets a grounded content answer.
+    Priority: affirmation→pending → feedback → plan/edit/pace → recommend → greeting
+    → strong-work → course-content → weak-work-timing → off-topic → [feedback pin] →
+    general. Course content outranks weak timing words so a question that merely says
+    "how much time" about a real topic still gets a grounded content answer.
+
+    ``feedback_active`` pins a just-given feedback turn: a follow-up the chain would
+    otherwise dump to GENERAL stays in FEEDBACK so it keeps grounding on that test,
+    until a competing intent above (plan, navigation, off-domain) breaks the pin.
     """
     # A bare "yes" only resolves against what the assistant just proposed.
     if pending == "pace" and _AFFIRM_RE.search(text):
@@ -397,6 +436,10 @@ def classify(
             off_topic=0.0,
             confidence=0.8,
         )
+    # An explicit feedback ask ("why did I fail my quiz") wins over the content/plan
+    # intents below: those words alone would otherwise read as ungrounded → general.
+    if is_feedback_intent(text):
+        return _feedback_decision()
     if is_plan_intent(text):
         return _study_plan_decision()
     if is_progress_intent(text):
@@ -457,6 +500,11 @@ def classify(
             off_topic=0.85,
             confidence=0.6,
         )
+    # Feedback pin (last resort): a follow-up that nothing above claimed, while a
+    # feedback turn is active, stays in FEEDBACK so "answer my questions from there
+    # on" keeps grounding on the same test instead of being refused as off-topic.
+    if feedback_active:
+        return _feedback_decision(followup=True)
     off = 0.1 if _GREETING_RE.search(text) else 0.5
     return RouteDecision(
         route=Route.GENERAL,
@@ -511,17 +559,21 @@ def route(
     grounding: CourseGrounding | None = None,
     history: list[dict[str, str]] | None = None,
     pending: str | None = None,
+    feedback_active: bool = False,
     settings: Settings | None = None,
 ) -> tuple[RouteDecision, PhaseTelemetry]:
     """Decide the route for a clean turn, with telemetry for the trace.
 
     ``history`` (recent turns) and ``pending`` (an action the last assistant turn
     proposed, e.g. "pace") let the router resolve context-dependent follow-ups
-    like a bare "yes" instead of treating each message in isolation.
+    like a bare "yes" instead of treating each message in isolation. ``feedback_active``
+    pins a just-given feedback turn so follow-ups keep grounding on the same test.
     """
     settings = settings or get_settings()
     if settings.llm_offline:
-        decision = classify(text, grounding=grounding, pending=pending)
+        decision = classify(
+            text, grounding=grounding, pending=pending, feedback_active=feedback_active
+        )
         return decision, _telemetry(decision, model="heuristic", tier=None)
 
     router = router or ModelRouter(settings)
@@ -532,15 +584,24 @@ def route(
             {"role": "user", "content": text},
         ]
         result = router.complete(Capability.FAST, messages, json_mode=True, max_tokens=120)
-        decision = _parse_decision(result.text, text, grounding, pending=pending)
+        decision = _parse_decision(
+            result.text, text, grounding, pending=pending, feedback_active=feedback_active
+        )
         return decision, _telemetry(decision, model=result.model, tier=result.tier)
     except AllProvidersDown:
-        decision = classify(text, grounding=grounding, pending=pending)
+        decision = classify(
+            text, grounding=grounding, pending=pending, feedback_active=feedback_active
+        )
         return decision, _telemetry(decision, model="heuristic (providers down)", tier=None)
 
 
 def _parse_decision(
-    raw: str, text: str, grounding: CourseGrounding | None, *, pending: str | None = None
+    raw: str,
+    text: str,
+    grounding: CourseGrounding | None,
+    *,
+    pending: str | None = None,
+    feedback_active: bool = False,
 ) -> RouteDecision:
     """Parse the model's JSON; correct it when it over-rejects an on-platform topic."""
     # Deterministic, high-signal intents win over the LLM regardless of its call.
@@ -548,6 +609,8 @@ def _parse_decision(
         return classify(text, grounding=grounding, pending=pending)
     if pending == "suggestion" and is_suggestion_response(text):
         return classify(text, grounding=grounding, pending=pending)
+    if is_feedback_intent(text):
+        return _feedback_decision()
     if is_plan_intent(text):
         return _study_plan_decision()
     if is_progress_intent(text):
@@ -601,4 +664,9 @@ def _parse_decision(
                 off_topic=decision.off_topic,
                 confidence=0.6,
             )
+    # Feedback pin: a follow-up the model files as general, while a feedback turn is
+    # active, stays in FEEDBACK so it keeps grounding on the same test (mirrors the
+    # offline pin in classify; an explicit competing intent already returned above).
+    if feedback_active and decision.route is Route.GENERAL:
+        return _feedback_decision(followup=True)
     return decision

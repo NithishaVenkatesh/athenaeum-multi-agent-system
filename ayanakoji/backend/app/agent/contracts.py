@@ -40,6 +40,7 @@ class Route(StrEnum):
     PRACTISE_MODULE = "practise_module"  # "quiz me on this module" → assessor practice round
     TAKE_EVALUATION = "take_evaluation"  # "I'm ready for the test" → CTA to the module evaluation
     GO_TO_MODULE = "go_to_module"  # "open / study the module" → CTA to the module page
+    FEEDBACK = "feedback"  # "feedback on my failed test" → grounded review of a test in THIS course
     GENERAL = "general"  # off-topic → helpful answer + steer back to learning
 
 
