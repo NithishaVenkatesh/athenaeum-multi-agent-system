@@ -121,6 +121,104 @@ def test_azure_grounding_gate_at_four(
     assert verdict.grounded is expected_grounded
 
 
+def _install_judge_stubs(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    groundedness: float | None,
+    relevance: float | None,
+    retrieval: float | None,
+    pro: float | None = None,
+) -> None:
+    """Stub the azure.ai.evaluation surface with per-judge scores.
+
+    A ``None`` score models a judge that errored: it returns ``{}`` so ``_extract_score``
+    yields ``None`` and that judge does not gate. ``pro`` patches ``_groundedness_pro``.
+    """
+    import sys
+    import types
+
+    import app.agent.grounding_verifier as gv
+
+    def _payload(name: str, score: float | None) -> dict[str, object]:
+        return {} if score is None else {name: score}
+
+    class _Grounded:
+        def __init__(self, _model_config: object) -> None: ...
+
+        def __call__(self, **_kw: object) -> dict[str, object]:
+            return _payload("groundedness", groundedness)
+
+    class _Relevance:
+        def __init__(self, _model_config: object) -> None: ...
+
+        def __call__(self, **_kw: object) -> dict[str, object]:
+            return _payload("relevance", relevance)
+
+    class _Retrieval:
+        def __init__(self, _model_config: object) -> None: ...
+
+        def __call__(self, **_kw: object) -> dict[str, object]:
+            return _payload("retrieval", retrieval)
+
+    fake = types.ModuleType("azure.ai.evaluation")
+    fake.AzureOpenAIModelConfiguration = lambda **_kw: object()  # type: ignore[attr-defined]
+    fake.GroundednessEvaluator = _Grounded  # type: ignore[attr-defined]
+    fake.RelevanceEvaluator = _Relevance  # type: ignore[attr-defined]
+    fake.RetrievalEvaluator = _Retrieval  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "azure.ai.evaluation", fake)
+    monkeypatch.setattr(gv, "_groundedness_pro", lambda *_a, **_k: pro)
+
+
+def test_azure_grounding_gates_on_relevance(monkeypatch: pytest.MonkeyPatch) -> None:
+    # (a) groundedness clears its bar but relevance is below 3 → ungrounded. The verdict
+    # must gate on every scoring judge, not groundedness alone, and the reason must name it.
+    import app.agent.grounding_verifier as gv
+
+    _install_judge_stubs(monkeypatch, groundedness=5.0, relevance=2.0, retrieval=5.0)
+    verdict = gv.azure_grounding("q", "an answer [cb-c01-m02]", _SRC, _eval_settings())
+    assert verdict.grounded is False
+    assert "relevance 2 < 3" in verdict.reason
+
+
+def test_azure_grounding_passes_when_every_judge_clears(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # (b) all three judges clear their thresholds → grounded.
+    import app.agent.grounding_verifier as gv
+
+    _install_judge_stubs(monkeypatch, groundedness=5.0, relevance=5.0, retrieval=5.0)
+    verdict = gv.azure_grounding("q", "an answer [cb-c01-m02]", _SRC, _eval_settings())
+    assert verdict.grounded is True
+
+
+def test_azure_grounding_absent_judge_does_not_block(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # (c) relevance errored (no score) → it must NOT block. Groundedness + retrieval clear,
+    # relevance is absent → grounded stays True (fail-open for an absent judge).
+    import app.agent.grounding_verifier as gv
+
+    _install_judge_stubs(monkeypatch, groundedness=5.0, relevance=None, retrieval=5.0)
+    verdict = gv.azure_grounding("q", "an answer [cb-c01-m02]", _SRC, _eval_settings())
+    assert verdict.grounded is True
+
+
+def test_azure_grounding_gates_on_pro_when_scored(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # groundedness/relevance/retrieval all clear, but the Content-Safety Pro judge returns
+    # a real low score → pro tightens the gate to ungrounded and names itself in the reason.
+    import app.agent.grounding_verifier as gv
+
+    _install_judge_stubs(
+        monkeypatch, groundedness=5.0, relevance=5.0, retrieval=5.0, pro=1.0
+    )
+    verdict = gv.azure_grounding("q", "an answer [cb-c01-m02]", _SRC, _eval_settings())
+    assert verdict.grounded is False
+    assert "groundedness_pro 1 < 3" in verdict.reason
+    assert ("groundedness_pro", 1.0) in verdict.metrics
+
+
 def test_extract_score_tolerates_nan_via_properties() -> None:
     from app.agent.grounding_verifier import _extract_score
 
@@ -132,6 +230,15 @@ def test_extract_score_tolerates_nan_via_properties() -> None:
     )
     assert _extract_score({"groundedness": True}, "groundedness") is None  # bool is not a score
     assert _extract_score({}, "relevance") is None
+
+
+def test_judge_threshold_defaults() -> None:
+    # The new per-judge thresholds default to 3.0 on the 1..5 rubric; groundedness stays 4.0.
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.groundedness_min_score == 4.0
+    assert settings.relevance_min_score == 3.0
+    assert settings.retrieval_min_score == 3.0
+    assert settings.groundedness_pro_min_score == 3.0
 
 
 # ── Live Azure evaluators ────────────────────────────────────────────────────────
