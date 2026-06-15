@@ -38,6 +38,47 @@ class FakeRouter:
         return StreamHandle(tokens=_gen(), provider=Provider.AZURE, model="gpt-4o-mini", tier=1)
 
 
+class VerifyRouter:
+    """Router that scripts the WORKHORSE (generation) and FAST (verification) calls apart.
+
+    The second-pass self-check uses Capability.FAST; generation uses WORKHORSE. This
+    fake returns ``gen_text`` for the WORKHORSE call and either ``verify_text`` (or
+    raises ``verify_exc``) for the FAST call, so tests can drive each pass independently.
+    """
+
+    def __init__(
+        self,
+        *,
+        gen_text: str,
+        verify_text: str = "{}",
+        verify_exc: Exception | None = None,
+    ) -> None:
+        self._gen_text = gen_text
+        self._verify_text = verify_text
+        self._verify_exc = verify_exc
+        self.calls: list[str] = []
+
+    def complete(
+        self, capability: object, messages: Sequence[dict[str, str]], **_: object
+    ) -> LLMResult:
+        self.calls.append(str(getattr(capability, "value", capability)))
+        if str(getattr(capability, "value", capability)) == "fast":
+            if self._verify_exc is not None:
+                raise self._verify_exc
+            text = self._verify_text
+        else:
+            text = self._gen_text
+        return LLMResult(
+            text=text,
+            provider=Provider.AZURE,
+            model="gpt-4o-mini",
+            tier=1,
+            prompt_tokens=10,
+            completion_tokens=5,
+            latency_ms=12,
+        )
+
+
 def test_route_enum_has_assessor_intents() -> None:
     assert Route.PRACTISE_MODULE.value == "practise_module"
     assert Route.TAKE_EVALUATION.value == "take_evaluation"
@@ -224,6 +265,123 @@ def test_generate_practice_online_malformed_choices_returns_cta(monkeypatch) -> 
     )
     assert reply.practice is None
     assert reply.actions is not None and reply.actions.actions[0].kind == "go_to_module"
+
+
+# ---------------------------------------------------------------------------
+# Answer-key second-pass self-check (online only)
+# ---------------------------------------------------------------------------
+
+
+def _gen_payload() -> str:
+    """Five shape-valid MCQs whose key is choices[1] (== "b{i}")."""
+    import json
+
+    return json.dumps(
+        {
+            "questions": [
+                {
+                    "prompt": f"Q{i}",
+                    "choices": [f"a{i}", f"b{i}", f"c{i}", f"d{i}"],
+                    "answer_index": 1,
+                    "explanation": "e",
+                }
+                for i in range(5)
+            ]
+        }
+    )
+
+
+def _online_settings():
+    from app.config import Settings
+
+    return Settings(_env_file=None, offline_llm=False, groq_api_key="gsk_x")  # type: ignore[call-arg]
+
+
+def _content_patch(monkeypatch) -> None:
+    from app.agent import assessor
+    from app.catalog.content import ModuleContent
+
+    monkeypatch.setattr(
+        assessor,
+        "get_module_content",
+        lambda mid: ModuleContent(module_id=mid, title="Functions", body="Body."),
+    )
+
+
+def test_offline_does_not_run_second_pass_self_check(monkeypatch) -> None:
+    """Offline mode produces the deterministic round and never calls the verifier."""
+    from app.agent import assessor
+
+    _content_patch(monkeypatch)
+
+    def _boom(*_a: object, **_k: object) -> None:
+        raise AssertionError("offline path must not run the online verifier")
+
+    monkeypatch.setattr(assessor, "_verify_questions_online", _boom)
+    reply = assessor.generate_practice(module_id="cb-c01-m01", module_title="Functions")
+    assert reply.practice is not None and len(reply.practice.questions) == 5
+
+
+def test_second_pass_disagreeing_with_a_key_drops_that_question(monkeypatch) -> None:
+    """When the verifier disagrees on even one key, the confirmed set is < 5 → fall back.
+
+    Dropping below the required count returns the original parsed set (better to show
+    shape-valid questions than block practice), so the card still renders all five.
+    """
+    import json
+
+    from app.agent import assessor
+
+    _content_patch(monkeypatch)
+    # Verifier confirms 4 keys but flags Q0 as the wrong key (correct_index != keyed 1).
+    verdicts = [
+        {"n": 0, "correct_index": 2, "key_correct": False, "grounded": True},
+        *[{"n": i, "correct_index": 1, "key_correct": True, "grounded": True} for i in range(1, 5)],
+    ]
+    router = VerifyRouter(
+        gen_text=_gen_payload(), verify_text=json.dumps({"verdicts": verdicts})
+    )
+    reply = assessor.generate_practice(
+        module_id="cb-c01-m01", module_title="Functions", router=router, settings=_online_settings()
+    )
+    # Both passes ran: WORKHORSE generation then FAST verification.
+    assert router.calls == ["workhorse", "fast"]
+    assert reply.practice is not None and len(reply.practice.questions) == 5
+
+
+def test_second_pass_failure_degrades_to_original_questions(monkeypatch) -> None:
+    """A failing or unparseable verifier keeps the original questions, never crashes."""
+    from app.agent import assessor
+    from app.agent.llm import AllProvidersDown
+
+    _content_patch(monkeypatch)
+    router = VerifyRouter(gen_text=_gen_payload(), verify_exc=AllProvidersDown("down"))
+    reply = assessor.generate_practice(
+        module_id="cb-c01-m01", module_title="Functions", router=router, settings=_online_settings()
+    )
+    assert router.calls == ["workhorse", "fast"]
+    assert reply.practice is not None and len(reply.practice.questions) == 5
+    assert reply.practice.questions[0].correct == "b0"
+
+
+def test_second_pass_all_confirmed_keeps_full_set(monkeypatch) -> None:
+    """When every key is confirmed and grounded, all five verified questions survive."""
+    import json
+
+    from app.agent import assessor
+
+    _content_patch(monkeypatch)
+    verdicts = [
+        {"n": i, "correct_index": 1, "key_correct": True, "grounded": True} for i in range(5)
+    ]
+    router = VerifyRouter(
+        gen_text=_gen_payload(), verify_text=json.dumps({"verdicts": verdicts})
+    )
+    reply = assessor.generate_practice(
+        module_id="cb-c01-m01", module_title="Functions", router=router, settings=_online_settings()
+    )
+    assert reply.practice is not None and len(reply.practice.questions) == 5
+    assert reply.practice.questions[0].correct == "b0"
 
 
 # ---------------------------------------------------------------------------

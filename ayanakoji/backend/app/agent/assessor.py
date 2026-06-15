@@ -11,6 +11,7 @@ without a live model (mirroring every other agent).
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Iterator
 from dataclasses import dataclass
 
@@ -30,9 +31,11 @@ from app.agent.contracts import (
     Route,
     TraceStep,
 )
-from app.agent.llm import Capability, ModelRouter
+from app.agent.llm import Capability, LLMError, ModelRouter
 from app.catalog.content import get_module_content
 from app.config import Settings, get_settings
+
+logger = logging.getLogger(__name__)
 
 PRACTICE_QUESTION_COUNT = 5
 READY_MIN_CORRECT = 4  # >= 4/5 (80%) → ready for the evaluation
@@ -131,6 +134,82 @@ def _parse_questions(raw: str) -> list[PracticeQuestion] | None:
         return None
 
 
+def _verify_questions_online(
+    module_title: str, body: str, questions: list[PracticeQuestion], router: ModelRouter
+) -> list[PracticeQuestion]:
+    """Second pass: re-derive each answer from the module and keep only confirmed keys.
+
+    One batched, cheap (FAST capability) verification call re-grades the *keyed*
+    answer of every question against the module material. We drop a question when the
+    verifier disagrees with the key or flags it as not grounded in the module. The key
+    is never sent: we send the choice *index* it claims is correct and ask the verifier
+    for the index it believes is correct, so agreement is a real re-derivation, not an
+    echo. Degrades gracefully: any failure or unparseable reply keeps the original set.
+    """
+    payload = [
+        {
+            "n": i,
+            "prompt": q.prompt,
+            "choices": list(q.choices),
+            "keyed_index": q.choices.index(q.correct),
+        }
+        for i, q in enumerate(questions)
+    ]
+    system = (
+        "You are Athenaeum's practice answer-key verifier. Using ONLY the module material "
+        "below, decide for each question whether the answer at 'keyed_index' is the single "
+        "correct, module-grounded answer. Independently work out the correct choice index "
+        "yourself. Mark grounded=false if the question is not answerable from this module. "
+        "Reply ONLY with JSON: "
+        '{"verdicts":[{"n":int,"correct_index":0-3,"key_correct":bool,"grounded":bool}]}.'
+        + _NO_LEAK
+        + _NO_OVERRIDE
+        + f"\n\nMODULE: {module_title}\n{body[:4000]}"
+    )
+    try:
+        result = router.complete(
+            Capability.FAST,
+            [
+                {"role": "system", "content": system},
+                {"role": "user", "content": json.dumps({"questions": payload})},
+            ],
+            json_mode=True,
+            max_tokens=600,
+        )
+        data = json.loads(result.text)
+        verdicts = data.get("verdicts") if isinstance(data, dict) else None
+        if not isinstance(verdicts, list):
+            raise ValueError("verifier returned no 'verdicts' list")
+    except (json.JSONDecodeError, KeyError, ValueError, TypeError, LLMError) as exc:
+        logger.warning("practice verification unavailable, keeping unverified questions: %s", exc)
+        return questions
+
+    confirmed: dict[int, bool] = {}
+    for v in verdicts:
+        if not isinstance(v, dict):
+            continue
+        try:
+            n = int(v["n"])
+            keyed_index = questions[n].choices.index(questions[n].correct)
+            ok = bool(v.get("key_correct")) and bool(v.get("grounded", True))
+            ok = ok and int(v.get("correct_index", keyed_index)) == keyed_index
+        except (KeyError, ValueError, TypeError, IndexError):
+            continue
+        confirmed[n] = ok
+
+    kept = [q for i, q in enumerate(questions) if confirmed.get(i, False)]
+    if len(kept) < PRACTICE_QUESTION_COUNT:
+        # Better to show shape-valid questions than block practice; mirror the graceful
+        # "practice unavailable" stance rather than dropping below the required count.
+        logger.warning(
+            "practice verification confirmed only %d/%d keys; keeping the original set",
+            len(kept),
+            PRACTICE_QUESTION_COUNT,
+        )
+        return questions
+    return kept
+
+
 def _generate_questions_online(
     module_title: str, body: str, router: ModelRouter
 ) -> tuple[list[PracticeQuestion] | None, str | None]:
@@ -154,7 +233,11 @@ def _generate_questions_online(
         json_mode=True,
         max_tokens=1400,
     )
-    return _parse_questions(result.text), result.model
+    questions = _parse_questions(result.text)
+    if questions is not None:
+        # Second pass: re-derive each key from the module and drop unconfirmed ones.
+        questions = _verify_questions_online(module_title, body, questions, router)
+    return questions, result.model
 
 
 def generate_practice(
