@@ -59,8 +59,10 @@ function freshSession(): ChatSession {
 }
 
 function titleFrom(text: string): string {
+  // Keep the full question (sane cap) and let the UI truncate visually with a tooltip,
+  // so a long title is never awkwardly cut off mid-word with no way to read it.
   const t = text.trim().replace(/\s+/g, " ");
-  return t.length > 40 ? `${t.slice(0, 40)}…` : t;
+  return t.length > 120 ? `${t.slice(0, 120)}…` : t;
 }
 
 function relativeTime(ts: number): string {
@@ -229,7 +231,10 @@ export function ManagerChat({ employeeId }: { employeeId: string }) {
           <h2 className="font-display text-foreground text-base leading-tight">
             Ask about your team
           </h2>
-          <p className="text-muted-foreground truncate text-[11px]">
+          <p
+            className="text-muted-foreground truncate text-[11px]"
+            title={active && active.title !== NEW_TITLE ? active.title : undefined}
+          >
             {active && active.title !== NEW_TITLE ? active.title : "Aggregate-only, grounded"}
           </p>
         </div>
@@ -266,12 +271,13 @@ export function ManagerChat({ employeeId }: { employeeId: string }) {
                     key={s.id}
                     type="button"
                     onClick={() => selectSession(s.id)}
+                    title={s.title}
                     className={
                       "hover:bg-accent flex w-full flex-col items-start gap-0.5 rounded-lg px-2.5 py-2 text-left transition-colors" +
                       (s.id === activeId ? " bg-accent" : "")
                     }
                   >
-                    <span className="text-foreground line-clamp-1 text-sm">{s.title}</span>
+                    <span className="text-foreground line-clamp-2 text-sm">{s.title}</span>
                     <span className="text-muted-foreground text-[10px]">
                       {relativeTime(s.updatedAt)}
                     </span>
