@@ -75,7 +75,10 @@ export function ChatComposer({
         aria-label="Message"
         rows={1}
         disabled={locked}
-        className="max-h-40 min-h-9 resize-none border-0 bg-transparent px-2 py-1.5 shadow-none focus-visible:ring-0 disabled:opacity-60 dark:bg-transparent"
+        // The base Textarea uses `field-sizing-content`, which only honours `max-height`
+        // when overflow is scrollable — without `overflow-y-auto` the field grows past the
+        // cap unbounded. With it, the composer stops at max-h-40 and scrolls.
+        className="max-h-40 min-h-9 resize-none overflow-y-auto border-0 bg-transparent px-2 py-1.5 shadow-none focus-visible:ring-0 disabled:opacity-60 dark:bg-transparent"
       />
       <Button
         type="submit"
