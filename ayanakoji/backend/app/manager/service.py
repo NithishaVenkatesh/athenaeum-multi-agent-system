@@ -27,6 +27,7 @@ from app.manager.schemas import (
     ReadinessBreakdown,
     RiskFlag,
     TeamInsights,
+    TrackRecord,
 )
 from app.workiq.models import Persona, Team
 from app.workiq.repository import HEAVY_MEETING_THRESHOLD_HOURS, WorkIQRepository
@@ -85,6 +86,20 @@ def _by_seniority(members: list[Persona]) -> list[CohortReadiness]:
             )
         )
     return out
+
+
+def _track_record(members: list[Persona]) -> TrackRecord:
+    """Team historical exam outcomes — decided Pass/Fail only ('In Progress' excluded)."""
+    outcomes = [
+        m.learning.exam_outcome for m in members if m.learning.exam_outcome in ("Pass", "Fail")
+    ]
+    decided = len(outcomes)
+    passed = sum(1 for o in outcomes if o == "Pass")
+    return TrackRecord(
+        passed=passed,
+        decided=decided,
+        pass_rate=round(passed / decided, 2) if decided else None,
+    )
 
 
 def _cert_targets(
@@ -265,6 +280,7 @@ def build_team_insights(
         sprint_goal=sprint.goal if sprint else None,
         readiness=readiness,
         by_seniority=_by_seniority(members),
+        track_record=_track_record(members),
         capacity=capacity,
         cert_targets=_cert_targets(repo, team, members),
         okrs=_okrs(repo, team.id),

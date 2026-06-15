@@ -157,6 +157,10 @@ def _facts(insights: TeamInsights) -> str:
         f", pass_rate={e.pass_rate:.0%}" if e.pass_rate is not None else ", no graded attempts yet"
     )
     parts.append(engagement)
+    tr = insights.track_record
+    if tr.decided:
+        rate = f"{tr.pass_rate:.0%}" if tr.pass_rate is not None else "n/a"
+        parts.append(f"prior_exam_pass_rate={rate} ({tr.passed}/{tr.decided} on record)")
     if insights.sprint_goal:
         parts.append(f"sprint_goal={insights.sprint_goal}")
     return "; ".join(parts)
@@ -198,6 +202,17 @@ def _sources(insights: TeamInsights) -> list[GroundingSource]:
                 snippet="; ".join(
                     f"{t.cert}: {t.ready_count}/{t.member_count} GO" for t in insights.cert_targets
                 ),
+                kind="work",
+            )
+        )
+    if insights.track_record.decided:
+        tr = insights.track_record
+        rate = f"{tr.pass_rate:.0%}" if tr.pass_rate is not None else "n/a"
+        sources.append(
+            GroundingSource(
+                ref="team.track_record",
+                title="Prior exam track record",
+                snippet=f"{tr.passed}/{tr.decided} passed previously ({rate})",
                 kind="work",
             )
         )

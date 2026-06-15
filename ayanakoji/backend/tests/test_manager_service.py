@@ -122,6 +122,11 @@ def test_build_team_insights_grounds_in_work_iq(session: Any) -> None:
     # "By role" view (seniority bands) is present and sums to the team.
     assert insights.by_seniority
     assert sum(c.total for c in insights.by_seniority) == insights.member_count
+    # Track record: only decided Pass/Fail counted (5 Pass / 2 Fail / 3 In-Progress).
+    tr = insights.track_record
+    assert tr.decided == 7
+    assert tr.passed == 5
+    assert tr.pass_rate is not None and 0.0 <= tr.pass_rate <= 1.0
     # Empty cert-target cohorts are never shown.
     assert all(t.member_count > 0 for t in insights.cert_targets)
     # Source 2 is empty on a fresh DB — honest empty state, not a crash.

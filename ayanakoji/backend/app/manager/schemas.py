@@ -34,6 +34,17 @@ class CohortReadiness(BaseModel):
     total: int = Field(ge=0)
 
 
+class TrackRecord(BaseModel):
+    """Historical certification-exam outcomes for the team (Work IQ profile signal).
+
+    Only members with a decided Pass/Fail are counted; "In Progress" is excluded.
+    """
+
+    passed: int = Field(default=0, ge=0)
+    decided: int = Field(default=0, ge=0, description="Members with a Pass/Fail on record")
+    pass_rate: float | None = Field(default=None, description="passed/decided, None if no history")
+
+
 class CapacitySummary(BaseModel):
     """Aggregate team capacity (Work IQ; Source 1) — no per-learner detail."""
 
@@ -104,6 +115,7 @@ class TeamInsights(BaseModel):
     sprint_goal: str | None = None
     readiness: ReadinessBreakdown
     by_seniority: list[CohortReadiness] = Field(default_factory=list)
+    track_record: TrackRecord = Field(default_factory=TrackRecord)
     capacity: CapacitySummary
     cert_targets: list[CertTargetProgress] = Field(default_factory=list)
     okrs: list[OkrProgress] = Field(default_factory=list)

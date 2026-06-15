@@ -82,6 +82,17 @@ function ReadinessCard({ insights }: { insights: TeamInsights }) {
           </span>
         ))}
       </div>
+      {insights.track_record.decided > 0 && (
+        <p className="text-muted-foreground mt-2 text-xs">
+          Prior exam pass rate:{" "}
+          <span className="text-foreground font-medium">
+            {insights.track_record.pass_rate != null
+              ? `${Math.round(insights.track_record.pass_rate * 100)}%`
+              : "—"}
+          </span>{" "}
+          ({insights.track_record.passed}/{insights.track_record.decided} on record)
+        </p>
+      )}
       {insights.by_seniority.length > 1 && (
         <div className="border-border/60 mt-3 space-y-2 border-t pt-3">
           <div className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">

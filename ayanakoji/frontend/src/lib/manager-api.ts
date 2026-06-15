@@ -25,6 +25,12 @@ export interface CohortReadiness {
   total: number;
 }
 
+export interface TrackRecord {
+  passed: number;
+  decided: number;
+  pass_rate: number | null;
+}
+
 export interface CapacitySummary {
   member_count: number;
   avg_meeting_hours_per_week: number;
@@ -78,6 +84,7 @@ export interface TeamInsights {
   sprint_goal: string | null;
   readiness: ReadinessBreakdown;
   by_seniority: CohortReadiness[];
+  track_record: TrackRecord;
   capacity: CapacitySummary;
   cert_targets: CertTargetProgress[];
   okrs: OkrProgress[];
