@@ -119,5 +119,6 @@ infisical run --env dev -- uv run python scripts/reindex_vectors.py --upload-onl
 
 ### Keeping the free Qdrant cluster alive
 Free Qdrant clusters are suspended after a week with no traffic and deleted after four.
-A cron-job.org job sends one 1-result search every 2 days with a **read-only** key,
-which is negligible load. If the cluster is lost anyway, run `--upload-only` above.
+A cron-job.org job calls the public `GET /health/vector` endpoint every 2 days: one
+1-result Qdrant search with a stored vector (no Cohere/LLM spend, throttled to 1/min,
+no secret on the scheduler), which is negligible load and also wakes Render. If the cluster is lost anyway, run `--upload-only` above.

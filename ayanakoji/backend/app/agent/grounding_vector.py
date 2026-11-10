@@ -19,8 +19,12 @@ with an honest trace note.
 
 from __future__ import annotations
 
+import json
+import time
 import uuid
 from collections import OrderedDict
+from functools import lru_cache
+from pathlib import Path
 from threading import Lock
 from typing import Any
 
@@ -244,3 +248,53 @@ def fuse(
     )
     activity = RetrievalActivity(provider=VECTOR_PROVIDER, live=True, steps=steps)
     return RetrievalResult(sources=sources, activity=activity)
+
+
+# ── Keep-alive probe (free Qdrant clusters suspend after a week idle) ──────────
+
+_VECTORS_PATH = Path(__file__).resolve().parents[1] / "data" / "course_vectors.json"
+_KEEPALIVE_MIN_INTERVAL = 60.0  # seconds; a public endpoint must not amplify traffic
+_keepalive_state: dict[str, Any] = {"at": 0.0, "result": None}
+_keepalive_lock = Lock()
+
+
+@lru_cache(maxsize=1)
+def _probe_vector() -> list[float]:
+    """A stored module vector, so the probe spends no Cohere call."""
+    data = json.loads(_VECTORS_PATH.read_text(encoding="utf-8"))
+    vector: list[float] = data["points"][0]["vector"]
+    return vector
+
+
+def keepalive_search(settings: Settings, *, client: httpx.Client | None = None) -> dict[str, Any]:
+    """One 1-result Qdrant search with a stored vector: real traffic, ~zero cost.
+
+    Throttled process-wide to one live call per minute; repeat hits within the window
+    return the cached result. Never raises: the outcome is reported in the payload.
+    """
+    with _keepalive_lock:
+        now = time.monotonic()
+        cached = _keepalive_state["result"]
+        if cached is not None and now - _keepalive_state["at"] < _KEEPALIVE_MIN_INTERVAL:
+            return {**cached, "cached": True}
+        if not settings.vector_search_configured:
+            result: dict[str, Any] = {"ok": False, "detail": "vector search not configured"}
+        else:
+            cfg = settings.require_vector_search()
+            http = client or httpx.Client(timeout=settings.vector_search_timeout_seconds)
+            try:
+                response = http.post(
+                    f"{cfg.qdrant_url}/collections/{cfg.collection}/points/search",
+                    headers={"api-key": cfg.qdrant_api_key},
+                    json={"vector": _probe_vector(), "limit": 1},
+                )
+                response.raise_for_status()
+                hits = response.json()["result"]
+                result = {"ok": True, "detail": f"qdrant search ok ({len(hits)} hit)"}
+            except Exception as exc:  # noqa: BLE001 — report, never 500 an uptime probe
+                result = {"ok": False, "detail": f"qdrant unavailable ({type(exc).__name__})"}
+            finally:
+                if client is None:
+                    http.close()
+        _keepalive_state.update(at=now, result=result)
+        return {**result, "cached": False}

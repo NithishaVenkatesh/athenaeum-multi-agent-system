@@ -131,3 +131,34 @@ def test_fuse_admits_strong_vector_hit_lexical_missed() -> None:
 def test_point_id_is_stable_uuid() -> None:
     assert gv.point_id("cb-c01-m02") == gv.point_id("cb-c01-m02")
     assert gv.point_id("cb-c01-m02") != gv.point_id("cb-c01-m03")
+
+
+def test_keepalive_search_hits_qdrant_once_per_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(gv, "_keepalive_state", {"at": 0.0, "result": None})
+    transport = _Transport([_hit("cb-c01-m02", 0.9)])
+    client = httpx.Client(transport=httpx.MockTransport(transport))
+    first = gv.keepalive_search(_settings(), client=client)
+    second = gv.keepalive_search(_settings(), client=client)
+    assert first["ok"] is True and first["cached"] is False
+    assert second["cached"] is True
+    assert len(transport.calls) == 1
+    assert all(c.url.host != "api.cohere.com" for c in transport.calls)  # no embed spend
+
+
+def test_keepalive_search_reports_failure_without_raising(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(gv, "_keepalive_state", {"at": 0.0, "result": None})
+
+    def down(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(503)
+
+    client = httpx.Client(transport=httpx.MockTransport(down))
+    out = gv.keepalive_search(_settings(), client=client)
+    assert out["ok"] is False
+    assert "HTTPStatusError" in out["detail"]
+
+
+def test_keepalive_endpoint_unconfigured(client: object) -> None:
+    gv._keepalive_state.update(at=0.0, result=None)
+    response = client.get("/health/vector")  # type: ignore[attr-defined]
+    assert response.status_code == 200
+    assert response.json()["ok"] is False

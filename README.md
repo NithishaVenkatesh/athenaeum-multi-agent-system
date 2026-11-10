@@ -6,7 +6,7 @@
 
 *Built for the **Microsoft Agents League 2026 · Reasoning Agents track**, now running entirely on free-tier APIs*
 
-[**Live app**](https://frontend-eight-red-15.vercel.app) · [**Backend API**](https://athenaeum-backend-thy8.onrender.com) · [**Swagger**](https://athenaeum-backend-thy8.onrender.com/docs) · [**Demo video**](https://drive.google.com/drive/folders/1zazruW7PRIStqxByv-luRYTnXf_uCSo5?usp=sharing)
+[**Live app**](https://athenaeum-swart.vercel.app) · [**Backend API**](https://athenaeum-backend-k669.onrender.com) · [**Swagger**](https://athenaeum-backend-k669.onrender.com/docs) · [**Demo video**](https://drive.google.com/drive/folders/1zazruW7PRIStqxByv-luRYTnXf_uCSo5?usp=sharing)
 
 ![track](https://img.shields.io/badge/track-Reasoning_Agents-c0562f)
 ![cloud](https://img.shields.io/badge/LLMs-Groq_→_Gemini_(free_tier)-2f8f4e)
@@ -642,7 +642,7 @@ infisical run --env dev -- .venv/bin/uvicorn app.main:app --reload --port 8000
 
 - **Backend** — Render (`render.yaml`), free plan, Singapore region, Python 3.12. Build: `pip install uv && uv sync --frozen --no-dev --group llm`. Start: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`. Health check at `/health`. Secrets are pushed from Infisical to the service's env vars, never committed. The free tier sleeps when idle — hence the cold-start note at the top.
 - **Frontend** — Vercel, with `NEXT_PUBLIC_API_BASE_URL` pointed at the Render backend.
-- **Qdrant keep-alive** — free Qdrant clusters suspend after a week idle, so a cron-job.org job runs one 1-result search with a read-only key every 2 days. `scripts/reindex_vectors.py --upload-only` rebuilds a lost cluster from the committed vectors with zero Cohere calls.
+- **Qdrant keep-alive** — free Qdrant clusters suspend after a week idle, so a cron-job.org job calls the backend's public `GET /health/vector` every 2 days. That endpoint runs one 1-result Qdrant search with a stored vector (no Cohere or LLM spend, throttled to 1/min, holds no secret) and also wakes the Render instance. `scripts/reindex_vectors.py --upload-only` rebuilds a lost cluster from the committed vectors with zero Cohere calls.
 - **Local (both services)** — `ecosystem.config.cjs` runs the frontend (`:3000`) and backend (`:8000`) under PM2.
 
 ---

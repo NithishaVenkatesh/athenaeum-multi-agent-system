@@ -114,6 +114,17 @@ def create_app() -> FastAPI:
             version=__version__,
         )
 
+    @app.get("/health/vector", tags=["system"])
+    def health_vector() -> dict[str, object]:
+        """Keep-alive for the free Qdrant cluster: one cheap search, throttled to 1/min.
+
+        An external scheduler (cron-job.org) hits this every 2 days, which also wakes the
+        Render free instance. It holds no secret and spends no Cohere or LLM calls.
+        """
+        from app.agent.grounding_vector import keepalive_search
+
+        return keepalive_search(get_settings())
+
     @app.get("/api/ping", response_model=PingResponse, tags=["system"])
     def ping() -> PingResponse:
         """Round-trip endpoint the frontend calls to confirm backend connectivity."""
