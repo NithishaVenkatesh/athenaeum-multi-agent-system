@@ -17,17 +17,15 @@ def _online() -> Settings:
     return Settings(  # type: ignore[call-arg]
         _env_file=None,
         offline_llm=False,
-        foundry_project_endpoint="https://r.services.ai.azure.com/api/projects/p",
-        azure_openai_endpoint="https://r.openai.azure.com/",
-        azure_openai_api_key="real-key",
         groq_api_key="gsk_real",
+        gemini_api_key="gm_real",
     )
 
 
 class FakeToolProvider:
     """Scripts complete_tools: each call pops the next (text, tool_calls) tuple."""
 
-    name = Provider.AZURE
+    name = Provider.GROQ
 
     def __init__(self, script: list[tuple[str, list[object]]]) -> None:
         self._script = list(script)
@@ -92,7 +90,7 @@ def test_run_scheduler_agent_builds_plan_from_model_constraints() -> None:
     # The model infers "45-minute evening sessions, faster" and calls the tool.
     router = ModelRouter(
         _online(),
-        azure=FakeToolProvider(
+        groq=FakeToolProvider(
             [
                 (
                     "",

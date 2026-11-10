@@ -15,10 +15,10 @@ ordered so the *purpose-built* detector leads and the general LLM backs it up:
    injection/jailbreak detection; returns a 0..1 score. The **primary online
    detector and authoritative on a block**: a confident jailbreak is caught by
    the specialist immediately, short-circuiting before the general LLM runs (M2).
-3. **Azure LLM classifier** — the **secondary semantic net**, run only when the
+3. **LLM classifier** — the **secondary semantic net**, run only when the
    guard clears the message. It catches intent-level attacks the guard's training
    underweights (extract the system prompt, "act outside your purpose"), so a
-   clean turn is confirmed by *both* a specialist and a generalist. If Azure's own
+   clean turn is confirmed by *both* a specialist and a generalist. If a provider's own
    trained Responsible-AI content filter declines the request (a typed
    :class:`~app.agent.llm.ContentFiltered`), that is an authoritative "this is an
    attack" verdict → BLOCK (never confused with an outage).
@@ -212,7 +212,7 @@ def screen(
     is visible instead of each turn looking harmless on its own.
 
     Telemetry now carries a ``steps`` list showing every layer that ran:
-    regex pre-filter → Azure LLM classifier → Groq Prompt Guard 2 → fail-open.
+    regex pre-filter → LLM classifier → Groq Prompt Guard 2 → fail-open.
     """
     settings = settings or get_settings()
     steps: list[TraceStep] = []
@@ -320,7 +320,7 @@ def screen(
             )
         )
 
-    # 4) Azure LLM classifier — the secondary semantic net (only when the guard
+    # 4) LLM classifier — the secondary semantic net (only when the guard
     #    cleared the turn): catches intent-level attacks the guard underweights.
     router = router or ModelRouter(settings)
     try:
@@ -341,7 +341,7 @@ def screen(
         if verdict.blocked and benign_learning_allowance(text):
             steps.append(
                 TraceStep(
-                    label="Azure LLM classifier",
+                    label="LLM classifier",
                     passed=False,
                     detail=f"Flagged ({verdict.confidence:.0%}) — {verdict.reason}",
                     model=result.model,
@@ -365,7 +365,7 @@ def screen(
             )
         steps.append(
             TraceStep(
-                label="Azure LLM classifier",
+                label="LLM classifier",
                 passed=not verdict.blocked,
                 detail=f"Confidence {verdict.confidence:.0%} — {verdict.reason}",
                 model=result.model,
@@ -373,7 +373,7 @@ def screen(
         )
         return verdict, _build_telemetry(verdict, model=result.model, tier=result.tier, steps=steps)
     except ContentFiltered as exc:
-        # Azure's OWN trained Responsible-AI classifier declined the request as a
+        # A provider's OWN trained safety classifier declined the request as a
         # jailbreak/unsafe. That is an authoritative "this is an attack" verdict —
         # treat it as a BLOCK, never an outage (the whole point of the typed signal).
         # We still honor the benign-learning allowance so a genuine learner whose
@@ -384,7 +384,7 @@ def screen(
         if benign_learning_allowance(text):
             steps.append(
                 TraceStep(
-                    label="Azure LLM classifier",
+                    label="LLM classifier",
                     passed=False,
                     detail=f"Provider safety filter declined the request{cat_detail}.",
                 )
@@ -407,25 +407,25 @@ def screen(
             )
         steps.append(
             TraceStep(
-                label="Azure LLM classifier",
+                label="LLM classifier",
                 passed=False,
                 detail=f"Provider safety filter detected a jailbreak{cat_detail} — "
-                "Azure's trained Responsible-AI classifier declined the request.",
+                "The provider's trained safety classifier declined the request.",
             )
         )
         verdict = InjectionVerdict(
             blocked=True,
             reason="Provider's trained safety classifier flagged this as a jailbreak/unsafe "
-            "request (Azure Responsible-AI content filter).",
+            "request (provider content filter).",
             confidence=0.99,
         )
         return verdict, _build_telemetry(verdict, model="content-filter", tier=None, steps=steps)
     except AllProvidersDown:
         steps.append(
             TraceStep(
-                label="Azure LLM classifier",
+                label="LLM classifier",
                 passed=None,
-                detail="Unavailable — Azure/LLM providers unreachable.",
+                detail="Unavailable — LLM providers unreachable.",
             )
         )
         # The specialist already cleared this turn → that is a real clean signal.

@@ -14,10 +14,15 @@ credentials.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Iterator, Sequence
 from typing import Any
 
-from app.config import FoundryConfig, Settings, get_settings
+from app.config import ProviderConfig, Settings, get_settings
+
+logger = logging.getLogger(__name__)
+# Room for a reasoning model's brief deliberation plus the <=6-word title.
+_TITLE_MAX_TOKENS = 200
 
 MAX_TITLE_WORDS = 6
 MAX_TITLE_CHARS = 48
@@ -32,14 +37,14 @@ _CHAT_SYSTEM = (
     "their course topic clearly and concisely, with plain language and concrete examples."
 )
 
-# Factory that turns validated Foundry config into an OpenAI-style client.
-ClientFactory = Callable[[FoundryConfig], Any]
+# Factory that turns validated provider config into an OpenAI-style client.
+ClientFactory = Callable[[ProviderConfig], Any]
 
 
-def _default_client_factory(config: FoundryConfig) -> Any:  # pragma: no cover - thin SDK adapter
-    from app.foundry import build_openai_client
+def _default_client_factory(config: ProviderConfig) -> Any:  # pragma: no cover - thin SDK adapter
+    from openai import OpenAI
 
-    return build_openai_client(config)
+    return OpenAI(api_key=config.api_key, base_url=config.base_url)
 
 
 def _fallback_title(content: str) -> str:
@@ -69,19 +74,43 @@ def generate_title(
     if settings.llm_offline:
         return _fallback_title(content)
 
-    config = settings.require_foundry()
-    client = client_factory(config)
-    response = client.chat.completions.create(
-        model=config.model_workhorse,
-        messages=[
-            {"role": "system", "content": _TITLE_SYSTEM},
-            {"role": "user", "content": content},
-        ],
-        max_tokens=16,
-        temperature=0.2,
-    )
-    text = (response.choices[0].message.content or "").strip().strip('"').strip()
-    return text or _fallback_title(content)
+    # Walk the provider chain (Groq, then Gemini): naming a chat must never fail the
+    # request, so any provider error falls to the next and finally to the local title.
+    for config in _provider_chain(settings):
+        try:
+            response = client_factory(config).chat.completions.create(
+                model=config.model_fast,
+                messages=[
+                    {"role": "system", "content": _TITLE_SYSTEM},
+                    {"role": "user", "content": content},
+                ],
+                max_tokens=_TITLE_MAX_TOKENS,
+                temperature=0.2,
+                **_reasoning_kwargs(config.model_fast, settings),
+            )
+        except Exception as exc:  # noqa: BLE001 — degrade to the next provider
+            logger.warning("chat-title provider failed: %s", type(exc).__name__)
+            continue
+        text = (response.choices[0].message.content or "").strip().strip('"').strip()
+        return text or _fallback_title(content)
+    return _fallback_title(content)
+
+
+def _reasoning_kwargs(model: str, settings: Settings) -> dict[str, Any]:
+    """Cap gpt-oss deliberation so the short title budget isn't spent on reasoning."""
+    if model.startswith("openai/gpt-oss"):
+        return {"reasoning_effort": settings.groq_reasoning_effort}
+    return {}
+
+
+def _provider_chain(settings: Settings) -> list[ProviderConfig]:
+    """Configured chat providers in fallback order."""
+    chain: list[ProviderConfig] = []
+    if settings.groq_configured:
+        chain.append(settings.require_groq())
+    if settings.gemini_configured:
+        chain.append(settings.require_gemini())
+    return chain
 
 
 def _fallback_stream(messages: Sequence[dict[str, Any]]) -> Iterator[str]:
@@ -111,7 +140,7 @@ def stream_reply(
         yield from _fallback_stream(messages)
         return
 
-    config = settings.require_foundry()
+    config = settings.require_chat_provider()
     client = client_factory(config)
     stream = client.chat.completions.create(
         model=config.model_workhorse,

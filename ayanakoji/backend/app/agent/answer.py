@@ -348,8 +348,8 @@ def verify_grounding(
 
     Runs only when the answer cites an approved source (an uncited answer is already
     handled by the streaming guard's no-citation disclaimer, and the expensive judges are
-    not worth spending on it). The live Azure groundedness / relevance / retrieval NLI
-    evaluators are the deeper, entailment-aware check; this selector chooses them when
+    not worth spending on it). The live LLM-judge groundedness / relevance / retrieval
+    scores are the deeper, entailment-aware check; this selector chooses them when
     available and degrades to the deterministic lexical floor on any failure, so
     verification never blocks the answer.
     """
@@ -362,13 +362,13 @@ def verify_grounding(
         )
     if settings.evaluation_available:
         try:
-            from app.agent.grounding_verifier import azure_grounding
+            from app.agent.grounding_verifier import llm_grounding
 
-            return azure_grounding(query, answer, sources, settings)
+            return llm_grounding(query, answer, sources, settings)
         except Exception as exc:  # noqa: BLE001 — degrade LOUDLY, never block the answer
             verdict = lexical_groundedness(answer, sources)
             note = (
-                f"live Azure evaluation unavailable ({type(exc).__name__}); "
+                f"live LLM-judge evaluation unavailable ({type(exc).__name__}); "
                 "used the deterministic lexical floor"
             )
             return replace(verdict, reason=f"{note}. {verdict.reason}")
@@ -667,7 +667,7 @@ def answer_foundry(
     """Grounded, cited answer over approved content + a 'pursue this course?' suggestion."""
     settings = settings or get_settings()
     grounding = grounding or get_grounding()
-    # The retriever backs the ANSWER (live Foundry IQ when configured, else lexical, with
+    # The retriever backs the ANSWER (live hybrid vector search when configured, else lexical, with
     # graceful fallback); the cheap lexical ``grounding`` still backs the course-suggestion
     # tool so only the grounded answer pays for a live call.
     retriever = retriever or get_retriever(settings)

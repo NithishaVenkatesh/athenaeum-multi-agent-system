@@ -40,7 +40,7 @@ class FakeRouter:
     ) -> LLMResult:
         return LLMResult(
             text=self._complete_text,
-            provider=Provider.AZURE,
+            provider=Provider.GROQ,
             model="gpt-4o-mini",
             tier=1,
             prompt_tokens=10,
@@ -54,7 +54,7 @@ class FakeRouter:
         def _gen() -> Iterator[str]:
             yield from self._tokens
 
-        return StreamHandle(tokens=_gen(), provider=Provider.AZURE, model="gpt-4o-mini", tier=1)
+        return StreamHandle(tokens=_gen(), provider=Provider.GROQ, model="gpt-4o-mini", tier=1)
 
 
 class _DownRouter:
@@ -107,7 +107,7 @@ def test_gate_regex_blocks_before_model_even_online() -> None:
     assert verdict.blocked is True
 
 
-def test_gate_azure_is_secondary_semantic_net() -> None:
+def test_gate_llm_classifier_is_secondary_semantic_net() -> None:
     # The guard clears the turn, but the Azure LLM net catches an intent-level
     # attack (social-engineering) the guard underweights.
     router = FakeRouter(
@@ -141,7 +141,7 @@ def test_gate_prompt_guard_is_primary_and_authoritative() -> None:
     assert "prompt-guard" in (telemetry.model or "")
 
 
-def test_gate_guard_clear_then_azure_down_passes_on_specialist() -> None:
+def test_gate_guard_clear_then_classifier_down_passes_on_specialist() -> None:
     # Guard cleared the turn and Azure is unreachable → that is a real clean
     # signal from the specialist, not a fail-open.
     verdict, telemetry = screen(
@@ -154,7 +154,7 @@ def test_gate_guard_clear_then_azure_down_passes_on_specialist() -> None:
     assert "prompt-guard" in (telemetry.model or "")
 
 
-def test_gate_passes_when_azure_and_guard_clear() -> None:
+def test_gate_passes_when_classifier_and_guard_clear() -> None:
     router = FakeRouter(complete_text='{"blocked": false, "reason": "clean"}')
     verdict, _ = screen(
         "how do azure functions work",
@@ -362,7 +362,7 @@ class _TwoShotRouter:
         def _gen() -> Iterator[str]:
             yield from script
 
-        return StreamHandle(tokens=_gen(), provider=Provider.AZURE, model="gpt-4o-mini", tier=1)
+        return StreamHandle(tokens=_gen(), provider=Provider.GROQ, model="gpt-4o-mini", tier=1)
 
 
 def test_answer_foundry_redispatches_once_on_ungrounded_answer() -> None:
@@ -418,7 +418,7 @@ class _SearchRouter:
             handler({"query": query})  # type: ignore[operator]
         return ToolLoopResult(
             text=self._final_text,
-            provider=Provider.AZURE,
+            provider=Provider.GROQ,
             model="gpt-4o-mini",
             tier=1,
             rounds=self._rounds,
@@ -432,7 +432,7 @@ class _SearchRouter:
         def _gen() -> Iterator[str]:
             yield from ["Bread ", "needs ", "flour. ", "Outside ", "Athenaeum's ", "approved."]
 
-        return StreamHandle(tokens=_gen(), provider=Provider.AZURE, model="gpt-4o-mini", tier=1)
+        return StreamHandle(tokens=_gen(), provider=Provider.GROQ, model="gpt-4o-mini", tier=1)
 
 
 def test_answer_foundry_open_online_agentic_search_surfaces_and_cites() -> None:
@@ -516,7 +516,7 @@ class _ToolsDownRouter:
         def _gen() -> Iterator[str]:
             yield from ["Bread ", "needs ", "flour. ", "Outside ", "Athenaeum's ", "approved."]
 
-        return StreamHandle(tokens=_gen(), provider=Provider.AZURE, model="gpt-4o-mini", tier=1)
+        return StreamHandle(tokens=_gen(), provider=Provider.GROQ, model="gpt-4o-mini", tier=1)
 
 
 def test_answer_foundry_open_online_falls_back_when_tools_fail() -> None:

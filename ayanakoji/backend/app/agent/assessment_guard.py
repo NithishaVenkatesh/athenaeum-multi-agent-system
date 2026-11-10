@@ -56,10 +56,10 @@ class AnswerGuardVerdict:
     reason: str
     confidence: float
     # Which layer decided: offline-heuristic | azure-classifier | content-filter |
-    # azure-prompt-shields | prompt-guard | none (fail-open during a full outage).
+    # prompt-shield | prompt-guard | none (fail-open during a full outage).
     detector: str
     guard_score: float | None = None  # Prompt Guard 2 probability, if it ran
-    shield_detected: bool | None = None  # Azure Prompt Shields verdict, if it ran
+    shield_detected: bool | None = None  # second-opinion shield verdict, if it ran
     steps: list[TraceStep] = field(default_factory=list)
 
 
@@ -155,7 +155,7 @@ def _classifier_user(answer: str, shield: bool | None, guard_score: float | None
     """
     signals: list[str] = []
     if shield is not None:
-        signals.append(f"Azure Prompt Shields attack_detected={str(shield).lower()}")
+        signals.append(f"Prompt shield attack_detected={str(shield).lower()}")
     if guard_score is not None:
         signals.append(f"Prompt Guard jailbreak_probability={guard_score:.2f}")
     note = ""
@@ -180,7 +180,7 @@ def _shield_step(shield: bool | None) -> TraceStep:
         label="Azure Prompt Shields",
         passed=not shield,
         detail=("Attack detected." if shield else "No attack detected."),
-        model="content-safety/shieldPrompt",
+        model="prompt-shield",
     )
 
 
@@ -349,7 +349,7 @@ def screen_answer(
                 manipulation=True,
                 reason="Azure Prompt Shields flagged the answer; classifier unavailable.",
                 confidence=0.9,
-                detector="azure-prompt-shields",
+                detector="prompt-shield",
                 guard_score=score,
                 shield_detected=shield,
                 steps=steps,

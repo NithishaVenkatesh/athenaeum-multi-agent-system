@@ -385,7 +385,7 @@ def stream_grounded(tokens: Iterable[str], sources: Iterable[GroundingSource]) -
 # ``[cb-c01-m02]`` to an off-topic or false statement and pass. This deterministic floor
 # catches the *topic-mismatch* case — a cited sentence sharing no salient term with the
 # module it cites — so a citation lifted onto an unrelated claim is flagged. It cannot
-# judge entailment of an on-topic-but-false claim; the live Azure groundedness/NLI
+# judge entailment of an on-topic-but-false claim; the live LLM-judge groundedness
 # evaluator (``app.agent.grounding_verifier``) is the deeper check, with this as its
 # offline floor. Both feed one ``GroundingVerdict`` and one honesty disclaimer.
 
@@ -494,7 +494,7 @@ class GroundingVerdict:
 
     grounded: bool
     reason: str
-    provider: str  # "deterministic lexical overlap" | "Azure AI evaluation"
+    provider: str  # "deterministic lexical overlap" | "LLM-as-judge evaluation"
     score: float | None = None  # 0..1 supported fraction, or an eval-normalized score
     metrics: tuple[tuple[str, float], ...] = ()  # named scores to surface in the trace
     unsupported: tuple[str, ...] = ()  # cited ids whose sentence isn't supported

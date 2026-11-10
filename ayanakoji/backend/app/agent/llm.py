@@ -1,10 +1,10 @@
-"""Model router with an explicit Azure → Azure → Groq → Groq fallback chain.
+"""Model router with an explicit Groq → Groq → Gemini → Gemini fallback chain.
 
 Per-agent model choice is by *capability* (a cheap classifier for routing, a
 workhorse for grounded prose), not a single global model. Each capability maps
 to an ordered list of attempts across two providers; the router walks the chain
-and returns the first success, recording which **tier** answered (1=Azure
-primary, 2=Azure fallback, 3=Groq primary, 4=Groq fallback) for the telemetry
+and returns the first success, recording which **tier** answered (1=Groq
+primary, 2=Groq fallback, 3=Gemini primary, 4=Gemini fallback) for the telemetry
 the user sees as a grounding source.
 
 If every configured provider fails, the router raises :class:`AllProvidersDown`
@@ -138,8 +138,8 @@ class Capability(StrEnum):
 
 
 class Provider(StrEnum):
-    AZURE = "azure"
     GROQ = "groq"
+    GEMINI = "gemini"
 
 
 class LLMError(RuntimeError):
@@ -159,7 +159,7 @@ class AllProvidersDown(LLMError):
 class ContentFiltered(LLMError):
     """A provider's *trained safety classifier* rejected the request as unsafe.
 
-    Distinct from :class:`AllProvidersDown` on purpose: Azure's Responsible-AI
+    Distinct from :class:`AllProvidersDown` on purpose: a provider's safety
     content filter returns a structured 400 (``code == 'content_filter'`` /
     ``innererror.code == 'ResponsibleAIPolicyViolation'`` /
     ``content_filter_result.jailbreak.detected``) that means "this is an attack",
@@ -208,8 +208,8 @@ def _content_filter_categories(exc: BaseException) -> tuple[str, ...]:
 def _is_content_filter(exc: BaseException) -> bool:
     """True iff ``exc`` is a provider's *structured* content/RAI safety rejection.
 
-    Inspects the structured error shape Azure emits — the top-level ``code``, the
-    parsed ``body['code']`` / ``body['innererror']['code']``, or a
+    Inspects the structured error shape OpenAI-compatible providers emit — the top-level
+    ``code``, the parsed ``body['code']`` / ``body['innererror']['code']``, or a
     ``content_filter_result.*.detected`` flag — never a substring of the message.
     """
     if getattr(exc, "code", None) in _CONTENT_FILTER_CODES:
@@ -297,13 +297,16 @@ ToolHandler = Callable[[dict[str, Any]], Any]
 
 
 def _is_reasoning_model(model: str) -> bool:
-    """o-series reasoning deployments take ``developer`` role + no temperature (§26)."""
-    head = model.lower()
-    return head.startswith(("o1", "o3", "o4")) or head.startswith("o-")
+    """Groq's gpt-oss family reasons before answering; cap that with ``reasoning_effort``.
+
+    Without the cap, reasoning tokens eat a small ``max_tokens`` budget (a 64-token
+    classifier call) and the visible answer can come back empty.
+    """
+    return model.lower().startswith("openai/gpt-oss")
 
 
 class CompletionProvider(Protocol):
-    """Minimal provider surface the router depends on (Azure/Groq/fakes implement it)."""
+    """Minimal provider surface the router depends on (Groq/Gemini/fakes implement it)."""
 
     name: Provider
 
@@ -330,35 +333,47 @@ class CompletionProvider(Protocol):
 
 
 class _OpenAICompatibleProvider:
-    """Shared impl for Azure OpenAI and Groq (both speak the OpenAI chat API)."""
+    """Shared impl for Groq and Gemini (both speak the OpenAI chat API)."""
 
     name: Provider
 
-    def __init__(self, client: Any, *, is_azure: bool, timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        client: Any,
+        *,
+        timeout: float = 30.0,
+        extra: dict[str, Any] | None = None,
+        require_user_turn: bool = False,
+    ) -> None:
         self._client = client
-        self._is_azure = is_azure
         self._timeout = timeout
+        # Gemini rejects a request whose only messages are ``system`` ("contents is not
+        # specified"); such a prompt is re-sent with the instruction as the user turn.
+        self._require_user_turn = require_user_turn
+        # Provider-specific request extras (e.g. Groq gpt-oss ``reasoning_effort``).
+        self._extra = dict(extra or {})
 
     def _kwargs(self, model: str, max_tokens: int) -> dict[str, Any]:
         # A per-request timeout so a hung provider degrades to the next rung
         # instead of stalling the whole turn.
-        base: dict[str, Any] = {"timeout": self._timeout}
-        # o-series (Azure) reject temperature/top_p and rename the token budget.
-        if self._is_azure and _is_reasoning_model(model):
-            return {**base, "max_completion_tokens": max_tokens}
         # Temperature 0: routing, gating, grounding, and planning are decisions, not
         # creative writing — the same message must classify and answer the same way every
         # time (pass^k determinism). A stochastic gate is exactly what made the system-
         # prompt leak flaky; deterministic decoding removes that whole class of flakiness.
-        return {**base, "max_tokens": max_tokens, "temperature": 0.0}
+        kwargs: dict[str, Any] = {
+            "timeout": self._timeout,
+            "max_tokens": max_tokens,
+            "temperature": 0.0,
+        }
+        if _is_reasoning_model(model):
+            kwargs.update(self._extra)
+        return kwargs
 
     def _project_messages(self, model: str, messages: Sequence[Message]) -> list[Message]:
-        if self._is_azure and _is_reasoning_model(model):
-            return [
-                {**m, "role": "developer"} if m.get("role") == "system" else dict(m)
-                for m in messages
-            ]
-        return [dict(m) for m in messages]
+        projected = [dict(m) for m in messages]
+        if self._require_user_turn and all(m.get("role") == "system" for m in projected):
+            projected = [{**m, "role": "user"} for m in projected]
+        return projected
 
     def complete(
         self, model: str, messages: Sequence[Message], *, json_mode: bool, max_tokens: int
@@ -420,27 +435,29 @@ class _OpenAICompatibleProvider:
         return (message.content or ""), calls
 
 
-def _build_azure_provider(settings: Settings) -> _OpenAICompatibleProvider:
-    from app.foundry import build_openai_client
-
-    provider = _OpenAICompatibleProvider(
-        build_openai_client(settings.require_foundry()),
-        is_azure=True,
-        timeout=settings.llm_timeout_seconds,
-    )
-    provider.name = Provider.AZURE
-    return provider
-
-
 def _build_groq_provider(settings: Settings) -> _OpenAICompatibleProvider:
     from openai import OpenAI
 
     config = settings.require_groq()
     client = OpenAI(api_key=config.api_key, base_url=config.base_url)
     provider = _OpenAICompatibleProvider(
-        client, is_azure=False, timeout=settings.llm_timeout_seconds
+        client,
+        timeout=settings.llm_timeout_seconds,
+        extra={"reasoning_effort": settings.groq_reasoning_effort},
     )
     provider.name = Provider.GROQ
+    return provider
+
+
+def _build_gemini_provider(settings: Settings) -> _OpenAICompatibleProvider:
+    from openai import OpenAI
+
+    config = settings.require_gemini()
+    client = OpenAI(api_key=config.api_key, base_url=config.base_url)
+    provider = _OpenAICompatibleProvider(
+        client, timeout=settings.llm_timeout_seconds, require_user_turn=True
+    )
+    provider.name = Provider.GEMINI
     return provider
 
 
@@ -448,24 +465,24 @@ def _build_groq_provider(settings: Settings) -> _OpenAICompatibleProvider:
 
 
 class ModelRouter:
-    """Walks the Azure→Azure→Groq→Groq chain for a capability; first success wins."""
+    """Walks the Groq→Groq→Gemini→Gemini chain for a capability; first success wins."""
 
     def __init__(
         self,
         settings: Settings | None = None,
         *,
-        azure: CompletionProvider | None = None,
         groq: CompletionProvider | None = None,
+        gemini: CompletionProvider | None = None,
         breaker: CircuitBreaker | None = None,
         sleep: Callable[[float], None] = time.sleep,
         max_attempts: int = RETRY_MAX_ATTEMPTS,
     ) -> None:
         self._settings = settings or get_settings()
         # Providers are lazily built on first use unless injected (tests inject fakes).
-        self._azure = azure
         self._groq = groq
-        self._azure_built = azure is not None
+        self._gemini = gemini
         self._groq_built = groq is not None
+        self._gemini_built = gemini is not None
         # Process-wide breaker by default so an outage learned on one turn is
         # honored on the next; injectable + a small sleep hook for fast tests.
         self._breaker = breaker or _default_breaker
@@ -489,15 +506,15 @@ class ModelRouter:
 
     # -- provider resolution ----------------------------------------------------
 
-    def _azure_provider(self) -> CompletionProvider | None:
-        if not self._azure_built:
-            self._azure_built = True
-            if self._settings.foundry_configured:
+    def _gemini_provider(self) -> CompletionProvider | None:
+        if not self._gemini_built:
+            self._gemini_built = True
+            if self._settings.gemini_configured:
                 try:
-                    self._azure = _build_azure_provider(self._settings)
+                    self._gemini = _build_gemini_provider(self._settings)
                 except Exception as exc:  # noqa: BLE001 — degrade to next provider
-                    logger.warning("Azure provider unavailable: %s", exc)
-        return self._azure
+                    logger.warning("Gemini provider unavailable: %s", exc)
+        return self._gemini
 
     def _groq_provider(self) -> CompletionProvider | None:
         if not self._groq_built:
@@ -511,16 +528,6 @@ class ModelRouter:
 
     # -- chain construction -----------------------------------------------------
 
-    def _azure_models(self, capability: Capability) -> list[str]:
-        s = self._settings
-        primary = {
-            Capability.FAST: s.model_fast,
-            Capability.WORKHORSE: s.model_workhorse,
-            Capability.REASONING: s.model_reasoning,
-        }[capability]
-        # Fallback to the robust general workhorse (a retry when already workhorse).
-        return [primary, s.model_workhorse]
-
     def _groq_models(self, capability: Capability) -> list[str]:
         s = self._settings
         primary = {
@@ -533,20 +540,32 @@ class ModelRouter:
         )
         return [primary, secondary]
 
+    def _gemini_models(self, capability: Capability) -> list[str]:
+        s = self._settings
+        primary = {
+            Capability.FAST: s.gemini_model_fast,
+            Capability.WORKHORSE: s.gemini_model_workhorse,
+            Capability.REASONING: s.gemini_model_reasoning,
+        }[capability]
+        secondary = (
+            s.gemini_model_fast if capability is Capability.WORKHORSE else s.gemini_model_workhorse
+        )
+        return [primary, secondary]
+
     def chain(self, capability: Capability) -> list[tuple[CompletionProvider, Attempt]]:
         """Ordered (provider, attempt) rungs for a capability, configured-only."""
         rungs: list[tuple[CompletionProvider, Attempt]] = []
         tier = 0
-        azure = self._azure_provider()
-        if azure is not None:
-            for model in self._azure_models(capability):
-                tier += 1
-                rungs.append((azure, Attempt(Provider.AZURE, model, tier)))
         groq = self._groq_provider()
         if groq is not None:
             for model in self._groq_models(capability):
                 tier += 1
                 rungs.append((groq, Attempt(Provider.GROQ, model, tier)))
+        gemini = self._gemini_provider()
+        if gemini is not None:
+            for model in self._gemini_models(capability):
+                tier += 1
+                rungs.append((gemini, Attempt(Provider.GEMINI, model, tier)))
         return rungs
 
     # -- calls ------------------------------------------------------------------

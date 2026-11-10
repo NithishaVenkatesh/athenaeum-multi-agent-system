@@ -40,7 +40,7 @@ class _FakeRouter:
             raise self._raises
         return LLMResult(
             text=self._complete_text,
-            provider=Provider.AZURE,
+            provider=Provider.GROQ,
             model="gpt-4o-mini",
             tier=1,
             prompt_tokens=10,
@@ -176,7 +176,7 @@ def test_guard_falls_back_to_prompt_shields_when_classifier_down() -> None:
         shield_fn=lambda _t: True,  # but Prompt Shields detects the override
     )
     assert verdict.manipulation is True
-    assert verdict.detector == "azure-prompt-shields"
+    assert verdict.detector == "prompt-shield"
     assert verdict.shield_detected is True
 
 

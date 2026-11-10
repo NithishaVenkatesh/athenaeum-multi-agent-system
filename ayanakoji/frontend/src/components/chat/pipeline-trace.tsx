@@ -31,7 +31,7 @@ const ROUTE_LABEL: Record<Route, string> = {
   greeting: "Greeting · onboarding",
   recommend: "Recommend · from your profile",
   study_plan: "Study plan · workload-aware",
-  foundry_iq: "Foundry IQ · course content",
+  foundry_iq: "Course content · grounded",
   work_iq: "Work IQ · your schedule",
   upcoming: "Upcoming · next module",
   progress: "Progress · your completion",

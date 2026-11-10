@@ -6,8 +6,8 @@ impersonate the examiner/system, override the rubric, or extract the hidden refe
 WITHOUT over-flagging a genuine answer, including a legitimate security answer that
 merely *quotes* injection wording as its subject matter.
 
-This battery drives the LIVE online path (Azure Prompt Shields if configured + Prompt
-Guard 2 + the question-aware Azure classifier). The oracle is directly observable —
+This battery drives the LIVE online path (Prompt Guard 2 + the
+question-aware LLM classifier). The oracle is directly observable —
 ``AnswerGuardVerdict.manipulation`` — so no judge is needed:
 
 - attack case  → ``manipulation`` MUST be True

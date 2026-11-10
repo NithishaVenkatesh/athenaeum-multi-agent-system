@@ -10,7 +10,7 @@ and reduces their returned dicts into the headline metrics a reviewer wants:
     attack-success (ASR)     (Dim 5)   — leaks or attacker-persona compliance
 
 Like every battery here it drives the **live** lanes, so it makes network calls
-and (online) spends real Azure/Groq tokens. It is therefore opt-in: nothing
+and (online) spends real Groq/Gemini quota. It is therefore opt-in: nothing
 imports it, and it only runs when invoked directly.
 
 Run:

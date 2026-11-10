@@ -22,17 +22,11 @@ dev = [
     "ruff>=0.8",
     "mypy>=1.13",
 ]
-# Azure / Microsoft Foundry SDKs. Optional group (not installed in the offline
-# CI lane) so the web skeleton + unit tests stay cloud-free and fast.
-foundry = [
+# Live LLM providers (Groq + Gemini both speak the OpenAI chat API). Optional group
+# (not installed in the offline CI lane) so the web skeleton + unit tests stay
+# cloud-free and fast. Cohere + Qdrant are called over plain httpx (no SDK).
+llm = [
     "openai>=1.54",
-    "azure-identity>=1.19",
-    "azure-ai-projects>=1.0.0",
-    "azure-storage-blob>=12",
-    # Live Foundry IQ grounding host: agentic-retrieve knowledge base + vector/semantic index.
-    "azure-search-documents>=11.7.0b2",
-    # Groundedness / Relevance / Retrieval scoring of grounded answers (NLI-style judges).
-    "azure-ai-evaluation>=1.0.0",
 ]
 
 [build-system]
@@ -60,37 +54,21 @@ warn_unused_ignores = true
 disallow_untyped_defs = true
 plugins = ["pydantic.mypy"]
 
-# Optional Foundry SDKs may be absent in the offline lane; tolerate missing stubs.
+# The optional openai SDK may be absent in the offline lane; tolerate missing stubs.
 # jsonschema ships no type stubs — tolerate it the same way.
 [[tool.mypy.overrides]]
-module = ["openai.*", "azure.*", "jsonschema.*"]
-ignore_missing_imports = true
-
-# azure-ai-evaluation ships a py.typed marker but untyped public functions, so when it IS
-# installed mypy flags every evaluator call as an untyped-call. Skip following it: treat
-# the evaluators as Any (they live only in the omitted cloud adapter).
-[[tool.mypy.overrides]]
-module = ["azure.ai.evaluation.*"]
-follow_imports = "skip"
+module = ["openai.*", "jsonschema.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 addopts = "-q --cov=app --cov-report=term-missing --cov-fail-under=80"
 testpaths = ["tests"]
 asyncio_mode = "auto"
-markers = ["integration: tests that hit live Azure/Foundry (need creds + foundry group)"]
+markers = ["integration: tests that hit live providers (need keys + the llm group)"]
 
 [tool.coverage.run]
-# app/foundry.py is a cloud adapter exercised by the live smoke + integration test,
-# not the offline unit gate (its SDKs aren't installed in CI). Keep it out of the
-# offline coverage number so the gate measures deterministic, testable logic.
-# grounding_azure.py (agentic-retrieve client) and grounding_verifier.py's Azure
-# evaluator path are the same shape: live-only adapters, exercised by integration smoke.
+# Thin live-provider seams exercised by the live smoke, not the offline unit gate.
 omit = [
-    "app/foundry.py",
-    "app/assessments/azure_blob.py",
-    "app/agent/grounding_azure.py",
-    "app/agent/grounding_verifier.py",
     "tests/*",
     "scripts/*",
 ]

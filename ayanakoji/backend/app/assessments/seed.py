@@ -14,32 +14,17 @@ from __future__ import annotations
 import logging
 
 from app.assessments.engine import session_scope
-from app.assessments.loader import seed_database, seed_from_banks
-from app.config import get_settings
+from app.assessments.loader import seed_database
 
 logger = logging.getLogger(__name__)
 
 
 def seed_on_startup() -> dict[str, object]:
-    """Seed ``assessments.db``, preferring the Azure Blob copy of the banks.
+    """Seed ``assessments.db`` from the in-repo JSON question banks.
 
-    Returns a summary dict with a ``source`` of ``"azure_blob"``, ``"local"``, or
-    ``"none"`` (both sources failed). Never raises — the app must boot regardless.
+    Returns a summary dict with a ``source`` of ``"local"`` or ``"none"`` (seeding
+    failed). Never raises — the app must boot regardless.
     """
-    settings = get_settings()
-
-    if settings.azure_storage_account:
-        try:
-            from app.assessments.azure_blob import pull_all_banks
-
-            banks = pull_all_banks()
-            with session_scope() as session:
-                summary = seed_from_banks(session, banks)
-            logger.info("Seeded assessments.db from Azure Blob: %s", summary)
-            return {"source": "azure_blob", **summary}
-        except Exception:  # noqa: BLE001 — any blob/SDK/validation failure → disk fallback
-            logger.exception("Azure Blob seed failed; falling back to local banks")
-
     try:
         with session_scope() as session:
             summary = seed_database(session)

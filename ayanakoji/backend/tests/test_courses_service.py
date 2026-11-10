@@ -5,7 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
-from app.config import FoundryConfig, Settings
+from app.config import ProviderConfig, Settings
 from app.courses.service import generate_title, stream_reply
 
 
@@ -17,9 +17,7 @@ def _live_settings() -> Settings:
     # Explicit init kwargs beat the autouse OFFLINE_LLM env var, so the live path runs.
     return Settings(
         offline_llm=False,
-        foundry_project_endpoint="https://proj.services.ai.azure.com/api/projects/p",
-        azure_openai_endpoint="https://res.openai.azure.com/",
-        azure_openai_api_key="sk-test-key",
+        groq_api_key="gsk_real",
     )
 
 
@@ -73,7 +71,7 @@ class _Completions:
         return _resp("Azure Functions Basics")
 
 
-def _factory(config: FoundryConfig) -> Any:
+def _factory(config: ProviderConfig) -> Any:
     return SimpleNamespace(chat=SimpleNamespace(completions=_Completions()))
 
 
@@ -85,7 +83,7 @@ def test_live_title_uses_model_response() -> None:
 
 
 def test_live_title_falls_back_when_model_returns_blank() -> None:
-    def blank_factory(config: FoundryConfig) -> Any:
+    def blank_factory(config: ProviderConfig) -> Any:
         completions = SimpleNamespace(create=lambda **kw: _resp("   "))
         return SimpleNamespace(chat=SimpleNamespace(completions=completions))
 
@@ -99,3 +97,40 @@ def test_live_stream_yields_content_tokens_only() -> None:
     messages = [{"role": "user", "content": "hi"}]
     tokens = list(stream_reply(messages, settings=_live_settings(), client_factory=_factory))
     assert tokens == ["Hello", " there"]  # empty-choices chunk and None token skipped
+
+
+def test_live_title_falls_through_failing_provider_to_next() -> None:
+    settings = Settings(
+        _env_file=None,  # type: ignore[call-arg]
+        groq_api_key="gsk_real",
+        gemini_api_key="gm_real",
+        offline_llm=False,
+    )
+    seen: list[str] = []
+
+    def flaky_factory(config: ProviderConfig) -> Any:
+        seen.append(config.base_url)
+        if "groq" in config.base_url:
+
+            def boom(**_kw: Any) -> Any:
+                raise RuntimeError("401 invalid key")
+
+            return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=boom)))
+        return _factory(config)
+
+    title = generate_title("How do triggers work?", settings=settings, client_factory=flaky_factory)
+    assert title == "Azure Functions Basics"
+    assert len(seen) == 2
+
+
+def test_live_title_uses_local_title_when_every_provider_fails() -> None:
+    def boom_factory(config: ProviderConfig) -> Any:
+        def boom(**_kw: Any) -> Any:
+            raise RuntimeError("down")
+
+        return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=boom)))
+
+    title = generate_title(
+        "Explain blob storage tiers", settings=_live_settings(), client_factory=boom_factory
+    )
+    assert title == "Explain blob storage tiers"

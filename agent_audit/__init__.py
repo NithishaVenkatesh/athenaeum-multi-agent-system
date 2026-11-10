@@ -6,7 +6,7 @@ attacking each node directly with adversarial inputs, then scoring the outcome.
 
 Two lanes (configured in :mod:`agent_audit.config`):
 
-- **online**  — real Azure/Groq providers (the production safety + answer layer).
+- **online**  — real Groq/Gemini providers (the production safety + answer layer).
 - **offline** — degraded mode (regex-only gate, deterministic answers), the
   "all providers down" window the audit flagged as the weakest point.
 

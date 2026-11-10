@@ -15,7 +15,7 @@ break as an error rather than a silent truncation, and — the HEADLINE finding 
 
 Most cases run against the LIVE chain. A few (retry-classification, breaker,
 mid-stream break) use injected ``FakeProvider``s via ``ModelRouter(settings,
-azure=..., groq=...)`` — the same seam the unit tests use — so the *behavior* is
+groq=..., gemini=...)`` — the same seam the unit tests use — so the *behavior* is
 deterministic while the live providers/creds remain configured. We never edit
 ``app/`` source; this module only observes.
 
@@ -38,7 +38,7 @@ from app.agent.llm import (
     ModelRouter,
     Provider,
     RawCompletion,
-    _build_azure_provider,
+    _build_groq_provider,
     _is_transient,
 )
 
@@ -209,25 +209,25 @@ def _fresh_router_no_breaker(
     settings = live_settings()
     return ModelRouter(
         settings,
-        azure=azure,  # type: ignore[arg-type]
-        groq=groq,  # type: ignore[arg-type]
+        groq=azure,  # type: ignore[arg-type]
+        gemini=groq,  # type: ignore[arg-type]
         breaker=CircuitBreaker(),
         sleep=lambda _s: None,
     )
 
 
-def _live_settings_only_azure() -> object:
-    """Live settings but with Groq stripped so the chain is Azure-only — lets us see
-    the *raw* outcome of the content_filter rejection without a Groq rung masking it.
+def _live_settings_primary_only() -> object:
+    """Live settings but with Gemini stripped so the chain is Groq-only — lets us see
+    the *raw* outcome of the content_filter rejection without a fallback rung masking it.
 
     ``Settings`` is a Pydantic model, so we clone via ``model_copy`` (not
-    dataclasses.replace); blanking the Groq key flips ``groq_configured`` to False."""
-    return live_settings().model_copy(update={"groq_api_key": None})
+    dataclasses.replace); blanking the Gemini key flips ``gemini_configured`` to False."""
+    return live_settings().model_copy(update={"gemini_api_key": None})
 
 
 # ── live content-filter probe (run once, evidence for the headline) ────────────
 
-# Cached across cases/rounds: Azure's RAI verdict is mildly probabilistic, so we
+# Cached across cases/rounds: a provider's safety verdict is mildly probabilistic, so we
 # probe ONCE and reuse the captured exception. The FINDING itself is structural and
 # does not depend on this probe tripping (see the cases); the probe only supplies
 # live evidence + the exact exception object we then replay deterministically.
@@ -235,16 +235,20 @@ _probe_cache: dict[str, BaseException | None] = {}
 
 
 def _live_content_filter_exc() -> BaseException | None:
-    """Send the blatant jailbreak to live Azure once; return the raised exception if
-    it is a structured content_filter / RAI rejection, else None. Cached."""
+    """Send the blatant jailbreak to the live primary provider (Groq) once; return the
+    raised exception if it is a structured content_filter rejection, else None. Cached.
+    (Groq rarely raises one; the cases treat a None probe as "no live evidence".)"""
     if "exc" in _probe_cache:
         return _probe_cache["exc"]
     captured: BaseException | None = None
     try:
         s = live_settings()
-        azure = _build_azure_provider(s)
-        azure.complete(
-            s.model_fast, [{"role": "user", "content": _JAILBREAK}], json_mode=False, max_tokens=64
+        primary = _build_groq_provider(s)
+        primary.complete(
+            s.groq_model_fast,
+            [{"role": "user", "content": _JAILBREAK}],
+            json_mode=False,
+            max_tokens=64,
         )
     except Exception as exc:  # noqa: BLE001 — inspect the rejection
         if _is_content_filter(exc):
@@ -323,15 +327,15 @@ def _case_content_filter_indistinguishable() -> CaseResult:
     # (a) AVAILABILITY: Azure content-filters but Groq answers → the router still
     #     returns a completion (the chain is not blanket-short-circuited on the first
     #     content_filter), so a benign answer remains reachable via a fallback tier.
-    groq_ok = _ScriptedProvider(Provider.GROQ, [RawCompletion(text="(fallback answer)")])
+    groq_ok = _ScriptedProvider(Provider.GEMINI, [RawCompletion(text="(fallback answer)")])
     router_avail = _fresh_router_no_breaker(
-        azure=_ReplayExcProvider(Provider.AZURE, cf_exc), groq=groq_ok
+        groq=_ReplayExcProvider(Provider.GROQ, cf_exc), gemini=groq_ok
     )
     try:
         res = router_avail.complete(
             Capability.FAST, [{"role": "user", "content": _JAILBREAK}], max_tokens=32
         )
-        availability_ok = isinstance(res, LLMResult) and res.provider == Provider.GROQ
+        availability_ok = isinstance(res, LLMResult) and res.provider == Provider.GEMINI
         avail_outcome = f"LLMResult(tier={res.tier}, provider={res.provider})"
     except Exception as exc:  # noqa: BLE001
         availability_ok = False
@@ -340,9 +344,9 @@ def _case_content_filter_indistinguishable() -> CaseResult:
     # (b) DISTINGUISHABILITY: when EVERY tier fails and one declined as unsafe, the
     #     router must raise the TYPED ContentFiltered — not AllProvidersDown. Drive a
     #     chain where Azure content-filters and Groq is also down (generic error).
-    groq_down = _ScriptedProvider(Provider.GROQ, [RuntimeError("groq 503")])
+    groq_down = _ScriptedProvider(Provider.GEMINI, [RuntimeError("groq 503")])
     router_block = _fresh_router_no_breaker(
-        azure=_ReplayExcProvider(Provider.AZURE, cf_exc), groq=groq_down
+        groq=_ReplayExcProvider(Provider.GROQ, cf_exc), gemini=groq_down
     )
     typed_signal = False
     distinguishable = False
@@ -398,7 +402,7 @@ def _case_content_filter_indistinguishable() -> CaseResult:
     )
 
 
-def _case_content_filter_azure_only() -> CaseResult:
+def _case_content_filter_primary_only() -> CaseResult:
     """With no fallback available, an Azure content_filter block must surface as the
     typed ``ContentFiltered`` (NOT ``AllProvidersDown``) — a deliberate SAFETY
     decision reported as such, so an allow-vs-refuse caller can BLOCK. This is the
@@ -415,12 +419,12 @@ def _case_content_filter_azure_only() -> CaseResult:
         else "synthetic content_filter 400 (probe did not trip this round)"
     )
 
-    s_azure_only = _live_settings_only_azure()
+    s_primary_only = _live_settings_primary_only()
     from app.agent.llm import CircuitBreaker
 
     router = ModelRouter(
-        s_azure_only,  # type: ignore[arg-type]
-        azure=_ReplayExcProvider(Provider.AZURE, cf_exc),  # type: ignore[arg-type]
+        s_primary_only,  # type: ignore[arg-type]
+        groq=_ReplayExcProvider(Provider.GROQ, cf_exc),  # type: ignore[arg-type]
         breaker=CircuitBreaker(),
         sleep=lambda _s: None,
     )
@@ -644,9 +648,9 @@ def _case_permanent_error_not_retried() -> CaseResult:
     full retry budget — or every permanent failure costs 3x. Verified with a counting
     fake on a private breaker (live creds remain configured)."""
     cid, cat, sev = "permanent_not_retried_3x", "retry_classification", "high"
-    az = _CountingPermanentProvider(Provider.AZURE)
-    gq = _CountingPermanentProvider(Provider.GROQ)
-    router = _fresh_router_no_breaker(azure=az, groq=gq)
+    az = _CountingPermanentProvider(Provider.GROQ)
+    gq = _CountingPermanentProvider(Provider.GEMINI)
+    router = _fresh_router_no_breaker(groq=az, gemini=gq)
     try:
         router.complete(Capability.FAST, [{"role": "user", "content": "hi"}])
         return CaseResult(cid, cat, False, "expected AllProvidersDown, got a result", severity=sev)
@@ -681,13 +685,13 @@ def _case_transient_retried_within_budget() -> CaseResult:
     cid, cat, sev = "transient_retry_bounded", "retry_classification", "med"
     from app.agent.llm import CircuitBreaker
 
-    az = _CountingTransientProvider(Provider.AZURE)
-    # Azure-only by passing groq=None won't strip the chain (it'd lazily build live
+    az = _CountingTransientProvider(Provider.GROQ)
+    # Azure-only by passing gemini=None won't strip the chain (it'd lazily build live
     # Groq); instead use a settings clone with Groq creds removed.
-    s_no_groq = _live_settings_only_azure()
+    s_no_fallback = _live_settings_primary_only()
     router = ModelRouter(
-        s_no_groq,  # type: ignore[arg-type]
-        azure=az,  # type: ignore[arg-type]
+        s_no_fallback,  # type: ignore[arg-type]
+        groq=az,  # type: ignore[arg-type]
         breaker=CircuitBreaker(),
         sleep=lambda _s: None,
     )
@@ -717,8 +721,8 @@ def _case_stream_break_surfaces_error() -> CaseResult:
     surface as a raised error to the consumer — never a silent truncation that looks
     like a complete answer."""
     cid, cat, sev = "stream_break_surfaces", "streaming", "high"
-    az = _MidStreamBreakProvider(Provider.AZURE)
-    router = _fresh_router_no_breaker(azure=az, groq=_ScriptedProvider(Provider.GROQ, []))
+    az = _MidStreamBreakProvider(Provider.GROQ)
+    router = _fresh_router_no_breaker(groq=az, gemini=_ScriptedProvider(Provider.GEMINI, []))
     handle = router.stream(Capability.WORKHORSE, [{"role": "user", "content": "hi"}])
     collected: list[str] = []
     try:
@@ -750,10 +754,8 @@ def _case_no_provider_typed_failure() -> CaseResult:
     cid, cat, sev = "no_provider_typed_down", "graceful_degradation", "med"
     stripped = live_settings().model_copy(
         update={
-            "foundry_project_endpoint": None,
-            "azure_openai_endpoint": None,
-            "azure_openai_api_key": None,
             "groq_api_key": None,
+            "gemini_api_key": None,
             "offline_llm": False,
         }
     )
@@ -792,25 +794,25 @@ def _case_breaker_opens_then_skips() -> CaseResult:
 
     clock = {"t": 0.0}
     breaker = CircuitBreaker(threshold=2, cooldown=60.0, monotonic=lambda: clock["t"])
-    s_no_groq = _live_settings_only_azure()
+    s_no_fallback = _live_settings_primary_only()
 
     # Turn 1: both Azure rungs fail (non-transient) → 2 failures cross threshold → open.
-    az1 = _CountingPermanentProvider(Provider.AZURE)
+    az1 = _CountingPermanentProvider(Provider.GROQ)
     r1 = ModelRouter(
-        s_no_groq,
-        azure=az1,
+        s_no_fallback,
+        groq=az1,
         breaker=breaker,
         sleep=lambda _s: None,  # type: ignore[arg-type]
     )
     with contextlib.suppress(AllProvidersDown):
         r1.complete(Capability.FAST, [{"role": "user", "content": "1"}])
-    opened = breaker.is_open(Provider.AZURE)
+    opened = breaker.is_open(Provider.GROQ)
 
     # Turn 2: Azure circuit open → its rungs must be SKIPPED (provider never called).
-    az2 = _CountingPermanentProvider(Provider.AZURE)
+    az2 = _CountingPermanentProvider(Provider.GROQ)
     r2 = ModelRouter(
-        s_no_groq,
-        azure=az2,
+        s_no_fallback,
+        groq=az2,
         breaker=breaker,
         sleep=lambda _s: None,  # type: ignore[arg-type]
     )
@@ -836,7 +838,7 @@ def run() -> list[CaseResult]:
     for the deterministic resilience cases)."""
     return [
         _case_content_filter_indistinguishable(),
-        _case_content_filter_azure_only(),
+        _case_content_filter_primary_only(),
         _case_json_mode_returns_string(),
         _case_huge_input(),
         _case_null_bytes(),

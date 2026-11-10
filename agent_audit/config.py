@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 # Red-team lanes (uvicorn instances started for the audit).
 OFFLINE_BASE = "http://localhost:8020"  # OFFLINE_LLM=true — degraded / all-providers-down
-ONLINE_BASE = "http://localhost:8021"  # real Azure + Groq — production safety + answer layer
+ONLINE_BASE = "http://localhost:8021"  # real Groq + Gemini — production safety + answer layer
 
 # Default per-request timeout (online answers + classifier round-trips are slow).
 DEFAULT_TIMEOUT = 90.0

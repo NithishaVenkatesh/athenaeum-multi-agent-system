@@ -2,7 +2,7 @@
 
 Strategy: the deterministic regex pre-filter and heuristic detector catch the
 *blatant* shapes. The real test of LIVE defense is attacks engineered to slip past
-those deterministic nets and land on the Prompt Guard 2 + Azure LLM classifier —
+those deterministic nets and land on the Prompt Guard 2 + LLM classifier —
 paraphrased overrides, indirect exfiltration, encoded payloads, semantic jailbreaks,
 and split multi-turn attacks. We ALSO assert the gate does not over-refuse benign
 learning asks that merely contain trigger words.

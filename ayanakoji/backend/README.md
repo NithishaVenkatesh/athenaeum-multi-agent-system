@@ -89,15 +89,35 @@ uv run mypy app              # types
 uv run pytest                # tests + coverage (>=80%)
 ```
 
-## Microsoft Foundry / Azure OpenAI
-Cloud SDKs live in the optional `foundry` dependency group (kept out of the
-offline CI lane). Credentials come from `.env` (git-ignored) — see
-`.env.example`. `app/config.py` fails loud via `require_foundry()` when values
-are missing or placeholders.
+## Live providers (all free tier, no credit card)
+
+| Role | Provider | Notes |
+|---|---|---|
+| LLM tiers 1-2 | **Groq** `openai/gpt-oss-120b` / `gpt-oss-20b` | `reasoning_effort=low` keeps small budgets from emptying |
+| LLM tiers 3-4 | **Google Gemini** `gemini-2.5-flash` / `gemini-3.5-flash-lite` | via AI Studio's OpenAI-compatible endpoint |
+| Injection classifier | **Groq** Llama Prompt Guard 2 (86M) | alongside the regex + heuristic + LLM layers |
+| Embeddings | **Cohere** `embed-v4.0` (1024-d) | trial key: 1,000 calls/month, so the corpus is pre-embedded and queries are LRU-cached |
+| Vector search | **Qdrant Cloud** free cluster | hybrid: fused with the lexical retriever (RRF); any failure → lexical-only, labelled in the trace |
+| Answer evaluation | LLM-as-judge through the same chain | one JSON call scores groundedness / relevance / retrieval (1-5) |
+
+With no keys at all, everything runs on the deterministic offline path (CI does this).
+The OpenAI SDK lives in the optional `llm` dependency group; Cohere and Qdrant are
+plain `httpx` calls. Secrets live in Infisical (project `athenaeum-multi-agent-system`).
+`app/config.py` fails loud via `require_groq()` / `require_gemini()` /
+`require_vector_search()` when values are missing or placeholders.
 
 ```bash
-uv sync --group foundry                          # install Azure/OpenAI SDKs
-uv run --group foundry python scripts/foundry_smoke.py   # ~0-cost connectivity probe
-uv run --group foundry pytest -m integration     # live integration test (needs creds)
+uv sync --group dev --group llm
+infisical run --env dev -- .venv/bin/uvicorn app.main:app --reload --port 8000
+
+# (Re)build the vector index: embeds only changed modules (1 Cohere call for the whole
+# catalog), then recreates the Qdrant collection from app/data/course_vectors.json.
+infisical run --env dev -- uv run python scripts/reindex_vectors.py
+# Restore a deleted/suspended cluster without spending any Cohere calls:
+infisical run --env dev -- uv run python scripts/reindex_vectors.py --upload-only
 ```
 
+### Keeping the free Qdrant cluster alive
+Free Qdrant clusters are suspended after a week with no traffic and deleted after four.
+A cron-job.org job sends one 1-result search every 2 days with a **read-only** key,
+which is negligible load. If the cluster is lost anyway, run `--upload-only` above.

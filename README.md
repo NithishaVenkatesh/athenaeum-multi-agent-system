@@ -4,12 +4,12 @@
 
 ### A grounded, work-aware, red-team-hardened multi-agent learning system
 
-*Built on Microsoft Foundry for the **Microsoft Agents League 2026 · Reasoning Agents track***
+*Built for the **Microsoft Agents League 2026 · Reasoning Agents track**, now running entirely on free-tier APIs*
 
 [**Live app**](https://frontend-eight-red-15.vercel.app) · [**Backend API**](https://athenaeum-backend-thy8.onrender.com) · [**Swagger**](https://athenaeum-backend-thy8.onrender.com/docs) · [**Demo video**](https://drive.google.com/drive/folders/1zazruW7PRIStqxByv-luRYTnXf_uCSo5?usp=sharing)
 
 ![track](https://img.shields.io/badge/track-Reasoning_Agents-c0562f)
-![cloud](https://img.shields.io/badge/cloud-Microsoft_Foundry-2f8f4e)
+![cloud](https://img.shields.io/badge/LLMs-Groq_→_Gemini_(free_tier)-2f8f4e)
 ![backend](https://img.shields.io/badge/backend-FastAPI_·_Python_3.12-3b6ea5)
 ![frontend](https://img.shields.io/badge/frontend-Next.js_16_·_React_19-15212e)
 ![offline](https://img.shields.io/badge/runs-fully_offline,_zero_credentials-607d8b)
@@ -22,6 +22,9 @@
 > [!NOTE]
 > The backend runs on Render's free tier and **sleeps when idle**, so the first request after a quiet period can take 30–60s to wake. The login chooser retries cold starts automatically — just give it a moment.
 
+> [!IMPORTANT]
+> **Free-tier migration (November 2026).** Athenaeum was built on Microsoft Foundry (Azure OpenAI, Azure AI Search / Foundry IQ, Azure AI Evaluation, Content Safety, Blob). When the Azure sponsorship credits ended, every cloud dependency was replaced with a **free, no-credit-card** service: **Groq** (`gpt-oss-120b` / `gpt-oss-20b` + Llama Prompt Guard 2) as the primary LLMs, **Google Gemini** (AI Studio) as the fallback, **Cohere `embed-v4.0`** embeddings, **Qdrant Cloud** vector search, and an **LLM-as-judge** in place of Azure AI Evaluation. The agent architecture, pipeline, and offline path are unchanged. Sections below describe the current stack; `kb/` keeps the original Azure research.
+
 ---
 
 ## Why this is a reasoning agent, not a chatbot
@@ -31,9 +34,9 @@ The whole system is built on one stance: **routing, gating, grounding, grading, 
 | | Metric | Source of truth |
 |---|---|---|
 | **Pipeline** | 3-node spine (gate → router → answer) emitting **12** typed SSE event types | `agent/orchestrator.py`, `agent/contracts.py:454` |
-| **Safety gate** | **5** ordered controls — 15-pattern regex → 17-rule/6-family heuristic → Prompt Guard 2 → Azure FAST classifier → Azure RAI filter | `agent/gate.py`, `agent/gate_heuristic.py` |
-| **Resilience** | **4-tier** fallback (Azure→Azure→Groq→Groq→offline), retry ×3, circuit breaker (4 fails / 60s) | `agent/llm.py:41` |
-| **Grounding** | Foundry IQ (Azure AI Search) or a deterministic IDF-gated lexical floor; answers re-verified, re-dispatched once if uncited | `agent/grounding*.py` |
+| **Safety gate** | **5** ordered controls — 15-pattern regex → 17-rule/6-family heuristic → Prompt Guard 2 → LLM FAST classifier → provider safety filter | `agent/gate.py`, `agent/gate_heuristic.py` |
+| **Resilience** | **4-tier** fallback (Groq→Groq→Gemini→Gemini→offline), retry ×3, circuit breaker (4 fails / 60s) | `agent/llm.py:41` |
+| **Grounding** | Hybrid Cohere + Qdrant vector search fused with a deterministic IDF-gated lexical floor; answers re-verified, re-dispatched once if uncited | `agent/grounding*.py` |
 | **Domain** | **5** verticals → **15** courses → **60** modules (a verified bijection, ~93k words) | `athenaeum/content`, `catalog/loader.py` |
 | **Assessments** | **60** banks → **120** rows → **600** choice (393 MCQ + 207 MSQ) + **180** oral, in a separate DB | `assessments/`, `bank.schema.json` |
 | **Red-team** | **13** adversarial batteries · **232** cases · **2** rounds each (≈464 live runs), fail-closed oracles | `ayanakoji/backend/agent_audit/` |
@@ -57,7 +60,7 @@ The whole system is built on one stance: **routing, gating, grounding, grading, 
 8. [Manager Insights — aggregate-only by construction](#8--manager-insights--aggregate-only-by-construction)
 9. [Data & provenance](#9--data--provenance)
 10. [Evaluation & red-team](#10--evaluation--red-team)
-11. [Microsoft Foundry & IQ](#11--microsoft-foundry--iq)
+11. [Cloud providers & Microsoft IQ](#11--cloud-providers--microsoft-iq)
 12. [Frontend: inspectable reasoning](#12--frontend-inspectable-reasoning)
 13. [Engineering discipline](#13--engineering-discipline)
 14. [Getting started](#14--getting-started)
@@ -83,7 +86,7 @@ The defining property is **inspectability**: every answer carries a phase-by-pha
 
 ## 2 · Architecture at a glance
 
-One browser client, one FastAPI backend, an optional Microsoft Foundry / Azure cloud column, a Groq fallback, and local data that lets the whole system run offline with **zero credentials**. Config validation decides — *per resource* — whether the live or offline path runs, and the trace always says which one answered.
+One browser client, one FastAPI backend, an optional free-tier cloud column (Groq, Gemini, Cohere, Qdrant), and local data that lets the whole system run offline with **zero credentials**. Config validation decides — *per resource* — whether the live or offline path runs, and the trace always says which one answered.
 
 ```mermaid
 flowchart TB
@@ -104,15 +107,13 @@ flowchart TB
         WIQ["Work IQ service<br/>(synthetic, read-only)"]
     end
 
-    subgraph CLOUD["Microsoft Foundry / Azure · optional, degrades to offline"]
-        AOAI["Azure OpenAI<br/>FAST · WORKHORSE · REASONING · embeddings"]
-        SRCH["Azure AI Search<br/>Foundry IQ · agentic retrieve + hybrid"]
-        EVAL["Azure AI Evaluation<br/>groundedness · relevance · retrieval · pro"]
-        CS["Azure Content Safety<br/>Prompt Shields + RAI filter"]
-        BLOB["Azure Blob<br/>assessment-bank mirror"]
+    subgraph CLOUD["Free-tier cloud · optional, degrades to offline"]
+        AOAI["Gemini (AI Studio)<br/>fallback FAST · WORKHORSE · REASONING"]
+        SRCH["Cohere embed-v4.0 + Qdrant Cloud<br/>hybrid vector ⊕ lexical retrieval"]
+        EVAL["LLM-as-judge<br/>groundedness · relevance · retrieval"]
     end
 
-    GROQ["Groq · fallback LLMs + Prompt Guard 2"]
+    GROQ["Groq · primary LLMs (gpt-oss) + Prompt Guard 2"]
 
     subgraph DATA["Local data · offline-capable"]
         DB1[("athenaeum.db<br/>learner workspace · WAL")]
@@ -123,15 +124,14 @@ flowchart TB
 
     UI -->|HTTP + SSE| BACKEND
     ORCH --> AOAI & SRCH & EVAL & GROQ
-    DOM --> CS & DB1 & DB2
-    DB2 -. mirror .-> BLOB
+    DOM --> DB1 & DB2
     DOM --> CAT
     WIQ --> WJSON
     MGR --> WIQ & DB1
 
     class CLIENT,UI client
     class BACKEND,ORCH,DOM,MGR,WIQ api
-    class CLOUD,AOAI,SRCH,EVAL,CS,BLOB cloud
+    class CLOUD,AOAI,SRCH,EVAL cloud
     class GROQ groq
     class DATA,DB1,DB2,CAT,WJSON data
 ```
@@ -143,11 +143,11 @@ flowchart TB
 |---|---|---|
 | Backend | **FastAPI ≥0.115 · Pydantic v2 · pydantic-settings · SQLModel ≥0.0.22** | Typed boundaries; native SSE streaming; small, owned schema |
 | Persistence | **SQLite × 2** (`athenaeum.db`, `assessments.db`), WAL + 30s busy-timeout | Zero-infra, fully offline; authored banks isolated from the mutable learner workspace |
-| Primary LLMs | **Azure OpenAI** via `openai.AzureOpenAI` — `gpt-4o-mini` (FAST + WORKHORSE), `o4-mini` (REASONING), `text-embedding-3-large` | Production models behind the Foundry rubric |
-| Fallback LLMs | **Groq** — `llama-3.1-8b-instant`, `llama-3.3-70b-versatile`, `deepseek-r1-distill-llama-70b` | Keeps the demo alive when Azure is rate-limited or down |
-| Grounding | **Azure AI Search** (agentic retrieve + hybrid) or a deterministic IDF-gated **lexical retriever** | Foundry IQ when configured; a cited offline floor so grounding never depends on the network |
-| Evaluation | **Azure AI Evaluation** (groundedness / relevance / retrieval / GroundednessPro) | Scores each live answer on a 1–5 rubric; a lexical floor stands in offline |
-| Safety | **Groq Prompt Guard 2** (`meta-llama/llama-prompt-guard-2-86m`) + **Azure Content Safety Prompt Shields** + **Azure RAI filter** | Specialist jailbreak detection at the gate and the oral-exam guard |
+| Primary LLMs | **Groq** — `openai/gpt-oss-20b` (FAST), `openai/gpt-oss-120b` (WORKHORSE + REASONING), `reasoning_effort=low` | Free tier, no card; fast OpenAI-compatible API |
+| Fallback LLMs | **Google Gemini** (AI Studio, OpenAI-compatible) — `gemini-3.5-flash-lite` (FAST), `gemini-2.5-flash` (WORKHORSE + REASONING) | Keeps the demo alive when Groq is rate-limited or down |
+| Grounding | **Cohere `embed-v4.0`** + **Qdrant Cloud**, reciprocal-rank-fused with a deterministic IDF-gated **lexical retriever** | Semantic recall when configured; a cited offline floor so grounding never depends on the network |
+| Evaluation | **LLM-as-judge** through the model router (groundedness / relevance / retrieval, one JSON call) | Scores each live answer on a 1–5 rubric; a lexical floor stands in offline |
+| Safety | **Groq Prompt Guard 2** (`meta-llama/llama-prompt-guard-2-86m`) + LLM classifier + deterministic regex/heuristics | Specialist jailbreak detection at the gate and the oral-exam guard |
 | Frontend | **Next.js 16.2.9 · React 19.2.4 · Tailwind v4 · framer-motion 12 · base-ui (+ shadcn CLI)** | App Router + SSE for live phase traces; a scholarly "atelier" design system |
 | Tooling | **uv · pnpm · ruff · mypy · pytest · eslint · tsc · vitest · playwright · gitleaks 8.21.2** | One CI gate across both stacks |
 
@@ -263,7 +263,7 @@ Safety is layered so no single control is load-bearing — and the system's **si
 
 ### The signature invariant: *unsafe* ≠ *unreachable*
 
-A provider **refusing** a request as unsafe (Azure Responsible-AI `ContentFiltered`) is read from Azure's **structured error fields** — `exc.code`, `body.innererror.code`, `content_filter_result[*].detected` — *never fragile message substrings* — and surfaced as an authoritative **BLOCK at confidence 0.99**. A provider being **unreachable** (`AllProvidersDown`) **fails open**. The distinction is carried in the *exception type* end-to-end.
+A provider **refusing** a request as unsafe (`ContentFiltered`, originally Azure's Responsible-AI filter) is read from the provider's **structured error fields** — `exc.code`, `body.innererror.code`, `content_filter_result[*].detected` — *never fragile message substrings* — and surfaced as an authoritative **BLOCK at confidence 0.99**. A provider being **unreachable** (`AllProvidersDown`) **fails open**. The distinction is carried in the *exception type* end-to-end.
 
 ```mermaid
 flowchart LR
@@ -289,8 +289,8 @@ flowchart LR
     IN(["learner / manager text"]) --> C1["1 · regex pre-filter<br/>15 patterns"]:::s
     C1 --> C2["2 · deterministic heuristic<br/>17 rules / 6 families<br/>NFKC · 24 homoglyphs · zero-width · leet"]:::s
     C2 --> C3["3 · Groq Prompt Guard 2<br/>block ≥ 0.8"]:::s
-    C3 --> C4["4 · Azure FAST classifier"]:::s
-    C4 --> C5["5 · Azure RAI filter"]:::s
+    C3 --> C4["4 · LLM FAST classifier"]:::s
+    C4 --> C5["5 · provider safety filter"]:::s
     C5 --> PASS["clean → pipeline"]:::ok
     C5 -.->|"outage on 3–5"| PASS
 ```
@@ -305,17 +305,17 @@ flowchart LR
     classDef gq fill:#fcf3da,stroke:#b8860b,color:#2c2310
     classDef off fill:#eceff1,stroke:#607d8b,color:#1c2429
 
-    T1["Tier 1<br/>Azure primary"]:::az --> T2["Tier 2<br/>Azure workhorse"]:::az
-    T2 --> T3["Tier 3<br/>Groq primary"]:::gq
-    T3 --> T4["Tier 4<br/>Groq secondary"]:::gq
+    T1["Tier 1<br/>Groq primary"]:::gq --> T2["Tier 2<br/>Groq secondary"]:::gq
+    T2 --> T3["Tier 3<br/>Gemini primary"]:::az
+    T3 --> T4["Tier 4<br/>Gemini secondary"]:::az
     T4 --> OFF["Offline deterministic path"]:::off
 ```
 
-- **Capability tiers** → models: `FAST` = `gpt-4o-mini` / `llama-3.1-8b-instant`; `WORKHORSE` = `gpt-4o-mini` / `llama-3.3-70b-versatile`; `REASONING` = `o4-mini` / `deepseek-r1-distill-llama-70b`.
+- **Capability tiers** → models (Groq / Gemini): `FAST` = `gpt-oss-20b` / `gemini-3.5-flash-lite`; `WORKHORSE` = `gpt-oss-120b` / `gemini-2.5-flash`; `REASONING` = `gpt-oss-120b` / `gemini-2.5-flash`.
 - **Retry** — up to **3 attempts** per rung with exponential backoff; with 3 attempts the actual sleeps are **0.25s then 0.5s** (the 3rd attempt has no sleep) on transient statuses `{408, 409, 425, 429, 500, 502, 503, 504}`.
 - **Circuit breaker** — per provider, process-wide and thread-safe; opens after **4 consecutive failures**, stays open **60s**, so the chain skips a known-dead tier instead of paying its timeout. A success resets the counter.
 - **Never retried** — a content-filter verdict is explicitly forced non-transient (retrying hits the same filter); any error not on the retryable allowlist (auth, unknown) is non-retried by default.
-- **Per-call timeout** `30s`. o-series reasoning models omit `temperature`/`top_p` (Azure rejects them) and use `max_completion_tokens`.
+- **Per-call timeout** `30s`. Groq's gpt-oss models get `reasoning_effort=low` so reasoning tokens can't exhaust a small classifier budget; Gemini prompts with only a system message are re-sent as a user turn (Gemini requires one).
 
 <details>
 <summary><b>Defense in depth — the complete control list</b></summary>
@@ -325,16 +325,16 @@ flowchart LR
 | Regex pre-filter (15 patterns) | Blatant override/exfil/jailbreak phrasing | Block |
 | Deterministic heuristic (17 rules / 6 families) | Paraphrased & obfuscated attacks (homoglyph, zero-width, leet) | Block; runs in **every** mode |
 | Groq Prompt Guard 2 (≥0.8) | Trained jailbreak classification | Block; authoritative |
-| Azure FAST classifier | Semantic injection/exfil intent | Block |
-| Azure RAI content filter | Provider-side safety | **Block at 0.99** (refusal) / fail-open (outage) |
+| LLM FAST classifier | Semantic injection/exfil intent | Block |
+| Provider content filter | Provider-side safety | **Block at 0.99** (refusal) / fail-open (outage) |
 | `_NO_LEAK` / `_NO_OVERRIDE` backstops | Per-agent: never reveal instructions; treat user text as untrusted content | Prompt-hardening on **every** free-text agent |
 | Output guard (160-char window, 19 markers) | Prompt-leak fragments + 14 jailbreak-persona declarations mid-stream | Halt stream (limits, not erases, exposure) |
 | Citation guard (NFKC + 24-confusables fold) | Invented/obfuscated module ids, inline while streaming | Scrub |
 | Number guard (role-bound, 30-entry word map) | Plan figures the planner never computed | Replace narration |
-| `lexical_groundedness` floor (≥2 shared salient terms, 81-word stop set) | Claim support when Azure NLI is unavailable | Deterministic floor |
+| `lexical_groundedness` floor (≥2 shared salient terms, 81-word stop set) | Claim support when the LLM judge is unavailable | Deterministic floor |
 | Oral-exam guard (4 online layers, non-blocking) | Grade-gaming ("award full marks") | Flag for grader; never halts/zeroes |
 
-The **oral-exam guard** is *neutralise-not-block*: Prompt Shields + Prompt Guard 2 + a question-aware authoritative LLM classifier + Azure RAI, with an 8-pattern offline lane. A detection is logged and passed to the grader as a flag — it never halts the exam or zeroes the turn — and on a full outage it fails *toward flag* on a confident specialist while failing open otherwise.
+The **oral-exam guard** is *neutralise-not-block*: Prompt Guard 2 + a question-aware authoritative LLM classifier + the provider safety filter (a pluggable second-opinion shield seam remains), with an 8-pattern offline lane. A detection is logged and passed to the grader as a flag — it never halts the exam or zeroes the turn — and on a full outage it fails *toward flag* on a confident specialist while failing open otherwise.
 
 </details>
 
@@ -348,19 +348,19 @@ flowchart LR
     classDef off fill:#eceff1,stroke:#607d8b,color:#1c2429
     classDef chk fill:#fdeee7,stroke:#c0562f,color:#2b1a12
 
-    Q(["answer request"]) --> R["Foundry IQ retriever"]:::chk
-    R -->|"configured & online"| AZ["Azure AI Search<br/>agentic retrieve → hybrid fallback"]:::live
+    Q(["answer request"]) --> R["course retriever"]:::chk
+    R -->|"configured & online"| AZ["Cohere embed + Qdrant search<br/>⊕ lexical (reciprocal-rank fusion)"]:::live
     R -.->|"offline / not configured / fails"| LEX["offline lexical retriever<br/>IDF relevance-gated, deterministic"]:::off
     AZ --> CITE["cited module sources"]:::chk
     LEX --> CITE
     CITE --> V{"supported?"}:::chk
-    V -->|"Azure AI Evaluation or lexical floor"| OUT["stream answer + trace label"]:::live
+    V -->|"LLM judge or lexical floor"| OUT["stream answer + trace label"]:::live
     V -->|"ungrounded / uncited"| REF["disclaimer + re-dispatch once"]:::chk
 ```
 
 - **The offline relevance gate is the anti-hallucination boundary.** It computes IDF over the **entire catalog** even when a query is scoped to one course, and structures the check as a property of the chosen candidate *set*: cert-code exempt; absolute matched-IDF **≥ 3.0**; IDF coverage **≥ 33%**; single-matched-term depth **≥ 10** alone or **≥ 3** with coverage. Top **4** sources returned. This provably rejects the classic RAG failure where a query's defining terms are catalog-absent and a single generic keyword like "key" poses as coverage — and it special-cases 2-letter topics (`ci`, `cd`, `ai`, `ml`) to **exact** match so a CI/CD query can't ground on "cite"/"city".
-- **Live path** — Azure AI Search **agentic retrieve** is primary; on any failure it degrades *within the live tier* to **hybrid vector + semantic** over the same index; only if both fail does it fall to the lexical floor. Course scope is applied via an OData filter only after `catalog_id` passes a `[A-Za-z0-9_-]+` allow-list (filter-injection defense). The trace labels exactly which retriever answered.
-- **Answer evaluation** — when configured (and online), Azure AI Evaluation judges score each answer on a **1–5 rubric**: groundedness **≥ 4.0** (mandatory), relevance / retrieval / GroundednessPro **≥ 3.0** (gate only when present). GroundednessPro is best-effort (Content-Safety-backed, can only *tighten* an already-grounded verdict). Offline, a deterministic `lexical_groundedness` floor stands in.
+- **Live path** — the question is embedded with **Cohere `embed-v4.0`** (LRU-cached, since the trial key allows 1,000 calls/month) and searched in **Qdrant Cloud** (one point per module, payload-filtered by course for scoped chats). Vector hits are **reciprocal-rank-fused** with the lexical ranking; a vector hit below cosine **0.40** only counts if lexical retrieval agrees, so the lexical relevance gate still rejects off-topic queries. Any failure (quota, network, suspended cluster) falls to the lexical floor. The trace labels exactly which retriever answered.
+- **Answer evaluation** — when a provider is configured (and online), an **LLM judge** scores each answer on a **1–5 rubric** in one JSON call: groundedness **≥ 4.0** (mandatory), relevance / retrieval **≥ 3.0** (gate only when present). Offline, a deterministic `lexical_groundedness` floor stands in.
 - **Reflection** — if an answer is ungrounded *or* had sources but cited none of them (the "don't-cite-to-dodge-the-judge" loophole), the agent appends an honest disclaimer and **re-dispatches exactly once** under a stricter sources-only prompt. Verification never blocks; it degrades **loudly**.
 
 ---
@@ -464,7 +464,7 @@ erDiagram
 ```
 
 - **The catalog is a verified bijection.** **5** verticals → **15** courses → **60** modules, with the 60 catalog module ids matching the 60 on-disk markdown frontmatter ids **exactly** (zero drift either direction, verified), ~**93,000** words across the 60 module bodies (plus 15 course-overview files). An `is_valid_course_id` allow-list plus a real prerequisite DAG mean no agent can recommend or cite a course that doesn't exist.
-- **Authored assessment banks** — **60** JSON files → **120** `AssessmentBank` rows → **600** choice questions (**393** MCQ + **207** MSQ) + **180** oral questions, in a separate `assessments.db`. A **JSON Schema (Draft 2020-12)** enforces exactly **10** choice + **3** oral questions per module (4 distinct options each), and **4** semantic rules JSON Schema can't express (MCQ has exactly 1 correct answer, MSQ ≥ 2, every correct answer appears verbatim in the choices, ids follow the positional convention). Seeding is **validate-before-write** and **refuses to wipe to empty** — a failed or empty source never destroys a populated bank. The banks mirror to Azure Blob (`DefaultAzureCredential`, no secrets in repo) with a local JSON fallback.
+- **Authored assessment banks** — **60** JSON files → **120** `AssessmentBank` rows → **600** choice questions (**393** MCQ + **207** MSQ) + **180** oral questions, in a separate `assessments.db`. A **JSON Schema (Draft 2020-12)** enforces exactly **10** choice + **3** oral questions per module (4 distinct options each), and **4** semantic rules JSON Schema can't express (MCQ has exactly 1 correct answer, MSQ ≥ 2, every correct answer appears verbatim in the choices, ids follow the positional convention). Seeding is **validate-before-write** and **refuses to wipe to empty** — a failed or empty source never destroys a populated bank. The banks seed from in-repo JSON on startup.
 - **Work IQ is provably reproducible.** A **zero-RNG** synthesizer emits a **byte-identical** `work_iq.json` (**11** personas, **599** calendar blocks on a 15-minute grid) that **CI regenerates and gates with `git diff --exit-code`** — so the committed data can never silently drift from the code that produced it. Every weekly aggregate is *derived* from the timed blocks and independently re-derived by tests, and the synthetic org is deliberately edge-case-rich (an exactly-at-threshold GO, an hours-met-but-low-score NOT_YET, >20-meeting-hour personas) so every downstream branch is demoed against a real case.
 
 ---
@@ -482,7 +482,7 @@ Athenaeum treats reasoning quality and safety as **measurable**, not asserted. T
 
 **13 batteries · 232 cases · 2 rounds each** (≈464 live executions). A layer is reported **HELD only if every case passes in every round** — *a flaky defense is not a defense*. It **fails closed everywhere**: an unparseable judge response counts as undesired-behavior-present; a provider outage is recorded as a typed error, never a pass; `live_settings()` refuses to run if `OFFLINE_LLM` is set, so a battery can never silently grade the deterministic mock.
 
-The batteries: `gate` · `router` · `answer` · `grounding` · `guards` · `grader` · `assessment_guard` · `schedule` · `studyplan` · `recommend` · `orchestrator` · `manager` · `llm`. They use a **mix of oracles** — structural/deterministic where possible (the grounding oracle is keyed to the real catalog id set, the `llm` battery replays a *captured real* Azure RAI content-filter exception to verify the typed `ContentFiltered` vs `AllProvidersDown` split) and an **LLM judge** (escalated FAST → WORKHORSE for nuance) only where semantic judgement is required. Golden datasets give offline regression: `gate` (15) · `grounding` (11) · `router` (11).
+The batteries: `gate` · `router` · `answer` · `grounding` · `guards` · `grader` · `assessment_guard` · `schedule` · `studyplan` · `recommend` · `orchestrator` · `manager` · `llm`. They use a **mix of oracles** — structural/deterministic where possible (the grounding oracle is keyed to the real catalog id set, the `llm` battery replays a *captured real* (Azure-era) RAI content-filter exception to verify the typed `ContentFiltered` vs `AllProvidersDown` split) and an **LLM judge** (escalated FAST → WORKHORSE for nuance) only where semantic judgement is required. Golden datasets give offline regression: `gate` (15) · `grounding` (11) · `router` (11).
 
 ### The quantified scorecard & honest baseline
 
@@ -502,7 +502,7 @@ That baseline graded three **HIGH** findings — **S1** (degraded-mode regex-onl
 | **before** (2026-06-14) | 6/16 = 38% | 4/48 | — | 0/7 |
 | **after** (2026-06-15) | **16/16 = 100%** | **46/48 = 96%** | **0** | **0/7** (unchanged) |
 
-**S1 is closed**: the deterministic heuristic now runs in *every* mode, so the degraded gate is no longer regex-only — 5/5 blatant, 8/8 paraphrased, 3/3 exfil now blocked, with 0 leaks. Crucially the gain costs nothing on the anti-metric — **over-refusal stays 0/7** — which is exactly the property that makes the improvement real rather than gamed. *(The online lane, which drove S2/S3, is not re-measured here because it spends Azure tokens; reproduce it with `… scorecard online` against `:8021`.)* Publishing both numbers is the point: it's the before→after a prose claim can't be.
+**S1 is closed**: the deterministic heuristic now runs in *every* mode, so the degraded gate is no longer regex-only — 5/5 blatant, 8/8 paraphrased, 3/3 exfil now blocked, with 0 leaks. Crucially the gain costs nothing on the anti-metric — **over-refusal stays 0/7** — which is exactly the property that makes the improvement real rather than gamed. *(The online lane, which drove S2/S3, is not re-measured here because it spends provider quota (it was measured on the original Azure stack); reproduce it with `… scorecard online` against `:8021`.)* Publishing both numbers is the point: it's the before→after a prose claim can't be.
 
 <details>
 <summary><b>CI & test gates</b></summary>
@@ -517,24 +517,24 @@ That baseline graded three **HIGH** findings — **S1** (degraded-mode regex-onl
 
 ---
 
-## 11 · Microsoft Foundry & IQ
+## 11 · Cloud providers & Microsoft IQ
 
 Everything in the cloud column is **optional**: with `OFFLINE_LLM=true` (or simply no credentials) the whole system runs deterministically. The trace always says which path answered.
 
 | Capability | Service | Status |
 |---|---|---|
-| Chat / reasoning / grading | Azure OpenAI via `openai.AzureOpenAI` | **Live** (4-tier router, retry + circuit breaker) |
-| Project connectivity | `azure.ai.projects.AIProjectClient` + `DefaultAzureCredential` | **Live** check |
-| Foundry IQ grounding | Azure AI Search agentic retrieve + hybrid | **Live when configured & online**, else deterministic lexical |
-| Answer evaluation | Azure AI Evaluation (groundedness / relevance / retrieval / pro) | **Live when configured & online**, else lexical floor |
-| Prompt injection on oral answers | Azure Content Safety Prompt Shields | **Live when configured** (assessment guard) |
-| Assessment-bank mirror | Azure Blob (`DefaultAzureCredential`) | **Live when configured**, else local JSON |
-| Fallback LLMs + jailbreak classifier | Groq (`meta-llama/llama-prompt-guard-2-86m`) | **Live when key present** |
+| Chat / reasoning / grading | Groq (`gpt-oss`) → Gemini, OpenAI-compatible | **Live when a key is present** (4-tier router, retry + circuit breaker) |
+| Course grounding | Cohere `embed-v4.0` + Qdrant Cloud ⊕ lexical | **Live when configured & online**, else deterministic lexical |
+| Answer evaluation | LLM-as-judge (groundedness / relevance / retrieval) | **Live when online**, else lexical floor |
+| Jailbreak classifier | Groq Llama Prompt Guard 2 (`meta-llama/llama-prompt-guard-2-86m`) | **Live when key present** |
+| Assessment banks | In-repo JSON → `assessments.db` | Always local |
+
+Every provider is a **free tier that needs no credit card**. Secrets live in Infisical and are injected at runtime; none are committed.
 
 **Microsoft IQ.** Athenaeum integrates two IQ layers and is honest about the third:
 
 - **Work IQ** — a **mock, not a live integration**: a static, deterministically-generated JSON shaped to the Work IQ pattern (meeting/focus signals, a 15-minute-grid weekly calendar, readiness, per-seniority capacity policy). The rest of the system reads it through a small read-only service, so the generated file could be swapped for a live Work IQ connector without changing downstream planning. *Gap: no Microsoft 365 tenant; signals are generated, not observed.*
-- **Foundry IQ** — grounded retrieval over the approved catalog (Azure AI Search agentic retrieve + hybrid, or the offline lexical floor). Both return cited module references; the trace labels which ran.
+- **Foundry IQ (pattern)** — grounded retrieval over the approved catalog. Originally Azure AI Search agentic retrieve; now Cohere + Qdrant hybrid retrieval or the offline lexical floor. Both return cited module references; the trace labels which ran. (The internal route id is still `foundry_iq`.)
 - **Fabric IQ** — **intentionally out of scope**. The semantic-ontology layer is researched in [`kb/iq/`](kb/iq/) but no Fabric API is wired.
 
 > No secrets are committed. Every cloud dependency is gated behind config validation and **fails open to the offline path on a genuine outage** — never to a silent wrong answer. A provider that refuses a request as unsafe is treated as a **block**, not an outage.
@@ -575,7 +575,7 @@ A Next.js 16 App Router client that streams the whole pipeline, not just tokens.
 
 The invariants that make the features correct under races, re-plans, outages, and adversarial input:
 
-- **Config capability lattice** ([`app/config.py`](ayanakoji/backend/app/config.py)) — `foundry_configured` / `groq_configured` (both validate against placeholder prefixes `<`, `TODO`, `changeme`, `your-`) compose into `foundry_iq_enabled`, `evaluation_available`, and `llm_offline`. Config **fails loud**: a missing required value raises a clear, named error rather than silently degrading — except genuine outages, which fall back to the offline path.
+- **Config capability lattice** ([`app/config.py`](ayanakoji/backend/app/config.py)) — `groq_configured` / `gemini_configured` / `vector_search_configured` (all validate against placeholder prefixes `<`, `TODO`, `changeme`, `your-`) compose into `vector_search_enabled`, `evaluation_available`, and `llm_offline`. Config **fails loud**: a missing required value raises a clear, named error rather than silently degrading — except genuine outages, which fall back to the offline path.
 - **The grader fails closed on the deciding boundary** — `grader_offline_demo` keys **only** off the explicit `OFFLINE_LLM` flag, *not* the broader `llm_offline`. A no-credentials deploy or a live grader error on the final exchange returns a non-passing "unavailable" grade — it can **never silently certify a free-text answer as passing**, even though every other cloud dependency fails *open* to the deterministic path.
 - **Two metadata-scoped SQLite databases** with WAL journaling + a 30s `busy_timeout`, plus a hand-rolled **idempotent `ensure_schema` migrator** (no migration tool) that adds new columns in place — so a redeploy onto an existing DB upgrades cleanly.
 - **Streaming safety as live transformers, not buffered post-processing** — `safe_output_stream(_no_em_dashes(tokens))` layers two generators over the live token source so the client still streams incrementally while the no-em-dash rewrite (a subtle state machine that carries a deferred dash across token boundaries and guards numeric ranges so `400-1000 RU/s` stays one value) and the prompt-leak/jailbreak-persona halt both run inline.
@@ -587,7 +587,7 @@ The invariants that make the features correct under races, re-plans, outages, an
 - **Fabric IQ is out of scope** (researched in `kb/iq/`, no Fabric API wired).
 - **The hosted demo uses Render's free tier** — it cold-starts after idle (30–60s) and its SQLite is ephemeral (learner state resets on redeploy). Production would point `DATABASE_URL` at managed Postgres.
 - **No real authentication** — persona = identity is a deliberate demo simplification; the manager 403/404 is a data-correctness guard, not an auth boundary.
-- **The published online safety numbers are the pre-hardening baseline** (2026-06-14); the measured *after* in §10 is the offline lane only, because re-running the online lane spends Azure tokens. The online S2/S3 fixes shipped but are re-verified on demand, not on every CI run.
+- **The published online safety numbers are the pre-hardening baseline** (2026-06-14); the measured *after* in §10 is the offline lane only, because re-running the online lane spends provider quota (the baseline was measured on the original Azure stack). The online S2/S3 fixes shipped but are re-verified on demand, not on every CI run.
 - **All data is synthetic** (see §17).
 
 ---
@@ -612,12 +612,13 @@ pnpm dev          # http://localhost:3000  (NEXT_PUBLIC_API_BASE_URL defaults to
 
 Open `http://localhost:3000`, pick a learner persona to start a course, or pick **Polaris** under "Team lead" for the Manager Insights view.
 
-**To run live on Microsoft Foundry**, install the cloud SDKs and provide credentials:
+**To run live** (all free tiers, no card), install the LLM SDK and provide keys, either through Infisical or a git-ignored `.env`:
 
 ```bash
 cd ayanakoji/backend
-uv sync --group foundry        # openai, azure-identity, azure-ai-projects, azure-search-documents, azure-ai-evaluation, azure-storage-blob
-cp .env.example .env           # fill in the Azure values, and unset OFFLINE_LLM
+uv sync --group dev --group llm   # adds the openai SDK (Groq + Gemini are OpenAI-compatible)
+infisical run --env dev -- .venv/bin/uvicorn app.main:app --reload --port 8000
+# or: cp .env.example .env, fill in the keys, and run uvicorn without OFFLINE_LLM
 ```
 
 <details>
@@ -625,13 +626,11 @@ cp .env.example .env           # fill in the Azure values, and unset OFFLINE_LLM
 
 | Group | Variables |
 |---|---|
-| Azure OpenAI (Foundry) | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_API_VERSION`, `MODEL_FAST`, `MODEL_WORKHORSE`, `MODEL_REASONING`, `MODEL_EMBED` |
-| Foundry project | `FOUNDRY_PROJECT_ENDPOINT` (connectivity check) |
-| Foundry IQ (Azure AI Search) | `SEARCH_ENDPOINT`, `SEARCH_ADMIN_KEY`, `SEARCH_INDEX_NAME`, `KNOWLEDGE_BASE_NAME` |
+| Groq (primary + guard) | `GROQ_API_KEY`, `GROQ_MODEL_FAST`, `GROQ_MODEL_WORKHORSE`, `GROQ_MODEL_REASONING`, `GROQ_REASONING_EFFORT`, `GROQ_MODEL_GUARD`, `GUARD_BLOCK_THRESHOLD` |
+| Gemini (fallback) | `GEMINI_API_KEY`, `GEMINI_MODEL_FAST`, `GEMINI_MODEL_WORKHORSE` |
+| Vector grounding | `COHERE_API_KEY`, `COHERE_EMBED_MODEL`, `EMBED_DIMENSIONS`, `QDRANT_URL`, `QDRANT_API_KEY`, `QDRANT_COLLECTION`, `VECTOR_SEARCH_LIVE` |
 | Evaluation | `EVALUATION_ENABLED`, `GROUNDEDNESS_MIN_SCORE`, `RELEVANCE_MIN_SCORE`, `RETRIEVAL_MIN_SCORE` |
-| Groq (fallback + guard) | `GROQ_API_KEY`, `GROQ_MODEL_FAST`, `GROQ_MODEL_WORKHORSE`, `GROQ_MODEL_GUARD`, `GUARD_BLOCK_THRESHOLD` |
-| Content Safety | `CONTENT_SAFETY_ENDPOINT`, `CONTENT_SAFETY_API_KEY` |
-| Blob mirror | `AZURE_STORAGE_ACCOUNT`, `ASSESSMENT_BLOB_CONTAINER`, `SEED_ASSESSMENTS_ON_STARTUP` |
+| Assessment seeding | `SEED_ASSESSMENTS_ON_STARTUP` |
 | Persistence & app | `DATABASE_URL`, `ASSESSMENTS_DATABASE_URL`, `CORS_ORIGINS`, `NOTIFY_TICK_SECONDS`, `ENVIRONMENT` |
 | Offline switch | `OFFLINE_LLM` (`true` forces the deterministic, no-cloud path) |
 
@@ -641,8 +640,9 @@ cp .env.example .env           # fill in the Azure values, and unset OFFLINE_LLM
 
 ## 15 · Deployment
 
-- **Backend** — Render (`render.yaml`), free plan, Singapore region, Python 3.12. Build: `pip install uv && uv sync --frozen --no-dev --group foundry` (production *includes* the Azure SDKs). Start: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`. Health check at `/health`. Secrets injected via the Render dashboard, never committed. The free tier sleeps when idle — hence the cold-start note at the top.
+- **Backend** — Render (`render.yaml`), free plan, Singapore region, Python 3.12. Build: `pip install uv && uv sync --frozen --no-dev --group llm`. Start: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`. Health check at `/health`. Secrets are pushed from Infisical to the service's env vars, never committed. The free tier sleeps when idle — hence the cold-start note at the top.
 - **Frontend** — Vercel, with `NEXT_PUBLIC_API_BASE_URL` pointed at the Render backend.
+- **Qdrant keep-alive** — free Qdrant clusters suspend after a week idle, so a cron-job.org job runs one 1-result search with a read-only key every 2 days. `scripts/reindex_vectors.py --upload-only` rebuilds a lost cluster from the committed vectors with zero Cohere calls.
 - **Local (both services)** — `ecosystem.config.cjs` runs the frontend (`:3000`) and backend (`:8000`) under PM2.
 
 ---
@@ -656,17 +656,17 @@ cp .env.example .env           # fill in the Azure values, and unset OFFLINE_LLM
 │   │   ├── app/
 │   │   │   ├── agent/           # reasoning pipeline: orchestrator, gate (+heuristic), router,
 │   │   │   │                    #   answer agents, guards, output_guard, llm router, grounding
-│   │   │   │                    #   (lexical + Azure AI Search + verifier), assessor, scheduler, grader
+│   │   │   │                    #   (lexical + Cohere/Qdrant hybrid + LLM-judge verifier), assessor, scheduler, grader
 │   │   │   ├── courses/         # chat==course, assessments, skill check, practice, feedback, evaluations
-│   │   │   ├── assessments/     # authored question banks (separate DB, Azure Blob seed, validation)
+│   │   │   ├── assessments/     # authored question banks (separate DB, JSON seed, validation)
 │   │   │   ├── manager/         # Manager Insights: aggregate-only insights + guarded chat
 │   │   │   ├── workiq/          # synthetic Work IQ service (read-only)
 │   │   │   ├── notifications/   # notification feed + streak (background tick)
 │   │   │   ├── catalog/         # catalog loader + read API
-│   │   │   ├── config.py        # validated settings surface (capability lattice)
-│   │   │   └── foundry.py       # Azure OpenAI / AI Project client
+│   │   │   ├── data/            # work_iq.json + course_vectors.json (pre-embedded catalog)
+│   │   │   └── config.py        # validated settings surface (capability lattice)
 │   │   ├── agent_audit/         # live LLM-judge red-team batteries (13) + golden datasets
-│   │   ├── scripts/             # generate_work_iq.py, validate_banks.py, Azure smokes
+│   │   ├── scripts/             # generate_work_iq.py, validate_banks.py, reindex_vectors.py
 │   │   └── tests/               # pytest (611 functions / 66 files, >=80% coverage)
 │   ├── frontend/                # Next.js 16 app (pnpm), workspace + manager dashboard
 │   ├── athenaeum/content/       # _catalog.json + module markdown (5 verticals · 15 courses · 60 modules)
@@ -690,8 +690,8 @@ cp .env.example .env           # fill in the Azure values, and unset OFFLINE_LLM
 | **Offline mode as a first-class path** | The full system runs deterministically with zero credentials, so CI and E2E are free and a judge can run the demo instantly. |
 | **Completion derived from tests** | No stored "completed" flag, so re-planning rewrites the schedule without ever losing progress. |
 | **Aggregate-only manager surface** | The manager agent only ever receives team rollups, so per-learner leakage is impossible by construction. |
-| **Two databases** | Authored banks are isolated from the mutable learner workspace and can be mirrored to Azure Blob. |
-| **Honest grounding labels** | The trace shows whether Azure AI Search or the offline retriever answered, with no claim of live cloud when it ran locally. |
+| **Two databases** | Authored banks are isolated from the mutable learner workspace. |
+| **Honest grounding labels** | The trace shows whether the live Cohere + Qdrant hybrid or the offline retriever answered, with no claim of live cloud when it ran locally. |
 
 </details>
 

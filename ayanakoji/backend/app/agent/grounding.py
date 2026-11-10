@@ -3,8 +3,8 @@
 The Foundry-IQ route answers course questions *grounded* in approved content.
 The deterministic backend here indexes the catalog's **module-level** objectives
 and summaries — structured, citable by module id, and runnable with zero
-credentials — so an answer can always cite a real source. When a live Foundry IQ
-knowledge base is available it swaps in behind the same ``search``/``suggest``
+credentials — so an answer can always cite a real source. When live vector search
+(Cohere + Qdrant) is configured it swaps in behind the same ``search``/``suggest``
 surface; the cache (an in-process LRU keyed by the normalized query) is the
 prod-grade equivalent of caching Foundry-IQ retrieval results.
 
@@ -27,10 +27,9 @@ from app.config import Settings, get_settings
 
 # Honest provider labels — what *actually* retrieved the sources, surfaced in the trace.
 # The offline lexical backend mirrors the Foundry IQ knowledge base's index; the live
-# adapter (``grounding_azure``) flips these to the Azure agentic-retrieve labels.
+# adapter (``grounding_vector``) reports the hybrid Cohere + Qdrant label.
 LEXICAL_PROVIDER = "Foundry-IQ-pattern · offline lexical retrieval"
-AZURE_KB_PROVIDER = "Foundry IQ · Azure AI Search agentic retrieve"
-AZURE_HYBRID_PROVIDER = "Foundry IQ · Azure AI Search hybrid (vector+semantic)"
+VECTOR_PROVIDER = "Hybrid retrieval · Cohere embed + Qdrant vector search ⊕ lexical"
 
 # Tokens that carry no retrieval signal (wrapped for readability).
 _STOPWORD_TEXT = """
@@ -102,13 +101,13 @@ class GroundingDoc:
 class RetrievalActivity:
     """How a set of grounding sources was retrieved — the query plan, surfaced in the trace.
 
-    The lexical backend reports its IDF-weighted keyword plan; the live Azure adapter
-    reports the agentic-retrieve plan (LLM-decomposed subqueries + reranker scores). Both
+    The lexical backend reports its IDF-weighted keyword plan; the live vector adapter
+    reports its embedding, vector-hit scores, and fusion. Both
     fill the same shape so the pipeline trace renders ``include_activity`` either way.
     """
 
     provider: str  # honest label of what retrieved the sources
-    live: bool  # True only when a live Azure AI Search call produced this
+    live: bool  # True only when a live vector-search call produced this
     steps: tuple[TraceStep, ...] = ()
 
 
@@ -479,11 +478,11 @@ def get_grounding() -> CourseGrounding:
     return CourseGrounding()
 
 
-# ── Retriever selection: live Foundry IQ when configured, else offline lexical ──
+# ── Retriever selection: live vector search when configured, else offline lexical ──
 
 
 class GroundedRetriever(Protocol):
-    """The retrieval surface ``answer_foundry`` grounds on (lexical or live Azure)."""
+    """The retrieval surface ``answer_foundry`` grounds on (lexical or live vector)."""
 
     def retrieve(
         self, query: str, *, catalog_id: str | None = ..., k: int = ...
@@ -493,8 +492,8 @@ class GroundedRetriever(Protocol):
 class FallbackRetriever:
     """A live retriever with a deterministic lexical fallback — never fails a turn.
 
-    The live agentic-retrieve adapter can fail transiently (network, throttling, a
-    preview-SDK shape drift). Rather than 500 the chat, any failure degrades to the
+    The live vector adapter can fail transiently (network, Cohere trial quota, a
+    suspended free Qdrant cluster). Rather than 500 the chat, any failure degrades to the
     offline lexical grounding, and the trace says so — honest, never silent.
     """
 
@@ -513,7 +512,7 @@ class FallbackRetriever:
                 label="Live retrieval fallback",
                 passed=None,
                 detail=(
-                    f"Azure agentic retrieve unavailable ({type(exc).__name__}); "
+                    f"Live vector search unavailable ({type(exc).__name__}); "
                     "fell back to offline lexical grounding"
                 ),
             )
@@ -528,15 +527,15 @@ class FallbackRetriever:
 def get_retriever(settings: Settings | None = None) -> GroundedRetriever:
     """The retriever ``answer_foundry`` should use this turn.
 
-    Live Foundry IQ (Azure AI Search agentic retrieve) when it is configured + toggled
-    on + online, wrapped so any live failure degrades to the cached offline lexical
+    Hybrid vector search (Cohere + Qdrant ⊕ lexical) when configured + toggled on +
+    online, wrapped so any live failure degrades to the cached offline lexical
     grounding; otherwise the offline lexical retriever directly. The router and the
     course-suggestion tool keep using the cheap lexical ``get_grounding`` regardless, so
     only the grounded answer pays for a live call.
     """
     settings = settings or get_settings()
-    if settings.foundry_iq_enabled:
-        from app.agent.grounding_azure import AzureKnowledgeRetriever
+    if settings.vector_search_enabled:
+        from app.agent.grounding_vector import VectorRetriever
 
-        return FallbackRetriever(AzureKnowledgeRetriever(settings), get_grounding())
+        return FallbackRetriever(VectorRetriever(settings), get_grounding())
     return get_grounding()

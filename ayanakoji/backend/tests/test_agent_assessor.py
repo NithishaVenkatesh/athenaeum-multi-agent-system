@@ -21,7 +21,7 @@ class FakeRouter:
     ) -> LLMResult:
         return LLMResult(
             text=self._complete_text,
-            provider=Provider.AZURE,
+            provider=Provider.GROQ,
             model="gpt-4o-mini",
             tier=1,
             prompt_tokens=10,
@@ -35,7 +35,7 @@ class FakeRouter:
         def _gen() -> Iterator[str]:
             yield from self._tokens
 
-        return StreamHandle(tokens=_gen(), provider=Provider.AZURE, model="gpt-4o-mini", tier=1)
+        return StreamHandle(tokens=_gen(), provider=Provider.GROQ, model="gpt-4o-mini", tier=1)
 
 
 class VerifyRouter:
@@ -70,7 +70,7 @@ class VerifyRouter:
             text = self._gen_text
         return LLMResult(
             text=text,
-            provider=Provider.AZURE,
+            provider=Provider.GROQ,
             model="gpt-4o-mini",
             tier=1,
             prompt_tokens=10,

@@ -205,7 +205,7 @@ class _BreakingRouter:
     def complete(self, *_: object, **__: object) -> LLMResult:
         return LLMResult(
             text='{"route":"general","reasoning":"r","off_topic":0.1,"confidence":0.6}',
-            provider=Provider.AZURE,
+            provider=Provider.GROQ,
             model="m",
             tier=1,
             prompt_tokens=1,
@@ -218,7 +218,7 @@ class _BreakingRouter:
             yield "partial "
             raise RuntimeError("connection reset")
 
-        return StreamHandle(tokens=_gen(), provider=Provider.AZURE, model="m", tier=1)
+        return StreamHandle(tokens=_gen(), provider=Provider.GROQ, model="m", tier=1)
 
 
 def test_mid_stream_break_surfaces_error() -> None:

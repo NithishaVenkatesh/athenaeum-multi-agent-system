@@ -71,13 +71,13 @@ class InjectionVerdict(BaseModel):
 class TraceStep(BaseModel):
     """One sub-step within a pipeline phase, shown in the grounding trace.
 
-    Used by the injection gate (regex → Azure → Prompt Guard) and the router
+    Used by the injection gate (regex → Prompt Guard → LLM classifier) and the router
     (heuristic vs LLM call) so the full decision chain is visible, not just the
     final verdict.
     """
 
     label: str = Field(
-        description="Layer name: Regex pre-filter | Azure LLM classifier | Groq Prompt Guard 2 | …"
+        description="Layer name: Regex pre-filter | LLM classifier | Groq Prompt Guard 2 | …"
     )
     passed: bool | None = Field(
         default=None,

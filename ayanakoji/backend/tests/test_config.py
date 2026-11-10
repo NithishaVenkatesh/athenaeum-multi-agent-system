@@ -1,13 +1,13 @@
-"""Tests for settings parsing and the fail-loud Foundry config gate (offline)."""
+"""Tests for settings parsing and the fail-loud provider config gates (offline)."""
 
 from __future__ import annotations
 
 import pytest
 from app.config import (
-    FoundryConfig,
+    GeminiConfig,
     GroqConfig,
-    SearchConfig,
     Settings,
+    VectorSearchConfig,
     _is_placeholder,
     get_settings,
 )
@@ -28,7 +28,7 @@ def test_get_settings_returns_settings() -> None:
     assert isinstance(get_settings(), Settings)
 
 
-# --- Foundry config gate ---------------------------------------------------
+# --- Placeholder detection ---------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -49,41 +49,32 @@ def test_is_placeholder(value: str | None, expected: bool) -> None:
     assert _is_placeholder(value) is expected
 
 
-def test_foundry_not_configured_by_default() -> None:
-    # No foundry fields set -> not configured.
-    settings = Settings(
-        _env_file=None,  # type: ignore[call-arg]
-    )
-    assert settings.foundry_configured is False
-
-
-def test_require_foundry_raises_listing_missing() -> None:
+def test_gemini_not_configured_by_default() -> None:
     settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.gemini_configured is False
     with pytest.raises(RuntimeError) as exc:
-        settings.require_foundry()
-    message = str(exc.value)
-    assert "FOUNDRY_PROJECT_ENDPOINT" in message
-    assert "AZURE_OPENAI_ENDPOINT" in message
-    assert "AZURE_OPENAI_API_KEY" in message
+        settings.require_gemini()
+    assert "GEMINI_API_KEY" in str(exc.value)
 
 
-def test_require_foundry_returns_config_when_set() -> None:
-    settings = Settings(
-        _env_file=None,  # type: ignore[call-arg]
-        foundry_project_endpoint="https://r.services.ai.azure.com/api/projects/p",
-        azure_openai_endpoint="https://r.openai.azure.com/",
-        azure_openai_api_key="real-key-123",
-    )
-    assert settings.foundry_configured is True
-    config = settings.require_foundry()
-    assert isinstance(config, FoundryConfig)
-    assert config.openai_endpoint == "https://r.openai.azure.com/"
-    assert config.model_workhorse == "gpt-4o-mini"
-    assert config.model_fast == "gpt-4o-mini"
-    assert config.openai_api_version == "2024-10-21"
+def test_gemini_configured_and_require_returns_config() -> None:
+    settings = Settings(_env_file=None, gemini_api_key="real-gemini-key")  # type: ignore[call-arg]
+    assert settings.gemini_configured is True
+    config = settings.require_gemini()
+    assert isinstance(config, GeminiConfig)
+    assert config.base_url == "https://generativelanguage.googleapis.com/v1beta/openai/"
+    assert config.model_workhorse == "gemini-2.5-flash"
+    assert config.model_fast == "gemini-3.5-flash-lite"
 
 
-# --- Groq fallback config gate ---------------------------------------------
+def test_require_chat_provider_prefers_groq_then_gemini() -> None:
+    both = Settings(_env_file=None, groq_api_key="gsk_x", gemini_api_key="gm_x")  # type: ignore[call-arg]
+    assert both.require_chat_provider().base_url == "https://api.groq.com/openai/v1"
+    gemini_only = Settings(_env_file=None, gemini_api_key="gm_x")  # type: ignore[call-arg]
+    assert "generativelanguage" in gemini_only.require_chat_provider().base_url
+
+
+# --- Groq primary config gate ---------------------------------------------
 
 
 def test_groq_not_configured_by_default() -> None:
@@ -100,15 +91,20 @@ def test_groq_configured_and_require_returns_config() -> None:
     config = settings.require_groq()
     assert isinstance(config, GroqConfig)
     assert config.base_url == "https://api.groq.com/openai/v1"
-    assert config.model_workhorse == "llama-3.3-70b-versatile"
-    assert config.model_fast == "llama-3.1-8b-instant"
+    assert config.model_workhorse == "openai/gpt-oss-120b"
+    assert config.model_fast == "openai/gpt-oss-20b"
 
 
 def test_llm_offline_false_when_only_groq_configured() -> None:
-    # The pipeline can run on Groq alone — not forced offline just because Azure is unset.
+    # The pipeline can run on Groq alone — not forced offline just because Gemini is unset.
     # offline_llm=False explicitly overrides the autouse OFFLINE_LLM=true test fixture.
     settings = Settings(_env_file=None, groq_api_key="gsk_realkey", offline_llm=False)  # type: ignore[call-arg]
-    assert settings.foundry_configured is False
+    assert settings.gemini_configured is False
+    assert settings.llm_offline is False
+
+
+def test_llm_offline_false_when_only_gemini_configured() -> None:
+    settings = Settings(_env_file=None, gemini_api_key="gm_realkey", offline_llm=False)  # type: ignore[call-arg]
     assert settings.llm_offline is False
 
 
@@ -139,85 +135,77 @@ def test_groundedness_min_score_default_is_four() -> None:
     assert Settings(_env_file=None).groundedness_min_score == 4.0  # type: ignore[call-arg]
 
 
-# --- Azure AI Search / Foundry IQ knowledge base ---------------------------
+# --- Live vector search (Cohere + Qdrant) ---------------------------------
 
 
-def test_search_not_configured_by_default() -> None:
+_VECTOR = {
+    "cohere_api_key": "real-cohere-key",
+    "qdrant_url": "https://cluster.cloud.qdrant.io/",
+    "qdrant_api_key": "real-qdrant-key",
+}
+
+
+def test_vector_search_not_configured_by_default() -> None:
     settings = Settings(_env_file=None)  # type: ignore[call-arg]
-    assert settings.search_configured is False
+    assert settings.vector_search_configured is False
     with pytest.raises(RuntimeError) as exc:
-        settings.require_search()
+        settings.require_vector_search()
     message = str(exc.value)
-    assert "SEARCH_ENDPOINT" in message
-    assert "SEARCH_ADMIN_KEY" in message
+    for name in ("COHERE_API_KEY", "QDRANT_URL", "QDRANT_API_KEY"):
+        assert name in message
 
 
-def test_search_configured_and_require_returns_config() -> None:
-    settings = Settings(
-        _env_file=None,  # type: ignore[call-arg]
-        search_endpoint="https://athenaeum-search.search.windows.net",
-        search_admin_key="real-admin-key",
-    )
-    assert settings.search_configured is True
-    config = settings.require_search()
-    assert isinstance(config, SearchConfig)
-    assert config.endpoint == "https://athenaeum-search.search.windows.net"
-    assert config.index_name == "athenaeum-courses"
-    assert config.semantic_config == "athenaeum-semantic"
-    assert config.knowledge_base_name == "athenaeum-knowledge-base"
-    assert config.reasoning_effort == "low"
+def test_vector_search_configured_and_require_returns_config() -> None:
+    settings = Settings(_env_file=None, **_VECTOR)  # type: ignore[arg-type]
+    assert settings.vector_search_configured is True
+    config = settings.require_vector_search()
+    assert isinstance(config, VectorSearchConfig)
+    assert config.qdrant_url == "https://cluster.cloud.qdrant.io"  # trailing slash stripped
+    assert config.collection == "athenaeum-courses"
+    assert config.embed_model == "embed-v4.0"
+    assert config.embed_dimensions == 1024
 
 
-def test_search_placeholder_endpoint_is_not_configured() -> None:
-    settings = Settings(
-        _env_file=None,  # type: ignore[call-arg]
-        search_endpoint="<your-search-endpoint>",
-        search_admin_key="real-admin-key",
-    )
-    assert settings.search_configured is False
+def test_vector_search_placeholder_is_not_configured() -> None:
+    settings = Settings(_env_file=None, **{**_VECTOR, "qdrant_url": "<your-cluster>"})  # type: ignore[arg-type]
+    assert settings.vector_search_configured is False
 
 
-def test_foundry_iq_enabled_requires_toggle_creds_and_online() -> None:
-    base = {
-        "search_endpoint": "https://s.search.windows.net",
-        "search_admin_key": "real-admin-key",
-        # an online provider so llm_offline is False
-        "groq_api_key": "gsk_realkey",
-        "offline_llm": False,
-    }
+def test_vector_search_enabled_requires_toggle_creds_and_online() -> None:
+    base = {**_VECTOR, "groq_api_key": "gsk_realkey", "offline_llm": False}
     on = Settings(_env_file=None, **base)  # type: ignore[arg-type]
-    assert on.foundry_iq_enabled is True
+    assert on.vector_search_enabled is True
 
-    # Forced offline → never make a live Search call, even when configured.
+    # Forced offline → never make a live call, even when configured.
     off = Settings(_env_file=None, **{**base, "offline_llm": True})  # type: ignore[arg-type]
-    assert off.foundry_iq_enabled is False
+    assert off.vector_search_enabled is False
 
     # Toggle off keeps the app on the offline lexical retriever.
-    toggled = Settings(_env_file=None, **{**base, "foundry_iq_live": False})  # type: ignore[arg-type]
-    assert toggled.foundry_iq_enabled is False
+    toggled = Settings(_env_file=None, **{**base, "vector_search_live": False})  # type: ignore[arg-type]
+    assert toggled.vector_search_enabled is False
 
-    # No Search creds → disabled regardless of toggle.
+    # No vector creds → disabled regardless of toggle.
     no_creds = Settings(_env_file=None, groq_api_key="gsk_realkey", offline_llm=False)  # type: ignore[call-arg]
-    assert no_creds.foundry_iq_enabled is False
+    assert no_creds.vector_search_enabled is False
 
 
-def test_evaluation_available_requires_aoai_and_online() -> None:
-    aoai = {
-        "foundry_project_endpoint": "https://r.services.ai.azure.com/api/projects/p",
-        "azure_openai_endpoint": "https://r.openai.azure.com/",
-        "azure_openai_api_key": "real-key-123",
-    }
-    on = Settings(_env_file=None, offline_llm=False, **aoai)  # type: ignore[arg-type]
+def test_evaluation_available_requires_provider_and_online() -> None:
+    on = Settings(_env_file=None, offline_llm=False, groq_api_key="gsk_realkey")  # type: ignore[call-arg]
     assert on.evaluation_available is True
 
-    # Offline → no live evaluator calls.
-    off = Settings(_env_file=None, offline_llm=True, **aoai)  # type: ignore[arg-type]
+    # Offline → no live judge calls.
+    off = Settings(_env_file=None, offline_llm=True, groq_api_key="gsk_realkey")  # type: ignore[call-arg]
     assert off.evaluation_available is False
 
-    # Groq-only (no AOAI judge) → evaluation can't run.
-    groq_only = Settings(_env_file=None, groq_api_key="gsk_realkey", offline_llm=False)  # type: ignore[call-arg]
-    assert groq_only.evaluation_available is False
+    # No provider at all → offline → no judge.
+    none = Settings(_env_file=None, offline_llm=False)  # type: ignore[call-arg]
+    assert none.evaluation_available is False
 
     # Explicitly disabled.
-    disabled = Settings(_env_file=None, evaluation_enabled=False, offline_llm=False, **aoai)  # type: ignore[arg-type]
+    disabled = Settings(
+        _env_file=None,  # type: ignore[call-arg]
+        evaluation_enabled=False,
+        offline_llm=False,
+        groq_api_key="gsk_realkey",
+    )
     assert disabled.evaluation_available is False

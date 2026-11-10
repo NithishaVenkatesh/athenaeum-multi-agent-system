@@ -340,21 +340,15 @@ def _call_with_tools(
     If the model replies normally → reply_text=text and GradeResult=None.
     """
     # Build the provider directly (ModelRouter doesn't expose tool-calling yet).
-    # AzureOpenAI and OpenAI share the chat.completions.create surface; typing the
+    # Groq and Gemini both expose the OpenAI chat.completions surface; typing the
     # client as Any avoids the SDK's strict param overloads on dict messages/tools.
     settings = get_settings()
     provider, model = _best_provider_and_model(router, settings)
 
-    client: Any
-    if provider == "azure":
-        from app.foundry import build_openai_client
+    from openai import OpenAI
 
-        client = build_openai_client(settings.require_foundry())
-    else:  # groq
-        from openai import OpenAI
-
-        cfg = settings.require_groq()
-        client = OpenAI(api_key=cfg.api_key, base_url=cfg.base_url)
+    cfg = settings.require_gemini() if provider == "gemini" else settings.require_groq()
+    client: Any = OpenAI(api_key=cfg.api_key, base_url=cfg.base_url)
 
     response = client.chat.completions.create(
         model=model,
@@ -389,12 +383,14 @@ def _call_with_tools(
 
 
 def _best_provider_and_model(router: Any, settings: Any) -> tuple[str, str]:
-    """Return ('azure'|'groq', model_name) from the router's chain."""
+    """Return ('groq'|'gemini', model_name) from the router's chain."""
     chain = router.chain(__import__("app.agent.llm", fromlist=["Capability"]).Capability.WORKHORSE)
     for _provider, attempt in chain:
         if not router._breaker.is_open(attempt.provider):
             return (attempt.provider.value, attempt.model)
-    # Fallback: prefer Groq if Azure is down.
+    # Every circuit open: retry the primary provider rather than giving up.
     if settings.groq_configured:
         return ("groq", settings.groq_model_workhorse)
+    if settings.gemini_configured:
+        return ("gemini", settings.gemini_model_workhorse)
     raise RuntimeError("No LLM provider available for grader")

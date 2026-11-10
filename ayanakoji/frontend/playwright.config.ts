@@ -29,7 +29,7 @@ export default defineConfig({
       url: "http://localhost:8000/health",
       reuseExistingServer: !isCI,
       timeout: 120_000,
-      // Deterministic offline replies so the chat flow works without Azure creds.
+      // Deterministic offline replies so the chat flow works without provider keys.
       env: { OFFLINE_LLM: "true" },
     },
     {

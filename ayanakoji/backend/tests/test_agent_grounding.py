@@ -15,12 +15,13 @@ from app.agent.grounding import (
 from app.config import Settings
 
 
-def _foundry_iq_settings() -> Settings:
-    """Settings where foundry_iq_enabled is True (search creds + online)."""
+def _vector_settings() -> Settings:
+    """Settings where vector_search_enabled is True (Cohere + Qdrant creds + online)."""
     return Settings(
         _env_file=None,  # type: ignore[call-arg]
-        search_endpoint="https://athenaeum-search.search.windows.net",
-        search_admin_key="real-admin-key",
+        cohere_api_key="real-cohere-key",
+        qdrant_url="https://cluster.cloud.qdrant.io",
+        qdrant_api_key="real-qdrant-key",
         groq_api_key="gsk_realkey",
         offline_llm=False,
     )
@@ -30,7 +31,7 @@ class _RaisingRetriever:
     """A primary retriever that always fails — to exercise the lexical fallback."""
 
     def retrieve(self, query: str, *, catalog_id: str | None = None, k: int = 4) -> RetrievalResult:
-        raise RuntimeError("simulated live agentic-retrieve outage")
+        raise RuntimeError("simulated live vector-search outage")
 
 
 class _StubRetriever:
@@ -48,8 +49,8 @@ def test_get_retriever_offline_is_lexical() -> None:
     assert get_retriever(settings) is get_grounding()
 
 
-def test_get_retriever_live_wraps_azure_in_a_fallback() -> None:
-    retriever = get_retriever(_foundry_iq_settings())
+def test_get_retriever_live_wraps_vector_in_a_fallback() -> None:
+    retriever = get_retriever(_vector_settings())
     assert isinstance(retriever, FallbackRetriever)
 
 
