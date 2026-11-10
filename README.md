@@ -19,6 +19,19 @@
 
 > Athenaeum turns *"I need to get certified"* into a grounded, end-to-end journey: it recommends a course from an approved catalog, builds a capacity-aware study plan from the learner's real calendar, tutors with cited answers, runs graded assessments it cannot be talked out of, and gives team leads aggregate-only readiness insights. **Every turn streams through an inspectable, defense-in-depth reasoning pipeline** — the model, tier, grounding sources, confidence, and per-step pass/fail are all visible, not hidden behind a chat bubble.
 
+## In 30 seconds
+
+- **What:** a multi-agent learning platform that recommends a certification course, plans study time around a real calendar, tutors with *cited* answers, grades exams it can't be talked out of, and gives managers aggregate-only team insights.
+- **Why it's interesting:** every turn runs through a visible reasoning pipeline (5-layer injection gate → LLM router → grounded answer → LLM-judge check), on a 4-tier model fallback chain with retries and a circuit breaker. It also runs fully offline with zero credentials.
+- **Stack:** FastAPI · Next.js 16 / React 19 · Groq + Gemini · Cohere + Qdrant hybrid RAG · SQLite · 804 backend tests (92% coverage) · CI on every push.
+- **Try it:** open the [live app](https://athenaeum-swart.vercel.app), pick **Vega**, and ask *"How do Azure Functions triggers and bindings work?"*. Then open **Reasoning & grounding** to see every step. Pick **Polaris** for the manager view.
+
+| Grounded, cited answer | Inspectable reasoning trace |
+|---|---|
+| ![Grounded answer with course suggestion](docs/screenshots/02-grounded-answer.png) | ![Reasoning and grounding trace](docs/screenshots/03-reasoning-trace.png) |
+| **Persona sign-in** | **Manager insights (aggregate-only)** |
+| ![Persona chooser](docs/screenshots/01-login.png) | ![Manager team readiness](docs/screenshots/04-manager-insights.png) |
+
 > [!NOTE]
 > The backend runs on Render's free tier and **sleeps when idle**, so the first request after a quiet period can take 30–60s to wake. The login chooser retries cold starts automatically — just give it a moment.
 
